@@ -1,33 +1,33 @@
-encryptionsalt: v1:zTriiVVM8/E=:v1:dWZa24847sJn7pJm:SXP16QOd4HVj3SaboByuZbnsHx+rNw==
+encryptionsalt: v1:6M7SmjRdv/0=:v1:lahUjUqjC328s3Zp:z1KtWCzKwZLouENrLg3XGPijbj7IMQ==
 config:
   kubernetes:kubeconfig: ~/.kube/k3s-config
   k8s-resources:maxPassword:
-    secure: v1:WxUpPqAnYF1n1owO:9P8qDDD64r3ZAUG0SdyhyWEs7KPVQzFHGQCp+A==
+    secure: v1:3O7D7U3xVfZASEwv:DZdXEjgJyYY/gmYLBQVrbsv8XUh/pUsrAAIPeQ==
   k8s-resources:michaelPassword:
-    secure: v1:IZps4YxuGlfcQRHY:3VufA9/DP9wRECAIlewm/mwXkzHqkaSodbP+DQ==
+    secure: v1:zly/CjRipwG1+G4N:WT/ccSwE5g6WOvrTIbWTHnjNBoDviwOs/amoRQ==
   k8s-resources:annaPassword:
-    secure: v1:nMrFLRC1Zc6YmrYd:UuMtrMdVG1SAA0yYpRZxyb4vz1SAQFYW39G3/A==
+    secure: v1:V1aJeCGXnKCYJoak:j2ZUAHYZXf8oTqAWFjw3M26ublcn15o0r0KGlg==
   k8s-resources:authentikOutpostToken:
-    secure: v1:oIUkXG4Wo0oYyqNH:ER2+uHHNOP8FlMX+fdHueOJvW6FgajraeZyayPb5C+ZRbsRpzeRYs5unuuD27xMeRK1NovKSfuvvgdYzsAq+LKgWWdIt1tEFfBezeA==
+    secure: v1:mJI8VzK1v7W11ni9:88pffXjZTJ9Hm0uZQia6d2Eil7rEK3Ba0cq+a6XawLPGaSu5ZXiQ3RMcmBhbalx/C0EnAkeekMerU8bzkJxuiUesP816D5zkqpe6tw==
   k8s-resources:grafana-oauth-client-id:
-    secure: v1:39Ey1h4G7lFP7djw:uuayDiexqrlgZXoix7192RtT672ZIdzXu7UT2oHWlSF4JizbgQv4mBOl7UWhr2zmu1E+sx1cmf0=
+    secure: v1:P0MJUVccKKeJcQNb:YUUDDD4iTjYY1MuEAo0+vgDgs48jaoCBtt3gDr2/aQaH19TdXjZfZbuxb4qik2VYmagUt56+BQU=
   k8s-resources:grafana-oauth-client-secret:
-    secure: v1:epHqIk9WXIbOlVdZ:7JIz1cKV3QVDw72uTHLehapMYGfnpPR5++s7Ad+0dtV/8KZoHBOTsagObMU5fjEaxyFlPSFCsspZlb9xGRDhPPZUKx85Bdv7y6T4o40H2QRSvCYKrZxfK/fBWKDriFOfX74zhijeeKlzuzC9IXqpB8uDZB2gatlghF92vwzcP/ZtcwRc0/DXIsmUAo1xRTA8
+    secure: v1:1+i50OBd4f7dDYFh:CW5fesPgt9E58zs9quUPElJhiNnFOv62vW1RWHsLcwYLV5+soQPfQEHmOB8SgP7EXfnTw4+7K/gTYouromx5dBjC8ykQP3mSIabSmbzjpSqjWTTn5BZJgZA/4vT+tTpqjwXbHMR47pkVSlf4VB8MUFrOHEOQgr69B+kmBg528qkp/fIVcalCSqjqA9wsVvlq
   k8s-resources:paperless-secret-key:
-    secure: v1:DW+tu708FV9EoOtf:l8JrkOoKOVKLGzMBfavEXEv9xkQ/uWlHoqYpb9cAnOoNZGWfx11zF54=
+    secure: v1:OcJAiK6K95xRDsRa:EUMdSXcZe+rqx3qT9uDZOv5nBGk2NcssY1XgTbzXatC/cbUFHPpHLlU=
   k8s-resources:paperless-authentik-client-id:
-    secure: v1:FDTbiAyBT68NV/iH:cc0Q0mlS4D8LPuw7XmQqWlqxeVm2b7O0QI3+iNb0KsGyICPgb5XLyjK2CdPUkhKg0XlX+pcS2+M=
+    secure: v1:ATzX1Gm3dHzw3IPZ:O2EB03E/cHPB6kuI7s0K0hhiriTXzQXdUflZBu8t6cUN+1WC37urAyL9n+R9TEptg82ZHPvGo+I=
   k8s-resources:paperless-authentik-client-secret:
-    secure: v1:kDzUr65x+yC6+fWq:h5uG3yl1WnI6cCjxw8+R3eDfsP6DGMcb1KdpNU798PMVG0+rzwfFUNN7SnX3to1hma3/kkUaE9Flj4MlssxWHGig6thSEaIvhidQeNgbWj0Jf9UAWBXBpNYU9r/lp8kVFHJTFIHaRq6cU3875U/RB6kzgE+mec/BTG+4t7EkOpQ/vMpf99jop5s2hMQVQs7/
+    secure: v1:303ATugfSJAizeiD:XYv9NqeEAzcuieltHZXXZq3GOyitJph/wN9y4/J5V/0hQIs8AmuYx4co6jLCi/IrwZdHNFk5dmmo+5geSGQFulhwQJwJ+tj4Xdw1ssbtNlGaFpNa8eYWPCkLob1IhW9RzGWmzE8Zvzs7ggeOJAYg6Cjnio4XTpwoTfHK1Kuw3gRej/my1KjQ5sDXv71A6vzS
   k8s-resources:paperless-metrics-api-token:
-    secure: v1:5vWE+oMujIdJWVhI:z4VTOE6KqYUqA5z5YwDJh8hkS3Tn19+VMW4ZC05MfDrYsFebqE6uyXDifYNZgb2ODw4oDTC4wqk=
+    secure: v1:eG/rrK0rz70sMgFX:YNWL9hlaQZTKTt+eSXyBnC/Ya6tl2ArQ90D9LW2mVcO0LksPyAIqA5X1TfKd+gZjNO9kAkP8T0w=
   k8s-resources:authentikApiToken:
-    secure: v1:UoPd8OLAvQr0TMMJ:ShjqZnpeoUpA9zQ/mIR36S2+g2s+4bcA6LzPBH82bfzvFms9DcgwMHPZAbq8ypNH28soSswvUhhDWxx9Rgjcp8Ivj/jx3v5Grsy4QQ==
+    secure: v1:D4h5pMvam0hKRGhr:cMonrYxkfpnYCS1TqzYIqu+r9EWP4pVqV4OtkUs/vqV0C6mSXS5uva985iPdgVaOES04o0/JTju6WuC+7GtuVigliYio4C5qsyjnFg==
   k8s-resources:proxmox-api-user:
-    secure: v1:duOYupmhdYuuO8WK:IJId8crs0Q9M/2E96fJweRubd85UnCB5IqpFXhQ6rLhl
+    secure: v1:pQFwT8WHQTVYDFj+:hyz8m1t/CxeBkLbSfV/lyJ6Pqb4zX1eJrqyNRfRURgmP
   k8s-resources:proxmox-api-token:
-    secure: v1:CUm8qdzGecR8v95s:He5sAdYSWskmMjvOL4ddlEaGOK4ietRWrGc4O5RM74yn+53pBwsVBbpxnunsWcsQUy/Scw==
+    secure: v1:qwCWJ4mECIPtHohe:t+tebyLDCgttkV0XwbLy3IxHTL7mdt9cxS5B2t1voUXzB9u7L1MifoZQqOVsVALYISrC3Q==
   k8s-resources:unpoller-password:
-    secure: v1:N7RUTOssBxa7owN2:RYsIWxa0emKmHUQ+1q7WusacOUSOsWrgBoYq84tu8IYHqq0=
+    secure: v1:JpH3SN5+f+yJjs9o:FAsrueH4ArNMRCOrcyUu+qX/DnTETYPiIHM2GnZ4xsiITeM=
   k8s-resources:homeassistant-prometheus-token:
-    secure: v1:koCCGQukSq2fPMLU:/uxvWbp8MAT9ieZoALkLR8A/EGNns1dAIBEe0UqKu4uQ60QeZzrRgCcwHNB4Hz/mL7n+LDxqhMmPtbjpAE/+9t5FNz9ROtjh8YXkUgk+twLV2nx5qpC8lo2bUaN/iTbeSsr6uwqpB9E4sJ5fY/2eLvLbG5TR5JlRnPZjNi+iPpfiCkfFdxyGAbbnmqEeaYhEah4ssluDTywiXjiROYhfR55XVLEqM3uwMna6dN/WuKLWhu3jgI+qKOe7u56uZh8od4pg5wDKgg==
+    secure: v1:UmF29CSTZkL2smAX:uDaRANSa+754TARg72TX+WcCmiWwbheFiqStzApjeuOmlVgB9DXa0Pha/VZ9AtzNi39y4e6OZJn+KVotWTZe+m2SSGmqrynBOdhvbkRPMnBmpDO/H/1xXRTErlILSu0YitzGTUirWPndpzc6ENPDJ3Uylaabn5a3iTbGNfhMuSNMA8KTMLcsQV+tZfkyxEPOoukV0oXvhEr62qj2JGWFs7+u40vgBMEZPpVOknigK6kTGtK2ssSuYw3y2PlnoLSIm+Sy1j3KGw==

@@ -8,7 +8,7 @@ import {
   postgresqlNamespace,
   postgresqlClusterName,
   grafanaDbPassword,
-} from "../postgresql";
+} from "../databases/postgresql";
 import { namespaceName } from "./namespace";
 
 // Declaratively create Grafana database using CloudNativePG

@@ -12,7 +12,7 @@ import {
   postgresqlNamespace,
   postgresqlClusterName,
   homeassistantDbPassword,
-} from "./postgresql";
+} from "../databases/postgresql";
 
 // Create namespace for Home Assistant
 const namespace = new k8s.core.v1.Namespace("homeassistant", {

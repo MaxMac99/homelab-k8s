@@ -12,8 +12,8 @@ import {
   postgresqlNamespace,
   postgresqlClusterName,
   authentikDbPassword
-} from "./postgresql";
-import { redisHost } from "./redis";
+} from "../databases/postgresql";
+import { redisHost } from "../databases/redis";
 
 // Create namespace for Authentik
 const namespace = new k8s.core.v1.Namespace("authentik", {

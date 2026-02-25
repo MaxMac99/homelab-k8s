@@ -5,7 +5,7 @@
 
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
-import { adminPassword as grafanaAdminPassword } from "./monitoring/grafana";
+import { adminPassword as grafanaAdminPassword } from "../monitoring/grafana";
 
 const config = new pulumi.Config();
 const authentikApiToken = config.requireSecret("authentikApiToken");

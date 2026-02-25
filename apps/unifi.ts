@@ -12,7 +12,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
 
 // Import shared MongoDB connection info
-import { mongodbHost, mongodbRootPasswordValue } from "./mongodb";
+import { mongodbHost, mongodbRootPasswordValue } from "../databases/mongodb";
 
 // Create namespace for UniFi
 const namespace = new k8s.core.v1.Namespace("unifi", {

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true
+  },
+  "timezone": "Europe/Berlin",
+  "schedule": ["before 6am on monday"],
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Auto-merge patch updates",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group all Helm chart updates (non-patch)",
+      "matchManagers": ["regex"],
+      "matchDatasources": ["helm"],
+      "matchUpdateTypes": ["minor", "major"],
+      "groupName": "helm charts"
+    },
+    {
+      "description": "Group all Docker image updates (non-patch)",
+      "matchManagers": ["regex"],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor", "major"],
+      "groupName": "docker images"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Match Docker images in Pulumi TypeScript files",
+      "fileMatch": ["\\.ts$"],
+      "matchStrings": [
+        "image:\\s*[\"'](?<depName>[^:\"']+):(?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Match Docker images with separate repository and tag fields",
+      "fileMatch": ["\\.ts$"],
+      "matchStrings": [
+        "repository:\\s*[\"'](?<depName>[^\"']+)[\"'][,\\s]*\\n\\s*tag:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Match Helm chart versions (Chart API with fetchOpts)",
+      "fileMatch": ["\\.ts$"],
+      "matchStrings": [
+        "chart:\\s*[\"'](?<depName>[^\"']+)[\"'][\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"'][\\s\\S]*?fetchOpts:\\s*\\{[\\s\\S]*?repo:\\s*[\"'](?<registryUrl>[^\"']+)[\"']",
+        "chart:\\s*[\"'](?<depName>[^\"']+)[\"'][\\s\\S]*?fetchOpts:\\s*\\{[\\s\\S]*?repo:\\s*[\"'](?<registryUrl>[^\"']+)[\"'][\\s\\S]*?\\}[\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "helm"
+    },
+    {
+      "customType": "regex",
+      "description": "Match Helm chart versions (Release API with repositoryOpts)",
+      "fileMatch": ["\\.ts$"],
+      "matchStrings": [
+        "chart:\\s*[\"'](?<depName>[^\"']+)[\"'][\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"'][\\s\\S]*?repositoryOpts:\\s*\\{[\\s\\S]*?repo:\\s*[\"'](?<registryUrl>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "helm"
+    },
+    {
+      "customType": "regex",
+      "description": "Match PostgreSQL image version in CloudNativePG",
+      "fileMatch": ["\\.ts$"],
+      "matchStrings": [
+        "imageName:\\s*[\"'](?<depName>[^:\"']+):(?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}

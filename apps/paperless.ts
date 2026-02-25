@@ -12,8 +12,8 @@ import {
   postgresqlHost,
   postgresqlNamespace,
   postgresqlClusterName,
-} from "./postgresql";
-import { redisHost } from "./redis";
+} from "../databases/postgresql";
+import { redisHost } from "../databases/redis";
 
 // Create namespace for Paperless
 const namespace = new k8s.core.v1.Namespace("paperless", {

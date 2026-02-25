@@ -4,8 +4,8 @@
 
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
-import { authentikOutpostService } from "./authentik-outpost";
-import { authentikNamespace } from "./authentik";
+import { authentikOutpostService } from "../auth/authentik-outpost";
+import { authentikNamespace } from "../auth/authentik";
 
 // Create namespace for Traefik
 const traefikNamespace = new k8s.core.v1.Namespace("traefik", {
