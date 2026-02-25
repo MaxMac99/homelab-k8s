@@ -1,0 +1,33 @@
+encryptionsalt: v1:zTriiVVM8/E=:v1:dWZa24847sJn7pJm:SXP16QOd4HVj3SaboByuZbnsHx+rNw==
+config:
+  kubernetes:kubeconfig: ~/.kube/k3s-config
+  k8s-resources:maxPassword:
+    secure: v1:WxUpPqAnYF1n1owO:9P8qDDD64r3ZAUG0SdyhyWEs7KPVQzFHGQCp+A==
+  k8s-resources:michaelPassword:
+    secure: v1:IZps4YxuGlfcQRHY:3VufA9/DP9wRECAIlewm/mwXkzHqkaSodbP+DQ==
+  k8s-resources:annaPassword:
+    secure: v1:nMrFLRC1Zc6YmrYd:UuMtrMdVG1SAA0yYpRZxyb4vz1SAQFYW39G3/A==
+  k8s-resources:authentikOutpostToken:
+    secure: v1:oIUkXG4Wo0oYyqNH:ER2+uHHNOP8FlMX+fdHueOJvW6FgajraeZyayPb5C+ZRbsRpzeRYs5unuuD27xMeRK1NovKSfuvvgdYzsAq+LKgWWdIt1tEFfBezeA==
+  k8s-resources:grafana-oauth-client-id:
+    secure: v1:39Ey1h4G7lFP7djw:uuayDiexqrlgZXoix7192RtT672ZIdzXu7UT2oHWlSF4JizbgQv4mBOl7UWhr2zmu1E+sx1cmf0=
+  k8s-resources:grafana-oauth-client-secret:
+    secure: v1:epHqIk9WXIbOlVdZ:7JIz1cKV3QVDw72uTHLehapMYGfnpPR5++s7Ad+0dtV/8KZoHBOTsagObMU5fjEaxyFlPSFCsspZlb9xGRDhPPZUKx85Bdv7y6T4o40H2QRSvCYKrZxfK/fBWKDriFOfX74zhijeeKlzuzC9IXqpB8uDZB2gatlghF92vwzcP/ZtcwRc0/DXIsmUAo1xRTA8
+  k8s-resources:paperless-secret-key:
+    secure: v1:DW+tu708FV9EoOtf:l8JrkOoKOVKLGzMBfavEXEv9xkQ/uWlHoqYpb9cAnOoNZGWfx11zF54=
+  k8s-resources:paperless-authentik-client-id:
+    secure: v1:FDTbiAyBT68NV/iH:cc0Q0mlS4D8LPuw7XmQqWlqxeVm2b7O0QI3+iNb0KsGyICPgb5XLyjK2CdPUkhKg0XlX+pcS2+M=
+  k8s-resources:paperless-authentik-client-secret:
+    secure: v1:kDzUr65x+yC6+fWq:h5uG3yl1WnI6cCjxw8+R3eDfsP6DGMcb1KdpNU798PMVG0+rzwfFUNN7SnX3to1hma3/kkUaE9Flj4MlssxWHGig6thSEaIvhidQeNgbWj0Jf9UAWBXBpNYU9r/lp8kVFHJTFIHaRq6cU3875U/RB6kzgE+mec/BTG+4t7EkOpQ/vMpf99jop5s2hMQVQs7/
+  k8s-resources:paperless-metrics-api-token:
+    secure: v1:5vWE+oMujIdJWVhI:z4VTOE6KqYUqA5z5YwDJh8hkS3Tn19+VMW4ZC05MfDrYsFebqE6uyXDifYNZgb2ODw4oDTC4wqk=
+  k8s-resources:authentikApiToken:
+    secure: v1:UoPd8OLAvQr0TMMJ:ShjqZnpeoUpA9zQ/mIR36S2+g2s+4bcA6LzPBH82bfzvFms9DcgwMHPZAbq8ypNH28soSswvUhhDWxx9Rgjcp8Ivj/jx3v5Grsy4QQ==
+  k8s-resources:proxmox-api-user:
+    secure: v1:duOYupmhdYuuO8WK:IJId8crs0Q9M/2E96fJweRubd85UnCB5IqpFXhQ6rLhl
+  k8s-resources:proxmox-api-token:
+    secure: v1:CUm8qdzGecR8v95s:He5sAdYSWskmMjvOL4ddlEaGOK4ietRWrGc4O5RM74yn+53pBwsVBbpxnunsWcsQUy/Scw==
+  k8s-resources:unpoller-password:
+    secure: v1:N7RUTOssBxa7owN2:RYsIWxa0emKmHUQ+1q7WusacOUSOsWrgBoYq84tu8IYHqq0=
+  k8s-resources:homeassistant-prometheus-token:
+    secure: v1:koCCGQukSq2fPMLU:/uxvWbp8MAT9ieZoALkLR8A/EGNns1dAIBEe0UqKu4uQ60QeZzrRgCcwHNB4Hz/mL7n+LDxqhMmPtbjpAE/+9t5FNz9ROtjh8YXkUgk+twLV2nx5qpC8lo2bUaN/iTbeSsr6uwqpB9E4sJ5fY/2eLvLbG5TR5JlRnPZjNi+iPpfiCkfFdxyGAbbnmqEeaYhEah4ssluDTywiXjiROYhfR55XVLEqM3uwMna6dN/WuKLWhu3jgI+qKOe7u56uZh8od4pg5wDKgg==

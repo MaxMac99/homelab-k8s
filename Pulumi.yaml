@@ -1,0 +1,7 @@
+name: k8s-resources
+description: Kubernetes resources for K3S cluster
+runtime:
+  name: nodejs
+  options:
+    packagemanager: yarn
+    nodeargs: '--loader ts-node/esm --no-warnings --experimental-specifier-resolution=node'
