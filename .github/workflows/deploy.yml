@@ -5,14 +5,26 @@ on:
     branches: [main]
 
 concurrency:
-  group: pulumi
+  group: pulumi-deploy
   cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   deploy:
     name: Pulumi Deploy
     runs-on: homelab-runner
     steps:
+      - name: Cancel running previews
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh run list -w "Pulumi Preview" --json databaseId,status -q '.[] | select(.status == "in_progress" or .status == "queued") | .databaseId'); do
+            gh run cancel "$id" || true
+          done
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
