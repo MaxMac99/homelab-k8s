@@ -53,7 +53,7 @@ const mongoInitJob = new k8s.batch.v1.Job("unifi-mongo-init", {
         restartPolicy: "OnFailure",
         containers: [{
           name: "mongo-init",
-          image: "mongo:8.0",
+          image: "mongo:8.2",
           command: ["mongosh"],
           args: [
             pulumi.interpolate`mongodb://root:${mongodbRootPasswordValue}@${mongodbHost}:27017/admin`,
@@ -130,7 +130,7 @@ const unifiDeployment = new k8s.apps.v1.Deployment("unifi", {
         },
         containers: [{
           name: "unifi",
-          image: "lscr.io/linuxserver/unifi-network-application:10.0.160",
+          image: "lscr.io/linuxserver/unifi-network-application:10.1.85",
           ports: [
             {
               containerPort: 8443,
