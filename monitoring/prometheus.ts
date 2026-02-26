@@ -158,15 +158,6 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
     serverFiles: {
       "prometheus.yml": {
         scrape_configs: [
-          // Scrape Prometheus itself
-          {
-            job_name: "prometheus",
-            static_configs: [
-              {
-                targets: ["localhost:9090"],
-              },
-            ],
-          },
           // Kubernetes API server
           {
             job_name: "kubernetes-apiservers",
