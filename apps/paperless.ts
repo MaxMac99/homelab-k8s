@@ -306,6 +306,13 @@ const paperlessDeployment = new k8s.apps.v1.Deployment("paperless", {
   },
   spec: {
     replicas: 1,
+    strategy: {
+      type: "RollingUpdate",
+      rollingUpdate: {
+        maxUnavailable: 1,
+        maxSurge: 0,
+      },
+    },
     selector: {
       matchLabels: {
         app: "paperless",

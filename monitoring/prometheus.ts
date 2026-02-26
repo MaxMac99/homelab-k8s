@@ -33,6 +33,12 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
   fetchOpts: {
     repo: "https://prometheus-community.github.io/helm-charts",
   },
+  transformations: [(obj: any) => {
+    if (obj.kind === "PersistentVolumeClaim") {
+      obj.metadata.annotations = obj.metadata.annotations || {};
+      obj.metadata.annotations["pulumi.com/skipAwait"] = "true";
+    }
+  }],
   values: {
     // Prometheus server configuration
     server: {
@@ -158,129 +164,6 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
     serverFiles: {
       "prometheus.yml": {
         scrape_configs: [
-          // Kubernetes API server
-          {
-            job_name: "kubernetes-apiservers",
-            kubernetes_sd_configs: [
-              {
-                role: "endpoints",
-              },
-            ],
-            scheme: "https",
-            tls_config: {
-              ca_file: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
-            },
-            bearer_token_file:
-              "/var/run/secrets/kubernetes.io/serviceaccount/token",
-            relabel_configs: [
-              {
-                source_labels: [
-                  "__meta_kubernetes_namespace",
-                  "__meta_kubernetes_service_name",
-                  "__meta_kubernetes_endpoint_port_name",
-                ],
-                action: "keep",
-                regex: "default;kubernetes;https",
-              },
-            ],
-          },
-          // Kubernetes nodes
-          {
-            job_name: "kubernetes-nodes",
-            kubernetes_sd_configs: [
-              {
-                role: "node",
-              },
-            ],
-            scheme: "https",
-            tls_config: {
-              ca_file: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
-            },
-            bearer_token_file:
-              "/var/run/secrets/kubernetes.io/serviceaccount/token",
-            relabel_configs: [
-              {
-                action: "labelmap",
-                regex: "__meta_kubernetes_node_label_(.+)",
-              },
-            ],
-          },
-          // Kubernetes cAdvisor - container metrics (CPU, memory, etc.)
-          {
-            job_name: "kubernetes-cadvisor",
-            kubernetes_sd_configs: [
-              {
-                role: "node",
-              },
-            ],
-            scheme: "https",
-            metrics_path: "/metrics/cadvisor",
-            tls_config: {
-              ca_file: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
-            },
-            bearer_token_file:
-              "/var/run/secrets/kubernetes.io/serviceaccount/token",
-            relabel_configs: [
-              {
-                action: "labelmap",
-                regex: "__meta_kubernetes_node_label_(.+)",
-              },
-            ],
-          },
-          // Kubernetes pods
-          {
-            job_name: "kubernetes-pods",
-            kubernetes_sd_configs: [
-              {
-                role: "pod",
-              },
-            ],
-            relabel_configs: [
-              // Only scrape pods with prometheus.io/scrape annotation
-              {
-                source_labels: [
-                  "__meta_kubernetes_pod_annotation_prometheus_io_scrape",
-                ],
-                action: "keep",
-                regex: "true",
-              },
-              // Use custom path if specified
-              {
-                source_labels: [
-                  "__meta_kubernetes_pod_annotation_prometheus_io_path",
-                ],
-                action: "replace",
-                target_label: "__metrics_path__",
-                regex: "(.+)",
-              },
-              // Use custom port if specified
-              {
-                source_labels: [
-                  "__address__",
-                  "__meta_kubernetes_pod_annotation_prometheus_io_port",
-                ],
-                action: "replace",
-                regex: "([^:]+)(?::\\d+)?;(\\d+)",
-                replacement: "$1:$2",
-                target_label: "__address__",
-              },
-              // Add pod labels as metrics labels
-              {
-                action: "labelmap",
-                regex: "__meta_kubernetes_pod_label_(.+)",
-              },
-              {
-                source_labels: ["__meta_kubernetes_namespace"],
-                action: "replace",
-                target_label: "namespace",
-              },
-              {
-                source_labels: ["__meta_kubernetes_pod_name"],
-                action: "replace",
-                target_label: "pod",
-              },
-            ],
-          },
           // Home Assistant - requires bearer token authentication
           {
             job_name: "homeassistant",
