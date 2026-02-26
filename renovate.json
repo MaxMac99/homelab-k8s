@@ -12,6 +12,7 @@
   "prHourlyLimit": 5,
   "prConcurrentLimit": 10,
   "labels": ["dependencies"],
+  "platformAutomerge": true,
   "packageRules": [
     {
       "description": "Auto-merge patch updates",
@@ -31,6 +32,13 @@
       "matchDatasources": ["docker"],
       "matchUpdateTypes": ["minor", "major"],
       "groupName": "docker images"
+    },
+    {
+      "description": "Group ARC charts together",
+      "matchManagers": ["regex"],
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["actions-runner-controller-charts"],
+      "groupName": "arc"
     }
   ],
   "customManagers": [
@@ -70,6 +78,16 @@
         "chart:\\s*[\"'](?<depName>[^\"']+)[\"'][\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"'][\\s\\S]*?repositoryOpts:\\s*\\{[\\s\\S]*?repo:\\s*[\"'](?<registryUrl>[^\"']+)[\"']"
       ],
       "datasourceTemplate": "helm"
+    },
+    {
+      "customType": "regex",
+      "description": "Match OCI Helm chart versions",
+      "fileMatch": ["\\.ts$"],
+      "matchStrings": [
+        "chart:\\s*[\"']oci://(?<registryUrl>[^/]+)/(?<depName>[^\"']+)[\"'][\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "docker",
+      "packageNameTemplate": "{{{registryUrl}}}/{{{depName}}}"
     },
     {
       "customType": "regex",

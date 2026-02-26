@@ -31,3 +31,5 @@ config:
     secure: v1:JpH3SN5+f+yJjs9o:FAsrueH4ArNMRCOrcyUu+qX/DnTETYPiIHM2GnZ4xsiITeM=
   k8s-resources:homeassistant-prometheus-token:
     secure: v1:UmF29CSTZkL2smAX:uDaRANSa+754TARg72TX+WcCmiWwbheFiqStzApjeuOmlVgB9DXa0Pha/VZ9AtzNi39y4e6OZJn+KVotWTZe+m2SSGmqrynBOdhvbkRPMnBmpDO/H/1xXRTErlILSu0YitzGTUirWPndpzc6ENPDJ3Uylaabn5a3iTbGNfhMuSNMA8KTMLcsQV+tZfkyxEPOoukV0oXvhEr62qj2JGWFs7+u40vgBMEZPpVOknigK6kTGtK2ssSuYw3y2PlnoLSIm+Sy1j3KGw==
+  k8s-resources:githubPat:
+    secure: v1:Ap9sfBd4rm95XVPD:WNMJHH1TB6FY6rCWHtogjfmXUXvulzhn7F7dQ4e4jWsKupGU/zjsJU1U6K5nRIeGi+TW1JPjBUA=

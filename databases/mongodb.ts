@@ -25,6 +25,7 @@ const mongodbSecret = new k8s.core.v1.Secret("mongodb-secret", {
   type: "Opaque",
   stringData: {
     rootPassword: mongodbRootPassword.result,
+    exporterUri: pulumi.interpolate`mongodb://root:${mongodbRootPassword.result}@localhost:27017`,
   },
 });
 
@@ -56,6 +57,10 @@ const mongodbDeployment = new k8s.apps.v1.Deployment("mongodb", {
   },
   spec: {
     replicas: 1,
+    strategy: {
+      type: "Recreate",
+      rollingUpdate: null as any,
+    },
     selector: {
       matchLabels: {
         app: "mongodb",
@@ -137,9 +142,16 @@ const mongodbDeployment = new k8s.apps.v1.Deployment("mongodb", {
               containerPort: 9216,
               name: "metrics",
             }],
-            command: [
-              "/mongodb_exporter",
-              pulumi.interpolate`--mongodb.uri=mongodb://root:${mongodbSecret.stringData.rootPassword}@localhost:27017`,
+            env: [
+              {
+                name: "MONGODB_URI",
+                valueFrom: {
+                  secretKeyRef: {
+                    name: mongodbSecret.metadata.name,
+                    key: "exporterUri",
+                  },
+                },
+              },
             ],
             resources: {
               requests: {
@@ -189,7 +201,7 @@ const mongodbService = new k8s.core.v1.Service("mongodb-service", {
 // Export connection info for applications
 export const mongodbHost = pulumi.interpolate`${mongodbService.metadata.name}.${postgresqlNamespace}.svc.cluster.local`;
 export const mongodbPort = 27017;
-export const mongodbRootPasswordValue = mongodbSecret.stringData.rootPassword;
+export const mongodbRootPasswordValue = mongodbRootPassword.result;
 
 // Instructions for applications:
 //

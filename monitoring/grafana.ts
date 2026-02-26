@@ -37,6 +37,14 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
   fetchOpts: {
     repo: "https://grafana.github.io/helm-charts",
   },
+  transformations: [
+    (obj: any, opts: any) => {
+      if (obj.kind === "Role" || obj.kind === "ClusterRole") {
+        opts.ignoreChanges = opts.ignoreChanges || [];
+        opts.ignoreChanges.push("rules");
+      }
+    },
+  ],
   values: {
     // Persistent storage for plugins only (dashboards/config now in PostgreSQL)
     persistence: {

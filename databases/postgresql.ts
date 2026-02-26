@@ -185,7 +185,7 @@ const postgresCluster = new k8s.apiextensions.CustomResource(
 
       // Storage configuration - use fast ZFS pool
       storage: {
-        storageClass: "local-path", // K3s default, points to /mnt/k8s-fast via config
+        storageClass: "local-path",
         size: "50Gi",
       },
 

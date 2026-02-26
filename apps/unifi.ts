@@ -62,8 +62,8 @@ const mongoInitJob = new k8s.batch.v1.Job("unifi-mongo-init", {
 db = db.getSiblingDB('unifi');
 try {
   db.createUser({
-    user: '${unifiMongoSecret.stringData.username}',
-    pwd: '${unifiMongoSecret.stringData.password}',
+    user: '${unifiMongoPassword.result}',
+    pwd: '${unifiMongoPassword.result}',
     roles: [
       { role: 'dbOwner', db: 'unifi' },
       { role: 'dbOwner', db: 'unifi_stat' }
