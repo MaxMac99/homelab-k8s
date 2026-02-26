@@ -280,7 +280,7 @@ const matterServerDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "matter-server",
-              image: "ghcr.io/matter-js/python-matter-server:8.1.1",
+              image: "ghcr.io/matter-js/python-matter-server:8.1.2",
               args: ["--storage-path", "/data", "--log-level", "info"],
               ports: [
                 {
