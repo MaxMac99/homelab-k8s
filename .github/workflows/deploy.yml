@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: pulumi-deploy
+  group: pulumi
   cancel-in-progress: false
 
 jobs:
