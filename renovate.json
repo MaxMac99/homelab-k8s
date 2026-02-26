@@ -84,10 +84,9 @@
       "description": "Match OCI Helm chart versions",
       "fileMatch": ["\\.ts$"],
       "matchStrings": [
-        "chart:\\s*[\"']oci://(?<registryUrl>[^/]+)/(?<depName>[^\"']+)[\"'][\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+        "chart:\\s*[\"']oci://(?<depName>[^\"']+)[\"'][\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
       ],
-      "datasourceTemplate": "docker",
-      "packageNameTemplate": "{{{registryUrl}}}/{{{depName}}}"
+      "datasourceTemplate": "docker"
     },
     {
       "customType": "regex",
