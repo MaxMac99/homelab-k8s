@@ -83,7 +83,7 @@ const mongodbDeployment = new k8s.apps.v1.Deployment("mongodb", {
         containers: [
           {
             name: "mongodb",
-            image: "mongo:8.0",
+            image: "mongo:8.2",
             args: [
               "--auth",
             ],
@@ -137,7 +137,7 @@ const mongodbDeployment = new k8s.apps.v1.Deployment("mongodb", {
           },
           {
             name: "mongodb-exporter",
-            image: "percona/mongodb_exporter:0.43",
+            image: "percona/mongodb_exporter:0.49",
             ports: [{
               containerPort: 9216,
               name: "metrics",

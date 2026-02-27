@@ -56,7 +56,7 @@ const redisDeployment = new k8s.apps.v1.Deployment("redis", {
         containers: [
           {
             name: "redis",
-            image: "redis:8.4.0-alpine",
+            image: "redis:8.6.1-alpine",
             args: [
               "redis-server",
               "--appendonly", "yes",
@@ -99,7 +99,7 @@ const redisDeployment = new k8s.apps.v1.Deployment("redis", {
           },
           {
             name: "redis-exporter",
-            image: "oliver006/redis_exporter:v1.66.0",
+            image: "oliver006/redis_exporter:v1.81.0",
             ports: [{
               containerPort: 9121,
               name: "metrics",

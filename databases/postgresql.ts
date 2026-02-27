@@ -181,7 +181,7 @@ const postgresCluster = new k8s.apiextensions.CustomResource(
       instances: 1, // Start with 1, can scale to 3 for HA later
 
       // PostgreSQL configuration
-      imageName: "ghcr.io/cloudnative-pg/postgresql:18.1",
+      imageName: "ghcr.io/cloudnative-pg/postgresql:18.3",
 
       // Storage configuration - use fast ZFS pool
       storage: {
