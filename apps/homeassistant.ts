@@ -180,7 +180,7 @@ const homeassistantDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "homeassistant",
-              image: "ghcr.io/home-assistant/home-assistant:2025.12",
+              image: "ghcr.io/home-assistant/home-assistant:2026.2",
               ports: [
                 {
                   containerPort: 8123,
