@@ -137,7 +137,7 @@ const mongodbDeployment = new k8s.apps.v1.Deployment("mongodb", {
           },
           {
             name: "mongodb-exporter",
-            image: "percona/mongodb_exporter:0.49",
+            image: "percona/mongodb_exporter:2.37",
             ports: [{
               containerPort: 9216,
               name: "metrics",
