@@ -32,7 +32,7 @@ const grafanaAdminPassword = new random.RandomPassword("grafana-admin-password",
 // Install Grafana using Helm chart
 const grafana = new k8s.helm.v3.Chart("grafana", {
   chart: "grafana",
-  version: "10.3.0",
+  version: "10.5.15",
   namespace: namespaceName,
   fetchOpts: {
     repo: "https://grafana.github.io/helm-charts",
