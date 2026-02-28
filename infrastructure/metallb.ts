@@ -11,7 +11,7 @@ const namespace = new k8s.core.v1.Namespace("metallb-system", {
 // Deploy MetalLB using Helm
 const metallb = new k8s.helm.v3.Release("metallb", {
   chart: "metallb",
-  version: "0.15.2",
+  version: "0.15.3",
   namespace: namespace.metadata.name,
   repositoryOpts: {
     repo: "https://metallb.github.io/metallb",
