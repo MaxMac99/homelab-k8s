@@ -47,10 +47,10 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
   ],
   values: {
     // Persistent storage for plugins only (dashboards/config now in PostgreSQL)
+    // Use existingClaim so the Helm chart doesn't manage the PVC
     persistence: {
       enabled: true,
-      storageClassName: "local-path",
-      size: "2Gi", // Reduced size - only for plugins and temporary files
+      existingClaim: "grafana",
     },
 
     // Disable init-chown-data container (not needed and causes permission issues)
