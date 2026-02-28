@@ -14,7 +14,7 @@ const namespace = new k8s.core.v1.Namespace("cert-manager", {
 // Install cert-manager via Helm
 const certManager = new k8s.helm.v3.Chart("cert-manager", {
   chart: "cert-manager",
-  version: "v1.19.1",
+  version: "v1.19.4",
   namespace: namespace.metadata.name,
   fetchOpts: {
     repo: "https://charts.jetstack.io",
