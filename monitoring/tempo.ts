@@ -8,7 +8,7 @@ import { namespaceName } from "./namespace";
 // Install Tempo using Helm chart (single binary mode for simplicity)
 const tempo = new k8s.helm.v3.Chart("tempo", {
   chart: "tempo",
-  version: "1.24.1",
+  version: "1.24.4",
   namespace: namespaceName,
   fetchOpts: {
     repo: "https://grafana.github.io/helm-charts",
