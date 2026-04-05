@@ -23,7 +23,7 @@ const cnpgNamespace = new k8s.core.v1.Namespace("cnpg-system", {
 // Install CloudNativePG operator
 const cnpgOperator = new k8s.helm.v3.Chart("cloudnative-pg", {
   chart: "cloudnative-pg",
-  version: "0.27.1",
+  version: "0.28.0",
   namespace: cnpgNamespace.metadata.name,
   fetchOpts: {
     repo: "https://cloudnative-pg.github.io/charts",
