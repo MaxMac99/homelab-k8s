@@ -29,7 +29,7 @@ const githubPatSecret = new k8s.core.v1.Secret("github-pat", {
 // ARC controller
 const arcController = new k8s.helm.v3.Release("arc-controller", {
   chart: "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller",
-  version: "0.13.1",
+  version: "0.14.0",
   namespace: arcSystemsNamespace.metadata.name,
 });
 
@@ -65,7 +65,7 @@ const arcRunnerScaleSet = new k8s.helm.v3.Release(
   "arc-runner-set",
   {
     chart: "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
-    version: "0.13.1",
+    version: "0.14.0",
     namespace: arcRunnersNamespace.metadata.name,
     values: {
       githubConfigUrl: "https://github.com/MaxMac99/homelab-k8s",
