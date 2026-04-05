@@ -130,7 +130,7 @@ const unifiDeployment = new k8s.apps.v1.Deployment("unifi", {
         },
         containers: [{
           name: "unifi",
-          image: "lscr.io/linuxserver/unifi-network-application:10.1.85",
+          image: "lscr.io/linuxserver/unifi-network-application:10.1.89",
           ports: [
             {
               containerPort: 8443,
