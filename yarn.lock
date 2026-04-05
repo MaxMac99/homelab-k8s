@@ -532,7 +532,7 @@
     glob "^12.0.0"
     shell-quote "^1.6.1"
 
-"@pulumi/pulumi@^3.113.0":
+"@pulumi/pulumi@^3.113.0", "@pulumi/pulumi@^3.142.0":
   version "3.229.0"
   resolved "https://registry.yarnpkg.com/@pulumi/pulumi/-/pulumi-3.229.0.tgz#c21ae9bcb0db33e17a19b16fd875065f3923b0af"
   integrity sha512-SoGAonHOrGP/NQQivq3gMz0nlebVUYOf6TgpsPHqvFARsHz4JIR+/fpFm/8JW+Ev5o6tvb6g04a+STmpdxoaOg==
@@ -567,45 +567,10 @@
     tmp "^0.2.4"
     upath "^1.1.0"
 
-"@pulumi/pulumi@^3.142.0":
-  version "3.228.0"
-  resolved "https://registry.yarnpkg.com/@pulumi/pulumi/-/pulumi-3.228.0.tgz#be4edbc2285349cd60062d9025eef793ea586776"
-  integrity sha512-yAwieapB/Huro8/psool1sKhe2rGT80GTnEFLDWbKPHTMo6oSegGb6aYg+bzPuC3vgBOn2dnHkobSuwbBhQ7gQ==
-  dependencies:
-    "@grpc/grpc-js" "^1.10.1"
-    "@logdna/tail-file" "^2.0.6"
-    "@npmcli/arborist" "^9.0.0"
-    "@opentelemetry/api" "^1.9"
-    "@opentelemetry/exporter-trace-otlp-grpc" "^0.57"
-    "@opentelemetry/exporter-zipkin" "^1.30"
-    "@opentelemetry/instrumentation" "^0.57"
-    "@opentelemetry/instrumentation-grpc" "^0.57"
-    "@opentelemetry/resources" "^1.30"
-    "@opentelemetry/sdk-trace-base" "^1.30"
-    "@opentelemetry/sdk-trace-node" "^1.30"
-    "@types/google-protobuf" "^3.15.5"
-    "@types/semver" "^7.5.6"
-    "@types/tmp" "^0.2.6"
-    execa "^5.1.0"
-    fdir "^6.5.0"
-    google-protobuf "^3.21.4"
-    got "^11.8.6"
-    ini "^2.0.0"
-    js-yaml "^3.14.2"
-    minimist "^1.2.6"
-    normalize-package-data "^6.0.0"
-    package-directory "^8.1.0"
-    picomatch "^3.0.1"
-    require-from-string "^2.0.1"
-    semver "^7.5.2"
-    source-map-support "^0.5.6"
-    tmp "^0.2.4"
-    upath "^1.1.0"
-
 "@pulumi/random@^4.18.4":
-  version "4.19.1"
-  resolved "https://registry.yarnpkg.com/@pulumi/random/-/random-4.19.1.tgz#0f08123b31f1463f1208460a0e061c4bc498744f"
-  integrity sha512-gDotQyxtl+pcJb4oaGfbi6PsK8OtzjBmF1D8PYLvr13kCup98KTIIv/8wF2xbgbFf7ljJn3EblADxZ0u8AC/Dg==
+  version "4.19.2"
+  resolved "https://registry.yarnpkg.com/@pulumi/random/-/random-4.19.2.tgz#76e3bd23bdc67c0805734551ae469c8dcf5adae4"
+  integrity sha512-ee77eUIfPMekYi9x7/3iDVIhqUcZrvXQpC8YNTRN8XKfRDuuWio4xu2CvoHeEBDOov84FumMafFqn+xSf+XlDQ==
   dependencies:
     "@pulumi/pulumi" "^3.142.0"
 
@@ -2000,11 +1965,6 @@ path-scurry@^2.0.0, path-scurry@^2.0.2:
   dependencies:
     lru-cache "^11.0.0"
     minipass "^7.1.2"
-
-picomatch@^3.0.1:
-  version "3.0.2"
-  resolved "https://registry.yarnpkg.com/picomatch/-/picomatch-3.0.2.tgz#8f543c114ddc037eab6b10fbd5a66cc8a51a02bc"
-  integrity sha512-cfDHL6LStTEKlNilboNtobT/kEa30PtAf2Q1OgszfrG/rpVl1xaFWT9ktfkS306GmHgmnad1Sw4wabhlvFtsTw==
 
 picomatch@^4.0.0, picomatch@^4.0.3:
   version "4.0.4"
