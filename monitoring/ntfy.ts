@@ -103,7 +103,7 @@ const ntfyDeployment = new k8s.apps.v1.Deployment("ntfy", {
         containers: [
           {
             name: "ntfy",
-            image: "binwiederhier/ntfy:v2.17.0",
+            image: "binwiederhier/ntfy:v2.21.0",
             args: ["serve"],
             ports: [
               {
