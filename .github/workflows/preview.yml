@@ -18,7 +18,7 @@ jobs:
     runs-on: homelab-runner
     concurrency:
       group: pulumi-preview
-      cancel-in-progress: true
+      cancel-in-progress: false
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
