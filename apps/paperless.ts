@@ -259,7 +259,7 @@ const tikaDeployment = new k8s.apps.v1.Deployment("tika", {
       spec: {
         containers: [{
           name: "tika",
-          image: "apache/tika:3.2.3.0",
+          image: "apache/tika:3.3.0.0",
           ports: [{
             containerPort: 9998,
             name: "http",
