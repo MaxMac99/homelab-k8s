@@ -17,6 +17,23 @@ import {
   grafanaDatabaseSecretName,
 } from "./grafana-database";
 
+// PersistentVolumeClaim for Grafana plugin storage
+const grafanaPVC = new k8s.core.v1.PersistentVolumeClaim("grafana-pvc", {
+  metadata: {
+    name: "grafana",
+    namespace: namespaceName,
+  },
+  spec: {
+    accessModes: ["ReadWriteOnce"],
+    storageClassName: "local-path",
+    resources: {
+      requests: {
+        storage: "10Gi",
+      },
+    },
+  },
+});
+
 // Get Pulumi config for Authentik OAuth credentials
 const config = new pulumi.Config();
 const authentikClientId = config.requireSecret("grafana-oauth-client-id");
