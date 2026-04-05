@@ -26,34 +26,6 @@
       "automerge": true
     },
     {
-      "description": "Group all Helm chart updates (non-patch)",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchDatasources": [
-        "helm"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "major"
-      ],
-      "groupName": "helm charts"
-    },
-    {
-      "description": "Group all Docker image updates (non-patch)",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "major"
-      ],
-      "groupName": "docker images"
-    },
-    {
       "description": "Group ARC charts together",
       "matchManagers": [
         "custom.regex"
