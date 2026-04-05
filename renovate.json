@@ -9,8 +9,9 @@
   },
   "timezone": "Europe/Berlin",
   "schedule": [
-    "before 6am on monday"
+    "before 6am every day"
   ],
+  "rebaseWhen": "behind-base-branch",
   "prHourlyLimit": 5,
   "prConcurrentLimit": 10,
   "labels": [
