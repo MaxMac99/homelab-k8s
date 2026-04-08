@@ -166,7 +166,7 @@ const authentikServer = new k8s.apps.v1.Deployment("authentik-server", {
       spec: {
         containers: [{
           name: "authentik",
-          image: "ghcr.io/goauthentik/server:2026.2.1",
+          image: "ghcr.io/goauthentik/server:2026.2.2",
           command: ["ak", "server"],
           env: authentikEnv,
           ports: [
@@ -231,7 +231,7 @@ const authentikWorker = new k8s.apps.v1.Deployment("authentik-worker", {
       spec: {
         containers: [{
           name: "authentik",
-          image: "ghcr.io/goauthentik/server:2026.2.1",
+          image: "ghcr.io/goauthentik/server:2026.2.2",
           command: ["ak", "worker"],
           env: authentikEnv,
           volumeMounts: [{
