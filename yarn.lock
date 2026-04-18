@@ -532,15 +532,15 @@
   integrity sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==
 
 "@pulumi/kubernetes@^4.23.0":
-  version "4.28.0"
-  resolved "https://registry.yarnpkg.com/@pulumi/kubernetes/-/kubernetes-4.28.0.tgz#483d459e489675c784a2c3293644748106f3b541"
-  integrity sha512-tdoUN7blJv1rrwr+2Pc55CP/+L1sMkH3z5Y7DI2yfNiGgdeaOHYia+hYsnLgR4HtBSfIfuBVWxGkZwGWOgUmOQ==
+  version "4.29.0"
+  resolved "https://registry.yarnpkg.com/@pulumi/kubernetes/-/kubernetes-4.29.0.tgz#6191745e9d34b43e9fdf57390c468c67d483aa68"
+  integrity sha512-gA0Kg76en7DStYFM72nKNdy5ByGztCeRfXzxE+Ww7GW9eb8xosc/kZX7r4u9LQURNqPvys+7JM2O+GTqUNcakg==
   dependencies:
     "@pulumi/pulumi" "^3.142.0"
     glob "^12.0.0"
     shell-quote "^1.6.1"
 
-"@pulumi/pulumi@^3.113.0", "@pulumi/pulumi@^3.142.0":
+"@pulumi/pulumi@^3.113.0":
   version "3.230.0"
   resolved "https://registry.yarnpkg.com/@pulumi/pulumi/-/pulumi-3.230.0.tgz#acdfe70ff11a124ea643d8863672f5fd0843e154"
   integrity sha512-wWHP65RKj2zz8R8N4sImPie4bQM/walrCOeNUl46TkdHOOihFdg6cMO2l1IPufh/EBBLtiUBrzpP0wi8OWqhsQ==
@@ -568,6 +568,39 @@
     minimist "^1.2.6"
     normalize-package-data "^6.0.0"
     package-directory "^8.1.0"
+    picomatch "^4.0.0"
+    require-from-string "^2.0.1"
+    semver "^7.5.2"
+    source-map-support "^0.5.6"
+    tmp "^0.2.4"
+    upath "^1.1.0"
+
+"@pulumi/pulumi@^3.142.0":
+  version "3.231.0"
+  resolved "https://registry.yarnpkg.com/@pulumi/pulumi/-/pulumi-3.231.0.tgz#5d6db7a2b4306bc7dba434d1294a5c574ae93bc2"
+  integrity sha512-aAIMkMkbxjGRZ8ldvvm2BPd5JwmJ23QM/vS8iMNpxf8wSDJcIUqx6AtAw2TKTeXlRL4iUMh1xvrXf7APRUwnMg==
+  dependencies:
+    "@grpc/grpc-js" "^1.10.1"
+    "@logdna/tail-file" "^2.0.6"
+    "@npmcli/arborist" "^9.0.0"
+    "@opentelemetry/api" "^1.9"
+    "@opentelemetry/exporter-trace-otlp-grpc" "^0.57"
+    "@opentelemetry/exporter-zipkin" "^1.30"
+    "@opentelemetry/instrumentation" "^0.57"
+    "@opentelemetry/instrumentation-grpc" "^0.57"
+    "@opentelemetry/resources" "^1.30"
+    "@opentelemetry/sdk-trace-base" "^1.30"
+    "@opentelemetry/sdk-trace-node" "^1.30"
+    "@types/google-protobuf" "^3.15.5"
+    "@types/semver" "^7.5.6"
+    "@types/tmp" "^0.2.6"
+    execa "^5.1.0"
+    fdir "^6.5.0"
+    google-protobuf "^3.21.4"
+    ini "^2.0.0"
+    js-yaml "^3.14.2"
+    minimist "^1.2.6"
+    normalize-package-data "^6.0.0"
     picomatch "^4.0.0"
     require-from-string "^2.0.1"
     semver "^7.5.2"
@@ -1368,9 +1401,9 @@ graceful-fs@^4.2.6:
   integrity sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==
 
 hasown@^2.0.2:
-  version "2.0.2"
-  resolved "https://registry.yarnpkg.com/hasown/-/hasown-2.0.2.tgz#003eaf91be7adc372e84ec59dc37252cedb80003"
-  integrity sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==
+  version "2.0.3"
+  resolved "https://registry.yarnpkg.com/hasown/-/hasown-2.0.3.tgz#5e5c2b15b60370a4c7930c383dfb76bf17bc403c"
+  integrity sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==
   dependencies:
     function-bind "^1.1.2"
 
@@ -2016,9 +2049,9 @@ promise-call-limit@^3.0.1:
   integrity sha512-mRPQO2T1QQVw11E7+UdCJu7S61eJVWknzml9sC1heAdj1jxl0fWMBypIt9ZOcLFf8FkG995ZD7RnVk7HH72fZw==
 
 protobufjs@^7.3.0, protobufjs@^7.5.3:
-  version "7.5.4"
-  resolved "https://registry.yarnpkg.com/protobufjs/-/protobufjs-7.5.4.tgz#885d31fe9c4b37f25d1bb600da30b1c5b37d286a"
-  integrity sha512-CvexbZtbov6jW2eXAvLukXjXUW1TzFaivC46BpWc/3BpcCysb5Vffu+B3XHMm8lVEuy2Mm4XGex8hBSg1yapPg==
+  version "7.5.5"
+  resolved "https://registry.yarnpkg.com/protobufjs/-/protobufjs-7.5.5.tgz#b7089ca4410374c75150baf277353ef76db69f96"
+  integrity sha512-3wY1AxV+VBNW8Yypfd1yQY9pXnqTAN+KwQxL8iYm3/BjKYMNg4i0owhEe26PWDOMaIrzeeF98Lqd5NGz4omiIg==
   dependencies:
     "@protobufjs/aspromise" "^1.1.2"
     "@protobufjs/base64" "^1.1.2"
