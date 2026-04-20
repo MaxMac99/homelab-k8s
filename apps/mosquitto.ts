@@ -167,9 +167,12 @@ const mosquittoService = new k8s.core.v1.Service("mosquitto-service", {
   metadata: {
     name: "mosquitto",
     namespace: homeassistantNamespace.metadata.name,
+    annotations: {
+      "metallb.universe.tf/loadBalancerIPs": "192.168.178.13",
+    },
   },
   spec: {
-    type: "ClusterIP",
+    type: "LoadBalancer",
     selector: {
       app: "mosquitto",
     },
