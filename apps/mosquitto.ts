@@ -93,7 +93,7 @@ const mosquittoDeployment = new k8s.apps.v1.Deployment("mosquitto", {
         containers: [
           {
             name: "mosquitto",
-            image: "eclipse-mosquitto:2.0.21",
+            image: "eclipse-mosquitto:2.0.22",
             ports: [
               {
                 containerPort: 1883,
