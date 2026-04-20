@@ -15,7 +15,7 @@ const mosquittoConfig = new k8s.core.v1.ConfigMap("mosquitto-config", {
   data: {
     "mosquitto.conf": `listener 1883
 allow_anonymous false
-password_file /mosquitto/config/password.txt
+password_file /mosquitto/data/password.txt
 persistence true
 persistence_location /mosquitto/data/
 log_dest stdout
