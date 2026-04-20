@@ -39,7 +39,7 @@ There are no tests — validation happens via `pulumi preview` before deploying.
 - `databases/` — shared database instances (PostgreSQL/CloudNativePG, Redis, MongoDB)
 - `auth/` — identity and authentication (Authentik, Authentik Outpost)
 - `apps/` — user-facing applications (Paperless, Homepage, UniFi, AdGuard, Home Assistant, Time Machine)
-- `monitoring/` — observability stack (Prometheus, Grafana, Loki, Tempo, Promtail, ntfy, unpoller)
+- `monitoring/` — observability stack (Prometheus, Grafana, Loki, Tempo, Alloy, ntfy, unpoller)
 - `index.ts` — orchestrator that imports all modules via directory barrel files
 - `Pulumi.default.yaml` — stack config with encrypted secrets
 

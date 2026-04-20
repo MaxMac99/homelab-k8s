@@ -1,5 +1,5 @@
 // Loki - Log aggregation system
-// Collects and stores logs from all pods via Promtail
+// Collects and stores logs from all pods via Grafana Alloy
 // Queryable from Grafana
 
 import * as k8s from "@pulumi/kubernetes";
@@ -142,7 +142,7 @@ const loki = new k8s.helm.v3.Chart("loki", {
 });
 
 // Create a LoadBalancer service for external access (e.g., from maxdata host)
-// This allows Promtail running on bare metal hosts to send logs to Loki
+// This allows log shippers running on bare metal hosts to send logs to Loki
 const lokiLoadBalancer = new k8s.core.v1.Service("loki-external", {
   metadata: {
     name: "loki-external",
@@ -150,6 +150,9 @@ const lokiLoadBalancer = new k8s.core.v1.Service("loki-external", {
     labels: {
       "app.kubernetes.io/name": "loki",
       "app.kubernetes.io/component": "external-access",
+    },
+    annotations: {
+      "metallb.universe.tf/loadBalancerIPs": "192.168.178.11",
     },
   },
   spec: {
@@ -169,7 +172,7 @@ const lokiLoadBalancer = new k8s.core.v1.Service("loki-external", {
   },
 }, { dependsOn: [loki] });
 
-// Export Loki service URL for Grafana data source and Promtail
+// Export Loki service URL for Grafana data source and log shippers (Alloy)
 export const lokiUrl = "http://loki.monitoring.svc.cluster.local:3100";
 export const lokiExternalIp = lokiLoadBalancer.status.loadBalancer.ingress[0].ip;
 
@@ -198,5 +201,5 @@ export { loki, lokiLoadBalancer };
 // Retention: 1 year (365 days)
 // Storage: 100Gi on local-path (ZFS backed with automatic sanoid snapshots)
 //
-// Note: Logs are shipped to Loki by Promtail (deployed as DaemonSet)
+// Note: Logs are shipped to Loki by Grafana Alloy (deployed as DaemonSet)
 // If storage fills up, expand the PVC or reduce retention period

@@ -5,7 +5,7 @@
 // Features:
 // - DNS-based ad blocking and tracking prevention
 // - Preconfigured with Cloudflare DNS upstream (1.1.1.1, 1.0.0.1)
-// - JSON logging for Loki/Promtail integration
+// - JSON logging for Loki/Alloy integration
 // - Prometheus metrics on port 3000 /metrics endpoint
 // - Authentik forward auth for web interface security
 
@@ -628,10 +628,10 @@ export {
 //    - Automatically scraped by Prometheus via pod annotations
 //    - Metrics include: DNS queries, blocked queries, processing time, etc.
 //
-// 2. Logs (Loki/Promtail):
+// 2. Logs (Loki/Alloy):
 //    - AdGuard Home logs to stdout in text format
 //    - Query logs stored in /opt/adguardhome/work/querylog.json (JSON format)
-//    - Promtail automatically collects container logs
+//    - Alloy automatically collects container logs
 //    - View in Grafana via Loki data source
 //
 // Architecture:

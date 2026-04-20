@@ -6,7 +6,7 @@
 import "./namespace";         // Create namespace first
 import "./prometheus";        // Metrics collection
 import "./loki";             // Log aggregation backend
-import "./promtail";         // Log collection agent (requires Loki)
+import "./alloy";            // Log collection agent (requires Loki)
 import "./tempo";            // Distributed tracing
 import "./ntfy";             // Push notification service
 import "./grafana-database"; // Grafana PostgreSQL database
@@ -17,7 +17,7 @@ import "./unpoller";         // UniFi metrics exporter for Prometheus
 export * from "./namespace";
 export * from "./prometheus";
 export * from "./loki";
-export * from "./promtail";
+export * from "./alloy";
 export * from "./tempo";
 export * from "./ntfy";
 export * from "./grafana";
@@ -31,7 +31,7 @@ export * from "./unpoller";
 //   - Node Exporter: Node-level metrics (DaemonSet on all nodes)
 //   - Kube State Metrics: Cluster state metrics
 //   - Loki: Log aggregation backend (365d retention, 100Gi)
-//   - Promtail: Log collection agent (DaemonSet on all nodes)
+//   - Alloy: Log collection agent (DaemonSet on all nodes)
 //   - Tempo: Distributed tracing backend (30d retention, 50Gi)
 //   - Grafana: Unified visualization with Authentik OAuth
 //   - Diun: Container image update notifier (checks every 6h)
