@@ -65,6 +65,32 @@ discovery.relabel "others" {
   }
 }
 
+// Systemd journal logs from the host node
+loki.source.journal "journal" {
+  forward_to = [loki.relabel.journal.receiver]
+  max_age    = "12h"
+  labels     = {
+    job = "systemd-journal",
+  }
+}
+
+loki.relabel "journal" {
+  forward_to = [loki.write.default.receiver]
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+  rule {
+    source_labels = ["__journal__hostname"]
+    target_label  = "hostname"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+
 loki.source.kubernetes "paperless" {
   targets    = discovery.relabel.paperless.output
   forward_to = [loki.process.paperless.receiver]
@@ -162,6 +188,21 @@ const alloy = new k8s.helm.v3.Chart("alloy", {
         },
       ],
 
+      mounts: {
+        extra: [
+          {
+            name: "journal",
+            mountPath: "/var/log/journal",
+            readOnly: true,
+          },
+          {
+            name: "machine-id",
+            mountPath: "/etc/machine-id",
+            readOnly: true,
+          },
+        ],
+      },
+
       resources: {
         requests: {
           cpu: "100m",
@@ -182,6 +223,22 @@ const alloy = new k8s.helm.v3.Chart("alloy", {
           operator: "Exists",
         },
       ],
+      volumes: {
+        extra: [
+          {
+            name: "journal",
+            hostPath: {
+              path: "/var/log/journal",
+            },
+          },
+          {
+            name: "machine-id",
+            hostPath: {
+              path: "/etc/machine-id",
+            },
+          },
+        ],
+      },
     },
   },
 });
