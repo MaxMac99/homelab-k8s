@@ -1,52 +1,57 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
+  "extends": ["config:recommended"],
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true
   },
   "timezone": "Europe/Berlin",
-  "schedule": [
-"before 6am"
-  ],
+  "schedule": ["before 6am"],
   "rebaseWhen": "behind-base-branch",
   "prHourlyLimit": 5,
   "prConcurrentLimit": 10,
-  "labels": [
-    "dependencies"
-  ],
+  "labels": ["dependencies"],
   "platformAutomerge": true,
   "packageRules": [
     {
       "description": "Auto-merge patch updates",
-      "matchUpdateTypes": [
-        "patch"
-      ],
+      "matchUpdateTypes": ["patch"],
       "automerge": true
     },
     {
       "description": "Group ARC charts together",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchDatasources": [
-        "docker"
-      ],
+      "matchManagers": ["custom.regex"],
+      "matchDatasources": ["docker"],
       "groupName": "arc",
-      "matchPackageNames": [
-        "/actions-runner-controller-charts/"
-      ]
+      "matchPackageNames": ["/actions-runner-controller-charts/"]
+    },
+    {
+      "description": "Group all npm updates (pulumi + dev tooling)",
+      "matchManagers": ["npm"],
+      "groupName": "pulumi and dev tooling"
+    },
+    {
+      "description": "Group monitoring stack (charts and images)",
+      "groupName": "monitoring stack",
+      "matchPackageNames": ["loki", "grafana", "prometheus", "tempo", "alloy"]
+    },
+    {
+      "description": "Group authentik server and proxy",
+      "matchDatasources": ["docker"],
+      "groupName": "authentik",
+      "matchPackageNames": ["/goauthentik//"]
+    },
+    {
+      "description": "Keep major bumps in their own PRs for easier review/rollback",
+      "matchUpdateTypes": ["major"],
+      "groupName": null
     }
   ],
   "customManagers": [
     {
       "customType": "regex",
       "description": "Match Docker images in Pulumi TypeScript files",
-      "managerFilePatterns": [
-        "/\\.ts$/"
-      ],
+      "managerFilePatterns": ["/\\.ts$/"],
       "matchStrings": [
         "image:\\s*[\"'](?<depName>[^:\"']+):(?<currentValue>[^\"']+)[\"']"
       ],
@@ -55,9 +60,7 @@
     {
       "customType": "regex",
       "description": "Match Docker images with separate repository and tag fields",
-      "managerFilePatterns": [
-        "/\\.ts$/"
-      ],
+      "managerFilePatterns": ["/\\.ts$/"],
       "matchStrings": [
         "repository:\\s*[\"'](?<depName>[^\"']+)[\"'][,\\s]*\\n\\s*tag:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
       ],
@@ -66,9 +69,7 @@
     {
       "customType": "regex",
       "description": "Match Helm chart versions (Chart API with fetchOpts)",
-      "managerFilePatterns": [
-        "/\\.ts$/"
-      ],
+      "managerFilePatterns": ["/\\.ts$/"],
       "matchStrings": [
         "chart:\\s*[\"'](?<depName>[^\"']+)[\"'][\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"'][\\s\\S]*?fetchOpts:\\s*\\{[\\s\\S]*?repo:\\s*[\"'](?<registryUrl>[^\"']+)[\"']",
         "chart:\\s*[\"'](?<depName>[^\"']+)[\"'][\\s\\S]*?fetchOpts:\\s*\\{[\\s\\S]*?repo:\\s*[\"'](?<registryUrl>[^\"']+)[\"'][\\s\\S]*?\\}[\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
@@ -78,9 +79,7 @@
     {
       "customType": "regex",
       "description": "Match Helm chart versions (Release API with repositoryOpts)",
-      "managerFilePatterns": [
-        "/\\.ts$/"
-      ],
+      "managerFilePatterns": ["/\\.ts$/"],
       "matchStrings": [
         "chart:\\s*[\"'](?<depName>[^\"']+)[\"'][\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"'][\\s\\S]*?repositoryOpts:\\s*\\{[\\s\\S]*?repo:\\s*[\"'](?<registryUrl>[^\"']+)[\"']"
       ],
@@ -89,9 +88,7 @@
     {
       "customType": "regex",
       "description": "Match OCI Helm chart versions",
-      "managerFilePatterns": [
-        "/\\.ts$/"
-      ],
+      "managerFilePatterns": ["/\\.ts$/"],
       "matchStrings": [
         "chart:\\s*[\"']oci://(?<depName>[^\"']+)[\"'][\\s\\S]*?version:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
       ],
@@ -100,9 +97,7 @@
     {
       "customType": "regex",
       "description": "Match PostgreSQL image version in CloudNativePG",
-      "managerFilePatterns": [
-        "/\\.ts$/"
-      ],
+      "managerFilePatterns": ["/\\.ts$/"],
       "matchStrings": [
         "imageName:\\s*[\"'](?<depName>[^:\"']+):(?<currentValue>[^\"']+)[\"']"
       ],
