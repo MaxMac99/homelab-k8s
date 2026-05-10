@@ -206,12 +206,16 @@ const alloy = new k8s.helm.v3.Chart("alloy", {
       resources: {
         requests: {
           cpu: "100m",
-          memory: "128Mi",
-        },
-        limits: {
-          cpu: "200m",
           memory: "256Mi",
         },
+        limits: {
+          cpu: "1000m",
+          memory: "512Mi",
+        },
+      },
+
+      readinessProbe: {
+        timeoutSeconds: 5,
       },
     },
 

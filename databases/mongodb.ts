@@ -130,6 +130,7 @@ const mongodbDeployment = new k8s.apps.v1.Deployment(
                 },
                 initialDelaySeconds: 30,
                 periodSeconds: 10,
+                timeoutSeconds: 10,
               },
               readinessProbe: {
                 exec: {
@@ -137,6 +138,7 @@ const mongodbDeployment = new k8s.apps.v1.Deployment(
                 },
                 initialDelaySeconds: 5,
                 periodSeconds: 5,
+                timeoutSeconds: 10,
               },
             },
             {
