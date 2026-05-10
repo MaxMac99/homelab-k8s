@@ -54,99 +54,111 @@ const authentikOutpost = new k8s.apps.v1.Deployment("authentik-outpost", {
         },
       },
       spec: {
-        containers: [{
-          name: "authentik-proxy",
-          image: "ghcr.io/goauthentik/proxy:2026.2.2",
-          env: [
-            {
-              name: "AUTHENTIK_HOST",
-              // Use the public URL - outpost uses this for redirect URLs sent to browsers
-              value: "https://auth.mvissing.de",
-            },
-            {
-              name: "AUTHENTIK_HOST_BROWSER",
-              // URL that browsers will use (public URL)
-              value: "https://auth.mvissing.de",
-            },
-            {
-              name: "AUTHENTIK_TOKEN",
-              valueFrom: {
-                secretKeyRef: {
-                  name: outpostSecret.metadata.name,
-                  key: "token",
+        containers: [
+          {
+            name: "authentik-proxy",
+            image: "ghcr.io/goauthentik/proxy:2026.2.2",
+            env: [
+              {
+                name: "AUTHENTIK_HOST",
+                // In-cluster URL so outpost connectivity does not depend on the external ionos edge
+                value: "http://authentik.authentik.svc.cluster.local",
+              },
+              {
+                name: "AUTHENTIK_HOST_BROWSER",
+                // URL that browsers will use (public URL)
+                value: "https://auth.mvissing.de",
+              },
+              {
+                name: "AUTHENTIK_INSECURE",
+                value: "true",
+              },
+              {
+                name: "AUTHENTIK_TOKEN",
+                valueFrom: {
+                  secretKeyRef: {
+                    name: outpostSecret.metadata.name,
+                    key: "token",
+                  },
                 },
               },
+              {
+                name: "AUTHENTIK_LOG_LEVEL",
+                value: "info",
+              },
+            ],
+            ports: [
+              {
+                containerPort: 9000,
+                name: "http",
+                protocol: "TCP",
+              },
+              {
+                containerPort: 9300,
+                name: "http-metrics",
+                protocol: "TCP",
+              },
+            ],
+            volumeMounts: [
+              {
+                name: "sessions",
+                mountPath: "/sessions",
+              },
+            ],
+            livenessProbe: {
+              httpGet: {
+                path: "/outpost.goauthentik.io/ping",
+                port: "http",
+              },
+              initialDelaySeconds: 30,
+              periodSeconds: 10,
+              timeoutSeconds: 3,
+              failureThreshold: 3,
             },
-            {
-              name: "AUTHENTIK_LOG_LEVEL",
-              value: "info",
+            readinessProbe: {
+              httpGet: {
+                path: "/outpost.goauthentik.io/ping",
+                port: "http",
+              },
+              initialDelaySeconds: 10,
+              periodSeconds: 5,
+              timeoutSeconds: 3,
+              failureThreshold: 3,
             },
-          ],
-          ports: [
-            {
-              containerPort: 9000,
-              name: "http",
-              protocol: "TCP",
+            resources: {
+              requests: {
+                memory: "128Mi",
+                cpu: "100m",
+              },
+              limits: {
+                memory: "512Mi",
+                cpu: "500m",
+              },
             },
-            {
-              containerPort: 9300,
-              name: "http-metrics",
-              protocol: "TCP",
-            },
-          ],
-          volumeMounts: [{
+          },
+        ],
+        volumes: [
+          {
             name: "sessions",
-            mountPath: "/sessions",
-          }],
-          livenessProbe: {
-            httpGet: {
-              path: "/outpost.goauthentik.io/ping",
-              port: "http",
-            },
-            initialDelaySeconds: 30,
-            periodSeconds: 10,
-            timeoutSeconds: 3,
-            failureThreshold: 3,
+            emptyDir: {},
           },
-          readinessProbe: {
-            httpGet: {
-              path: "/outpost.goauthentik.io/ping",
-              port: "http",
-            },
-            initialDelaySeconds: 10,
-            periodSeconds: 5,
-            timeoutSeconds: 3,
-            failureThreshold: 3,
-          },
-          resources: {
-            requests: {
-              memory: "128Mi",
-              cpu: "100m",
-            },
-            limits: {
-              memory: "512Mi",
-              cpu: "500m",
-            },
-          },
-        }],
-        volumes: [{
-          name: "sessions",
-          emptyDir: {},
-        }],
+        ],
         // Distribute pods across nodes for better availability
         affinity: {
           podAntiAffinity: {
-            preferredDuringSchedulingIgnoredDuringExecution: [{
-              weight: 100,
-              podAffinityTerm: {
-                labelSelector: {
-                  matchLabels: {
-                    app: "authentik-outpost",
+            preferredDuringSchedulingIgnoredDuringExecution: [
+              {
+                weight: 100,
+                podAffinityTerm: {
+                  labelSelector: {
+                    matchLabels: {
+                      app: "authentik-outpost",
+                    },
                   },
+                  topologyKey: "kubernetes.io/hostname",
                 },
-                topologyKey: "kubernetes.io/hostname",
               },
-            }],
+            ],
           },
         },
       },
@@ -155,47 +167,46 @@ const authentikOutpost = new k8s.apps.v1.Deployment("authentik-outpost", {
 });
 
 // Service for Authentik Outpost
-const authentikOutpostService = new k8s.core.v1.Service("authentik-outpost-service", {
-  metadata: {
-    name: "authentik-outpost",
-    namespace: authentikNamespace.metadata.name,
-    labels: {
-      app: "authentik-outpost",
-      "app.kubernetes.io/name": "authentik-outpost",
-      "app.kubernetes.io/component": "proxy",
+const authentikOutpostService = new k8s.core.v1.Service(
+  "authentik-outpost-service",
+  {
+    metadata: {
+      name: "authentik-outpost",
+      namespace: authentikNamespace.metadata.name,
+      labels: {
+        app: "authentik-outpost",
+        "app.kubernetes.io/name": "authentik-outpost",
+        "app.kubernetes.io/component": "proxy",
+      },
+    },
+    spec: {
+      type: "ClusterIP",
+      selector: {
+        app: "authentik-outpost",
+      },
+      ports: [
+        {
+          port: 9000,
+          targetPort: 9000,
+          protocol: "TCP",
+          name: "http",
+        },
+        {
+          port: 9300,
+          targetPort: 9300,
+          protocol: "TCP",
+          name: "http-metrics",
+        },
+      ],
     },
   },
-  spec: {
-    type: "ClusterIP",
-    selector: {
-      app: "authentik-outpost",
-    },
-    ports: [
-      {
-        port: 9000,
-        targetPort: 9000,
-        protocol: "TCP",
-        name: "http",
-      },
-      {
-        port: 9300,
-        targetPort: 9300,
-        protocol: "TCP",
-        name: "http-metrics",
-      },
-    ],
-  },
-});
+);
 
 // Note: Outpost paths (/outpost.goauthentik.io/*) are now routed through the main
 // Authentik ingress (defined in authentik.ts) to ensure consistent session handling
 // between forward auth requests and OAuth callbacks.
 
-export {
-  authentikOutpost,
-  authentikOutpostService,
-  outpostSecret,
-};
+export { authentikOutpost, authentikOutpostService, outpostSecret };
 
 // Setup instructions for Domain-Level Forward Auth:
 //
