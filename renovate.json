@@ -45,6 +45,12 @@
       "description": "Keep major bumps in their own PRs for easier review/rollback",
       "matchUpdateTypes": ["major"],
       "groupName": null
+    },
+    {
+      "description": "Track paperless-ngx pre-releases (v3 beta)",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/paperless-ngx/paperless-ngx"],
+      "ignoreUnstable": false
     }
   ],
   "customManagers": [
