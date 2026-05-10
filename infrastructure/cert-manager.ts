@@ -47,82 +47,90 @@ const certManager = new k8s.helm.v3.Chart("cert-manager", {
 
 // ClusterIssuer for Let's Encrypt Production
 // This will issue real, trusted certificates
-const letsencryptProd = new k8s.apiextensions.CustomResource("letsencrypt-prod", {
-  apiVersion: "cert-manager.io/v1",
-  kind: "ClusterIssuer",
-  metadata: {
-    name: "letsencrypt-prod",
-  },
-  spec: {
-    acme: {
-      // Let's Encrypt production server
-      server: "https://acme-v02.api.letsencrypt.org/directory",
+const letsencryptProd = new k8s.apiextensions.CustomResource(
+  "letsencrypt-prod",
+  {
+    apiVersion: "cert-manager.io/v1",
+    kind: "ClusterIssuer",
+    metadata: {
+      name: "letsencrypt-prod",
+    },
+    spec: {
+      acme: {
+        // Let's Encrypt production server
+        server: "https://acme-v02.api.letsencrypt.org/directory",
 
-      // Email for certificate expiration notifications
-      email: "max_vissing@yahoo.de",
+        // Email for certificate expiration notifications
+        email: "max_vissing@yahoo.de",
 
-      // Store the ACME account private key in this secret
-      privateKeySecretRef: {
-        name: "letsencrypt-prod-account-key",
-      },
+        // Store the ACME account private key in this secret
+        privateKeySecretRef: {
+          name: "letsencrypt-prod-account-key",
+        },
 
-      // Use HTTP-01 challenge (requires port 80 accessible)
-      solvers: [
-        {
-          http01: {
-            ingress: {
-              ingressClassName: "traefik",
+        // Use HTTP-01 challenge (requires port 80 accessible)
+        solvers: [
+          {
+            http01: {
+              ingress: {
+                ingressClassName: "traefik",
+              },
             },
           },
-        },
-      ],
+        ],
+      },
     },
   },
-}, {
-  dependsOn: certManager,
-  customTimeouts: {
-    create: "10m", // Give cert-manager plenty of time to become ready
-    update: "10m",
+  {
+    dependsOn: certManager,
+    customTimeouts: {
+      create: "10m", // Give cert-manager plenty of time to become ready
+      update: "10m",
+    },
   },
-});
+);
 
 // ClusterIssuer for Let's Encrypt Staging (optional, for testing)
 // Use this first to test your setup without hitting rate limits
-const letsencryptStaging = new k8s.apiextensions.CustomResource("letsencrypt-staging", {
-  apiVersion: "cert-manager.io/v1",
-  kind: "ClusterIssuer",
-  metadata: {
-    name: "letsencrypt-staging",
-  },
-  spec: {
-    acme: {
-      // Let's Encrypt staging server (for testing)
-      server: "https://acme-staging-v02.api.letsencrypt.org/directory",
+const letsencryptStaging = new k8s.apiextensions.CustomResource(
+  "letsencrypt-staging",
+  {
+    apiVersion: "cert-manager.io/v1",
+    kind: "ClusterIssuer",
+    metadata: {
+      name: "letsencrypt-staging",
+    },
+    spec: {
+      acme: {
+        // Let's Encrypt staging server (for testing)
+        server: "https://acme-staging-v02.api.letsencrypt.org/directory",
 
-      email: "max_vissing@yahoo.de",
+        email: "max_vissing@yahoo.de",
 
-      privateKeySecretRef: {
-        name: "letsencrypt-staging-account-key",
-      },
+        privateKeySecretRef: {
+          name: "letsencrypt-staging-account-key",
+        },
 
-      solvers: [
-        {
-          http01: {
-            ingress: {
-              ingressClassName: "traefik",
+        solvers: [
+          {
+            http01: {
+              ingress: {
+                ingressClassName: "traefik",
+              },
             },
           },
-        },
-      ],
+        ],
+      },
     },
   },
-}, {
-  dependsOn: certManager,
-  customTimeouts: {
-    create: "10m", // Give cert-manager plenty of time to become ready
-    update: "10m",
+  {
+    dependsOn: certManager,
+    customTimeouts: {
+      create: "10m", // Give cert-manager plenty of time to become ready
+      update: "10m",
+    },
   },
-});
+);
 
 export { certManager, letsencryptProd, letsencryptStaging };
 

@@ -11,7 +11,7 @@ import {
   postgresqlHost,
   postgresqlNamespace,
   postgresqlClusterName,
-  authentikDbPassword
+  authentikDbPassword,
 } from "../databases/postgresql";
 import { redisHost } from "../databases/redis";
 
@@ -42,21 +42,24 @@ const authentikSecret = new k8s.core.v1.Secret("authentik-secret", {
 
 // Declaratively create Authentik database using CloudNativePG
 // Uses the 'authentik' user created via declarative role management
-const authentikDatabase = new k8s.apiextensions.CustomResource("authentik-database", {
-  apiVersion: "postgresql.cnpg.io/v1",
-  kind: "Database",
-  metadata: {
-    name: "authentik-db",
-    namespace: postgresqlNamespace,
-  },
-  spec: {
-    name: "authentik",
-    owner: "authentik", // Use per-app user from declarative role management
-    cluster: {
-      name: postgresqlClusterName,
+const authentikDatabase = new k8s.apiextensions.CustomResource(
+  "authentik-database",
+  {
+    apiVersion: "postgresql.cnpg.io/v1",
+    kind: "Database",
+    metadata: {
+      name: "authentik-db",
+      namespace: postgresqlNamespace,
+    },
+    spec: {
+      name: "authentik",
+      owner: "authentik", // Use per-app user from declarative role management
+      cluster: {
+        name: postgresqlClusterName,
+      },
     },
   },
-});
+);
 
 // Create postgres-authentik secret directly in authentik namespace
 // (Workaround for Reflector mirroring issues - creating it directly instead)
@@ -73,21 +76,24 @@ const postgresSecret = new k8s.core.v1.Secret("postgres-authentik-secret", {
 });
 
 // PVC for Authentik media files
-const authentikMediaPVC = new k8s.core.v1.PersistentVolumeClaim("authentik-media-pvc", {
-  metadata: {
-    name: "authentik-media",
-    namespace: namespace.metadata.name,
-  },
-  spec: {
-    accessModes: ["ReadWriteOnce"],
-    storageClassName: "local-path",
-    resources: {
-      requests: {
-        storage: "5Gi",
+const authentikMediaPVC = new k8s.core.v1.PersistentVolumeClaim(
+  "authentik-media-pvc",
+  {
+    metadata: {
+      name: "authentik-media",
+      namespace: namespace.metadata.name,
+    },
+    spec: {
+      accessModes: ["ReadWriteOnce"],
+      storageClassName: "local-path",
+      resources: {
+        requests: {
+          storage: "5Gi",
+        },
       },
     },
   },
-});
+);
 
 // Common environment variables for Authentik
 const authentikEnv = [
@@ -140,125 +146,145 @@ const authentikEnv = [
 ];
 
 // Authentik Server Deployment
-const authentikServer = new k8s.apps.v1.Deployment("authentik-server", {
-  metadata: {
-    name: "authentik-server",
-    namespace: namespace.metadata.name,
-  },
-  spec: {
-    replicas: 1,
-    selector: {
-      matchLabels: {
-        app: "authentik-server",
-      },
+const authentikServer = new k8s.apps.v1.Deployment(
+  "authentik-server",
+  {
+    metadata: {
+      name: "authentik-server",
+      namespace: namespace.metadata.name,
     },
-    template: {
-      metadata: {
-        labels: {
+    spec: {
+      replicas: 1,
+      selector: {
+        matchLabels: {
           app: "authentik-server",
         },
-        annotations: {
-          "prometheus.io/scrape": "true",
-          "prometheus.io/port": "9300",
-          "prometheus.io/path": "/metrics",
-        },
       },
-      spec: {
-        containers: [{
-          name: "authentik",
-          image: "ghcr.io/goauthentik/server:2026.2.2",
-          command: ["ak", "server"],
-          env: authentikEnv,
-          ports: [
+      template: {
+        metadata: {
+          labels: {
+            app: "authentik-server",
+          },
+          annotations: {
+            "prometheus.io/scrape": "true",
+            "prometheus.io/port": "9300",
+            "prometheus.io/path": "/metrics",
+          },
+        },
+        spec: {
+          containers: [
             {
-              containerPort: 9000,
-              name: "http",
-            },
-            {
-              containerPort: 9443,
-              name: "https",
-            },
-            {
-              containerPort: 9300,
-              name: "metrics",
+              name: "authentik",
+              image: "ghcr.io/goauthentik/server:2026.2.2",
+              command: ["ak", "server"],
+              env: authentikEnv,
+              ports: [
+                {
+                  containerPort: 9000,
+                  name: "http",
+                },
+                {
+                  containerPort: 9443,
+                  name: "https",
+                },
+                {
+                  containerPort: 9300,
+                  name: "metrics",
+                },
+              ],
+              volumeMounts: [
+                {
+                  name: "media",
+                  mountPath: "/media",
+                },
+              ],
+              resources: {
+                requests: {
+                  memory: "256Mi",
+                  cpu: "250m",
+                },
+                limits: {
+                  memory: "1Gi",
+                  cpu: "1000m",
+                },
+              },
             },
           ],
-          volumeMounts: [{
-            name: "media",
-            mountPath: "/media",
-          }],
-          resources: {
-            requests: {
-              memory: "256Mi",
-              cpu: "250m",
+          volumes: [
+            {
+              name: "media",
+              persistentVolumeClaim: {
+                claimName: authentikMediaPVC.metadata.name,
+              },
             },
-            limits: {
-              memory: "1Gi",
-              cpu: "1000m",
-            },
-          },
-        }],
-        volumes: [{
-          name: "media",
-          persistentVolumeClaim: {
-            claimName: authentikMediaPVC.metadata.name,
-          },
-        }],
+          ],
+        },
       },
     },
   },
-}, { dependsOn: [authentikDatabase] });
+  { dependsOn: [authentikDatabase] },
+);
 
 // Authentik Worker Deployment
-const authentikWorker = new k8s.apps.v1.Deployment("authentik-worker", {
-  metadata: {
-    name: "authentik-worker",
-    namespace: namespace.metadata.name,
-  },
-  spec: {
-    replicas: 1,
-    selector: {
-      matchLabels: {
-        app: "authentik-worker",
-      },
+const authentikWorker = new k8s.apps.v1.Deployment(
+  "authentik-worker",
+  {
+    metadata: {
+      name: "authentik-worker",
+      namespace: namespace.metadata.name,
     },
-    template: {
-      metadata: {
-        labels: {
+    spec: {
+      replicas: 1,
+      selector: {
+        matchLabels: {
           app: "authentik-worker",
         },
       },
-      spec: {
-        containers: [{
-          name: "authentik",
-          image: "ghcr.io/goauthentik/server:2026.2.2",
-          command: ["ak", "worker"],
-          env: authentikEnv,
-          volumeMounts: [{
-            name: "media",
-            mountPath: "/media",
-          }],
-          resources: {
-            requests: {
-              memory: "256Mi",
-              cpu: "250m",
-            },
-            limits: {
-              memory: "1Gi",
-              cpu: "1000m",
-            },
+      template: {
+        metadata: {
+          labels: {
+            app: "authentik-worker",
           },
-        }],
-        volumes: [{
-          name: "media",
-          persistentVolumeClaim: {
-            claimName: authentikMediaPVC.metadata.name,
-          },
-        }],
+        },
+        spec: {
+          containers: [
+            {
+              name: "authentik",
+              image: "ghcr.io/goauthentik/server:2026.2.2",
+              command: ["ak", "worker"],
+              env: authentikEnv,
+              volumeMounts: [
+                {
+                  name: "media",
+                  mountPath: "/media",
+                },
+              ],
+              resources: {
+                requests: {
+                  memory: "256Mi",
+                  cpu: "250m",
+                },
+                limits: {
+                  memory: "1Gi",
+                  cpu: "1000m",
+                },
+              },
+            },
+          ],
+          volumes: [
+            {
+              name: "media",
+              persistentVolumeClaim: {
+                claimName: authentikMediaPVC.metadata.name,
+              },
+            },
+          ],
+        },
       },
     },
   },
-}, { dependsOn: [authentikDatabase] });
+  { dependsOn: [authentikDatabase] },
+);
 
 // Authentik Service
 const authentikService = new k8s.core.v1.Service("authentik-service", {
@@ -307,50 +333,55 @@ const authentikIngress = new k8s.networking.v1.Ingress("authentik-ingress", {
       "gethomepage.dev/href": "https://auth.mvissing.de",
       // Authentik widget - shows user counts and login stats
       "gethomepage.dev/widget.type": "authentik",
-      "gethomepage.dev/widget.url": "http://authentik.authentik.svc.cluster.local",
+      "gethomepage.dev/widget.url":
+        "http://authentik.authentik.svc.cluster.local",
       "gethomepage.dev/widget.key": "{{HOMEPAGE_VAR_AUTHENTIK_TOKEN}}",
       "gethomepage.dev/widget.version": "2", // Authentik >= 2025.8.0
     },
   },
   spec: {
-    ingressClassName: "traefik",  // Changed from traefik-external - now using port forwarding on ionos
-    rules: [{
-      host: "auth.mvissing.de",
-      http: {
-        paths: [
-          // Route outpost paths to outpost service (must come first for priority)
-          {
-            path: "/outpost.goauthentik.io",
-            pathType: "Prefix",
-            backend: {
-              service: {
-                name: "authentik-outpost", // Reference by name to avoid circular dependency
-                port: {
-                  number: 9000,
+    ingressClassName: "traefik", // Changed from traefik-external - now using port forwarding on ionos
+    rules: [
+      {
+        host: "auth.mvissing.de",
+        http: {
+          paths: [
+            // Route outpost paths to outpost service (must come first for priority)
+            {
+              path: "/outpost.goauthentik.io",
+              pathType: "Prefix",
+              backend: {
+                service: {
+                  name: "authentik-outpost", // Reference by name to avoid circular dependency
+                  port: {
+                    number: 9000,
+                  },
                 },
               },
             },
-          },
-          // Route all other paths to main Authentik server
-          {
-            path: "/",
-            pathType: "Prefix",
-            backend: {
-              service: {
-                name: authentikService.metadata.name,
-                port: {
-                  number: 80,
+            // Route all other paths to main Authentik server
+            {
+              path: "/",
+              pathType: "Prefix",
+              backend: {
+                service: {
+                  name: authentikService.metadata.name,
+                  port: {
+                    number: 80,
+                  },
                 },
               },
             },
-          },
-        ],
+          ],
+        },
       },
-    }],
-    tls: [{
-      secretName: "authentik-tls",
-      hosts: ["auth.mvissing.de"],
-    }],
+    ],
+    tls: [
+      {
+        secretName: "authentik-tls",
+        hosts: ["auth.mvissing.de"],
+      },
+    ],
   },
 });
 

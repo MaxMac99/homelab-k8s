@@ -3,15 +3,15 @@
 // All components use local-path storage (ZFS backed) with automatic snapshots
 
 // Import all monitoring components in dependency order
-import "./namespace";         // Create namespace first
-import "./prometheus";        // Metrics collection
-import "./loki";             // Log aggregation backend
-import "./alloy";            // Log collection agent (requires Loki)
-import "./tempo";            // Distributed tracing
-import "./ntfy";             // Push notification service
+import "./namespace"; // Create namespace first
+import "./prometheus"; // Metrics collection
+import "./loki"; // Log aggregation backend
+import "./alloy"; // Log collection agent (requires Loki)
+import "./tempo"; // Distributed tracing
+import "./ntfy"; // Push notification service
 import "./grafana-database"; // Grafana PostgreSQL database
-import "./grafana";          // Visualization and dashboards (requires all data sources)
-import "./unpoller";         // UniFi metrics exporter for Prometheus
+import "./grafana"; // Visualization and dashboards (requires all data sources)
+import "./unpoller"; // UniFi metrics exporter for Prometheus
 
 // Re-export for external use if needed
 export * from "./namespace";

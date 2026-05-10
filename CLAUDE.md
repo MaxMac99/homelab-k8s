@@ -35,6 +35,7 @@ There are no tests — validation happens via `pulumi preview` before deploying.
 **Cluster topology:** K3S with 1 Raspberry Pi (ARM64, runs AdGuard on hostPort) + 3 Proxmox x86_64 VMs. Use `nodeSelector` when workloads must target a specific architecture.
 
 **File organization:**
+
 - `infrastructure/` — core cluster services (MetalLB, Traefik, cert-manager, Reflector)
 - `databases/` — shared database instances (PostgreSQL/CloudNativePG, Redis, MongoDB)
 - `auth/` — identity and authentication (Authentik, Authentik Outpost)
@@ -44,6 +45,7 @@ There are no tests — validation happens via `pulumi preview` before deploying.
 - `Pulumi.default.yaml` — stack config with encrypted secrets
 
 **Key infrastructure layers:**
+
 - **MetalLB** — LoadBalancer IPs (192.168.178.10-20)
 - **Traefik** — Ingress controller with Authentik forward auth
 - **cert-manager** — Let's Encrypt TLS via DNS challenge

@@ -94,109 +94,128 @@ const traefik = new k8s.helm.v3.Chart(
       ],
     },
   },
-  { dependsOn: [traefikNamespace] }
+  { dependsOn: [traefikNamespace] },
 );
 
 // Authentik Forward Auth Middleware
 // Points to the dedicated Authentik outpost service for forward authentication
-const authentikMiddleware = new k8s.apiextensions.CustomResource("traefik-authentik-middleware", {
-  apiVersion: "traefik.io/v1alpha1",
-  kind: "Middleware",
-  metadata: {
-    name: "authentik",
-    namespace: traefikNamespace.metadata.name,
-  },
-  spec: {
-    forwardAuth: {
-      // MUST use public URL (not internal cluster URL) for domain-level forward auth
-      // This ensures browser cookies are properly forwarded through the ingress
-      address: "https://auth.mvissing.de/outpost.goauthentik.io/auth/traefik",
-      trustForwardHeader: true,
-      // Forward these headers to Authentik so it can redirect back to the original URL
-      // Cookie is essential for Authentik to verify existing sessions
-      authRequestHeaders: [
-        "Cookie",
-        "X-Forwarded-Proto",
-        "X-Forwarded-Host",
-        "X-Forwarded-Uri",
-        "X-Forwarded-For",
-      ],
-      authResponseHeaders: [
-        "X-authentik-username",
-        "X-authentik-groups",
-        "X-authentik-email",
-        "X-authentik-name",
-        "X-authentik-uid",
-      ],
-      authResponseHeadersRegex: "^X-authentik-",
+const authentikMiddleware = new k8s.apiextensions.CustomResource(
+  "traefik-authentik-middleware",
+  {
+    apiVersion: "traefik.io/v1alpha1",
+    kind: "Middleware",
+    metadata: {
+      name: "authentik",
+      namespace: traefikNamespace.metadata.name,
+    },
+    spec: {
+      forwardAuth: {
+        // MUST use public URL (not internal cluster URL) for domain-level forward auth
+        // This ensures browser cookies are properly forwarded through the ingress
+        address: "https://auth.mvissing.de/outpost.goauthentik.io/auth/traefik",
+        trustForwardHeader: true,
+        // Forward these headers to Authentik so it can redirect back to the original URL
+        // Cookie is essential for Authentik to verify existing sessions
+        authRequestHeaders: [
+          "Cookie",
+          "X-Forwarded-Proto",
+          "X-Forwarded-Host",
+          "X-Forwarded-Uri",
+          "X-Forwarded-For",
+        ],
+        authResponseHeaders: [
+          "X-authentik-username",
+          "X-authentik-groups",
+          "X-authentik-email",
+          "X-authentik-name",
+          "X-authentik-uid",
+        ],
+        authResponseHeadersRegex: "^X-authentik-",
+      },
     },
   },
-}, { dependsOn: [traefik, authentikOutpostService] });
+  { dependsOn: [traefik, authentikOutpostService] },
+);
 
 // Certificate for Traefik Internal Dashboard
-const dashboardCertificate = new k8s.apiextensions.CustomResource("traefik-cert", {
-  apiVersion: "cert-manager.io/v1",
-  kind: "Certificate",
-  metadata: {
-    name: "traefik-dashboard-tls",
-    namespace: traefikNamespace.metadata.name,
-  },
-  spec: {
-    secretName: "traefik-dashboard-tls",
-    dnsNames: ["traefik.mvissing.de"],
-    issuerRef: {
-      name: "letsencrypt-prod",
-      kind: "ClusterIssuer",
-      group: "cert-manager.io",
+const dashboardCertificate = new k8s.apiextensions.CustomResource(
+  "traefik-cert",
+  {
+    apiVersion: "cert-manager.io/v1",
+    kind: "Certificate",
+    metadata: {
+      name: "traefik-dashboard-tls",
+      namespace: traefikNamespace.metadata.name,
+    },
+    spec: {
+      secretName: "traefik-dashboard-tls",
+      dnsNames: ["traefik.mvissing.de"],
+      issuerRef: {
+        name: "letsencrypt-prod",
+        kind: "ClusterIssuer",
+        group: "cert-manager.io",
+      },
     },
   },
-}, { dependsOn: [traefik] });
+  { dependsOn: [traefik] },
+);
 
 // IngressRoute for Traefik Internal Dashboard with Authentik Auth
-const dashboardIngressRoute = new k8s.apiextensions.CustomResource("traefik-dashboard", {
-  apiVersion: "traefik.io/v1alpha1",
-  kind: "IngressRoute",
-  metadata: {
-    name: "traefik-dashboard",
-    namespace: traefikNamespace.metadata.name,
-    annotations: {
-      // Homepage dashboard discovery
-      "gethomepage.dev/enabled": "true",
-      "gethomepage.dev/name": "Traefik",
-      "gethomepage.dev/description": "Ingress Controller",
-      "gethomepage.dev/group": "Infrastructure",
-      "gethomepage.dev/icon": "traefik",
-      "gethomepage.dev/href": "https://traefik.mvissing.de",
-      "gethomepage.dev/pod-selector": "app.kubernetes.io/name=traefik",
-      // Traefik widget
-      "gethomepage.dev/widget.type": "traefik",
-      "gethomepage.dev/widget.url": "http://traefik.traefik.svc.cluster.local:9000",
-    },
-  },
-  spec: {
-    entryPoints: ["websecure"],
-    routes: [
-      {
-        match: "Host(`traefik.mvissing.de`)",
-        kind: "Rule",
-        middlewares: [
-          {
-            name: authentikMiddleware.metadata.name,
-            namespace: traefikNamespace.metadata.name,
-          },
-        ],
-        services: [
-          {
-            name: "api@internal",
-            kind: "TraefikService",
-          },
-        ],
+const dashboardIngressRoute = new k8s.apiextensions.CustomResource(
+  "traefik-dashboard",
+  {
+    apiVersion: "traefik.io/v1alpha1",
+    kind: "IngressRoute",
+    metadata: {
+      name: "traefik-dashboard",
+      namespace: traefikNamespace.metadata.name,
+      annotations: {
+        // Homepage dashboard discovery
+        "gethomepage.dev/enabled": "true",
+        "gethomepage.dev/name": "Traefik",
+        "gethomepage.dev/description": "Ingress Controller",
+        "gethomepage.dev/group": "Infrastructure",
+        "gethomepage.dev/icon": "traefik",
+        "gethomepage.dev/href": "https://traefik.mvissing.de",
+        "gethomepage.dev/pod-selector": "app.kubernetes.io/name=traefik",
+        // Traefik widget
+        "gethomepage.dev/widget.type": "traefik",
+        "gethomepage.dev/widget.url":
+          "http://traefik.traefik.svc.cluster.local:9000",
       },
-    ],
-    tls: {
-      secretName: "traefik-dashboard-tls",
+    },
+    spec: {
+      entryPoints: ["websecure"],
+      routes: [
+        {
+          match: "Host(`traefik.mvissing.de`)",
+          kind: "Rule",
+          middlewares: [
+            {
+              name: authentikMiddleware.metadata.name,
+              namespace: traefikNamespace.metadata.name,
+            },
+          ],
+          services: [
+            {
+              name: "api@internal",
+              kind: "TraefikService",
+            },
+          ],
+        },
+      ],
+      tls: {
+        secretName: "traefik-dashboard-tls",
+      },
     },
   },
-}, { dependsOn: [authentikMiddleware, dashboardCertificate] });
+  { dependsOn: [authentikMiddleware, dashboardCertificate] },
+);
 
-export { traefik, traefikNamespace, authentikMiddleware, dashboardCertificate, dashboardIngressRoute };
+export {
+  traefik,
+  traefikNamespace,
+  authentikMiddleware,
+  dashboardCertificate,
+  dashboardIngressRoute,
+};

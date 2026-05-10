@@ -65,99 +65,101 @@ const mosquittoDataPVC = new k8s.core.v1.PersistentVolumeClaim(
 );
 
 // Mosquitto Deployment
-const mosquittoDeployment = new k8s.apps.v1.Deployment("mosquitto", {
-  metadata: {
-    name: "mosquitto",
-    namespace: homeassistantNamespace.metadata.name,
-    labels: {
-      app: "mosquitto",
-    },
-  },
-  spec: {
-    replicas: 1,
-    strategy: {
-      type: "Recreate",
-    },
-    selector: {
-      matchLabels: {
+const mosquittoDeployment = new k8s.apps.v1.Deployment(
+  "mosquitto",
+  {
+    metadata: {
+      name: "mosquitto",
+      namespace: homeassistantNamespace.metadata.name,
+      labels: {
         app: "mosquitto",
       },
     },
-    template: {
-      metadata: {
-        labels: {
+    spec: {
+      replicas: 1,
+      strategy: {
+        type: "Recreate",
+      },
+      selector: {
+        matchLabels: {
           app: "mosquitto",
         },
       },
-      spec: {
-        containers: [
-          {
-            name: "mosquitto",
-            image: "eclipse-mosquitto:2.0.22",
-            ports: [
-              {
-                containerPort: 1883,
-                name: "mqtt",
-                protocol: "TCP",
-              },
-            ],
-            volumeMounts: [
-              {
-                name: "config",
-                mountPath: "/mosquitto/config/mosquitto.conf",
-                subPath: "mosquitto.conf",
-                readOnly: true,
-              },
-              {
-                name: "data",
-                mountPath: "/mosquitto/data",
-              },
-            ],
-            resources: {
-              requests: {
-                memory: "32Mi",
-                cpu: "50m",
-              },
-              limits: {
-                memory: "128Mi",
-                cpu: "200m",
-              },
-            },
-            livenessProbe: {
-              tcpSocket: {
-                port: 1883,
-              },
-              initialDelaySeconds: 10,
-              periodSeconds: 30,
-              timeoutSeconds: 5,
-            },
-            readinessProbe: {
-              tcpSocket: {
-                port: 1883,
-              },
-              initialDelaySeconds: 5,
-              periodSeconds: 10,
-              timeoutSeconds: 5,
-            },
+      template: {
+        metadata: {
+          labels: {
+            app: "mosquitto",
           },
-        ],
-        volumes: [
-          {
-            name: "config",
-            configMap: {
-              name: mosquittoConfig.metadata.name,
+        },
+        spec: {
+          containers: [
+            {
+              name: "mosquitto",
+              image: "eclipse-mosquitto:2.0.22",
+              ports: [
+                {
+                  containerPort: 1883,
+                  name: "mqtt",
+                  protocol: "TCP",
+                },
+              ],
+              volumeMounts: [
+                {
+                  name: "config",
+                  mountPath: "/mosquitto/config/mosquitto.conf",
+                  subPath: "mosquitto.conf",
+                  readOnly: true,
+                },
+                {
+                  name: "data",
+                  mountPath: "/mosquitto/data",
+                },
+              ],
+              resources: {
+                requests: {
+                  memory: "32Mi",
+                  cpu: "50m",
+                },
+                limits: {
+                  memory: "128Mi",
+                  cpu: "200m",
+                },
+              },
+              livenessProbe: {
+                tcpSocket: {
+                  port: 1883,
+                },
+                initialDelaySeconds: 10,
+                periodSeconds: 30,
+                timeoutSeconds: 5,
+              },
+              readinessProbe: {
+                tcpSocket: {
+                  port: 1883,
+                },
+                initialDelaySeconds: 5,
+                periodSeconds: 10,
+                timeoutSeconds: 5,
+              },
             },
-          },
-          {
-            name: "data",
-            persistentVolumeClaim: {
-              claimName: mosquittoDataPVC.metadata.name,
+          ],
+          volumes: [
+            {
+              name: "config",
+              configMap: {
+                name: mosquittoConfig.metadata.name,
+              },
             },
-          },
-        ],
+            {
+              name: "data",
+              persistentVolumeClaim: {
+                claimName: mosquittoDataPVC.metadata.name,
+              },
+            },
+          ],
+        },
       },
     },
-  },
   },
   { dependsOn: [mosquittoDataPVC] },
 );

@@ -51,7 +51,7 @@ const ipAddressPool = new k8s.apiextensions.CustomResource(
       ],
     },
   },
-  { dependsOn: [metallb] }
+  { dependsOn: [metallb] },
 );
 
 // L2 Advertisement - announces the LoadBalancer IPs on the local network
@@ -68,7 +68,7 @@ const l2Advertisement = new k8s.apiextensions.CustomResource(
       ipAddressPools: ["default-pool"],
     },
   },
-  { dependsOn: [ipAddressPool] }
+  { dependsOn: [ipAddressPool] },
 );
 
 export { metallb, ipAddressPool, l2Advertisement };

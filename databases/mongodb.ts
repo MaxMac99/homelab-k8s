@@ -47,134 +47,144 @@ const mongodbPVC = new k8s.core.v1.PersistentVolumeClaim("mongodb-pvc", {
 });
 
 // MongoDB Deployment with persistence
-const mongodbDeployment = new k8s.apps.v1.Deployment("mongodb", {
-  metadata: {
-    name: "mongodb",
-    namespace: postgresqlNamespace,
-    labels: {
-      app: "mongodb",
-    },
-  },
-  spec: {
-    replicas: 1,
-    strategy: {
-      type: "Recreate",
-      rollingUpdate: null as any,
-    },
-    selector: {
-      matchLabels: {
+const mongodbDeployment = new k8s.apps.v1.Deployment(
+  "mongodb",
+  {
+    metadata: {
+      name: "mongodb",
+      namespace: postgresqlNamespace,
+      labels: {
         app: "mongodb",
       },
     },
-    template: {
-      metadata: {
-        labels: {
+    spec: {
+      replicas: 1,
+      strategy: {
+        type: "Recreate",
+        rollingUpdate: null as any,
+      },
+      selector: {
+        matchLabels: {
           app: "mongodb",
         },
-        annotations: {
-          "prometheus.io/scrape": "true",
-          "prometheus.io/port": "9216",
-        },
       },
-      spec: {
-        nodeSelector: {
-          "kubernetes.io/arch": "amd64",
+      template: {
+        metadata: {
+          labels: {
+            app: "mongodb",
+          },
+          annotations: {
+            "prometheus.io/scrape": "true",
+            "prometheus.io/port": "9216",
+          },
         },
-        containers: [
-          {
-            name: "mongodb",
-            image: "mongo:8.2",
-            args: [
-              "--auth",
-            ],
-            ports: [{
-              containerPort: 27017,
+        spec: {
+          nodeSelector: {
+            "kubernetes.io/arch": "amd64",
+          },
+          containers: [
+            {
               name: "mongodb",
-            }],
-            env: [
-              {
-                name: "MONGO_INITDB_ROOT_USERNAME",
-                value: "root",
-              },
-              {
-                name: "MONGO_INITDB_ROOT_PASSWORD",
-                valueFrom: {
-                  secretKeyRef: {
-                    name: mongodbSecret.metadata.name,
-                    key: "rootPassword",
+              image: "mongo:8.2",
+              args: ["--auth"],
+              ports: [
+                {
+                  containerPort: 27017,
+                  name: "mongodb",
+                },
+              ],
+              env: [
+                {
+                  name: "MONGO_INITDB_ROOT_USERNAME",
+                  value: "root",
+                },
+                {
+                  name: "MONGO_INITDB_ROOT_PASSWORD",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: mongodbSecret.metadata.name,
+                      key: "rootPassword",
+                    },
                   },
                 },
+              ],
+              volumeMounts: [
+                {
+                  name: "data",
+                  mountPath: "/data/db",
+                },
+              ],
+              resources: {
+                requests: {
+                  memory: "512Mi",
+                  cpu: "250m",
+                },
+                limits: {
+                  memory: "2Gi",
+                  cpu: "1000m",
+                },
               },
-            ],
-            volumeMounts: [{
+              livenessProbe: {
+                exec: {
+                  command: ["mongosh", "--eval", "db.adminCommand('ping')"],
+                },
+                initialDelaySeconds: 30,
+                periodSeconds: 10,
+              },
+              readinessProbe: {
+                exec: {
+                  command: ["mongosh", "--eval", "db.adminCommand('ping')"],
+                },
+                initialDelaySeconds: 5,
+                periodSeconds: 5,
+              },
+            },
+            {
+              name: "mongodb-exporter",
+              image: "percona/mongodb_exporter:2.37",
+              ports: [
+                {
+                  containerPort: 9216,
+                  name: "metrics",
+                },
+              ],
+              env: [
+                {
+                  name: "MONGODB_URI",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: mongodbSecret.metadata.name,
+                      key: "exporterUri",
+                    },
+                  },
+                },
+              ],
+              resources: {
+                requests: {
+                  memory: "32Mi",
+                  cpu: "10m",
+                },
+                limits: {
+                  memory: "64Mi",
+                  cpu: "100m",
+                },
+              },
+            },
+          ],
+          volumes: [
+            {
               name: "data",
-              mountPath: "/data/db",
-            }],
-            resources: {
-              requests: {
-                memory: "512Mi",
-                cpu: "250m",
-              },
-              limits: {
-                memory: "2Gi",
-                cpu: "1000m",
+              persistentVolumeClaim: {
+                claimName: "mongodb-data",
               },
             },
-            livenessProbe: {
-              exec: {
-                command: ["mongosh", "--eval", "db.adminCommand('ping')"],
-              },
-              initialDelaySeconds: 30,
-              periodSeconds: 10,
-            },
-            readinessProbe: {
-              exec: {
-                command: ["mongosh", "--eval", "db.adminCommand('ping')"],
-              },
-              initialDelaySeconds: 5,
-              periodSeconds: 5,
-            },
-          },
-          {
-            name: "mongodb-exporter",
-            image: "percona/mongodb_exporter:2.37",
-            ports: [{
-              containerPort: 9216,
-              name: "metrics",
-            }],
-            env: [
-              {
-                name: "MONGODB_URI",
-                valueFrom: {
-                  secretKeyRef: {
-                    name: mongodbSecret.metadata.name,
-                    key: "exporterUri",
-                  },
-                },
-              },
-            ],
-            resources: {
-              requests: {
-                memory: "32Mi",
-                cpu: "10m",
-              },
-              limits: {
-                memory: "64Mi",
-                cpu: "100m",
-              },
-            },
-          },
-        ],
-        volumes: [{
-          name: "data",
-          persistentVolumeClaim: {
-            claimName: "mongodb-data",
-          },
-        }],
+          ],
+        },
       },
     },
   },
-}, { dependsOn: mongodbPVC });
+  { dependsOn: mongodbPVC },
+);
 
 // MongoDB Service
 const mongodbService = new k8s.core.v1.Service("mongodb-service", {
@@ -190,11 +200,13 @@ const mongodbService = new k8s.core.v1.Service("mongodb-service", {
     selector: {
       app: "mongodb",
     },
-    ports: [{
-      port: 27017,
-      targetPort: 27017,
-      name: "mongodb",
-    }],
+    ports: [
+      {
+        port: 27017,
+        targetPort: 27017,
+        name: "mongodb",
+      },
+    ],
   },
 });
 

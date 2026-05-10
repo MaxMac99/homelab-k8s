@@ -8,7 +8,8 @@ import { namespaceName } from "./namespace";
 
 // Get UniFi credentials from Pulumi config
 const config = new pulumi.Config();
-const unifiUrl = config.get("unpoller-url") || "https://unifi.unifi.svc.cluster.local:8443";
+const unifiUrl =
+  config.get("unpoller-url") || "https://unifi.unifi.svc.cluster.local:8443";
 const unifiUser = config.get("unpoller-user") || "unpoller";
 const unifiPassword = config.requireSecret("unpoller-password");
 
@@ -53,76 +54,80 @@ const unpollerDeployment = new k8s.apps.v1.Deployment("unpoller", {
         },
       },
       spec: {
-        containers: [{
-          name: "unpoller",
-          image: "golift/unifi-poller:v2.39.0",
-          ports: [{
-            containerPort: 9130,
-            name: "metrics",
-            protocol: "TCP",
-          }],
-          env: [
-            {
-              name: "UP_UNIFI_DEFAULT_URL",
-              value: unifiUrl,
-            },
-            {
-              name: "UP_UNIFI_DEFAULT_USER",
-              value: unifiUser,
-            },
-            {
-              name: "UP_UNIFI_DEFAULT_PASS",
-              valueFrom: {
-                secretKeyRef: {
-                  name: unpollerSecret.metadata.name,
-                  key: "password",
+        containers: [
+          {
+            name: "unpoller",
+            image: "golift/unifi-poller:v2.39.0",
+            ports: [
+              {
+                containerPort: 9130,
+                name: "metrics",
+                protocol: "TCP",
+              },
+            ],
+            env: [
+              {
+                name: "UP_UNIFI_DEFAULT_URL",
+                value: unifiUrl,
+              },
+              {
+                name: "UP_UNIFI_DEFAULT_USER",
+                value: unifiUser,
+              },
+              {
+                name: "UP_UNIFI_DEFAULT_PASS",
+                valueFrom: {
+                  secretKeyRef: {
+                    name: unpollerSecret.metadata.name,
+                    key: "password",
+                  },
                 },
               },
+              {
+                name: "UP_UNIFI_DEFAULT_VERIFY_SSL",
+                value: "false",
+              },
+              {
+                name: "UP_PROMETHEUS_NAMESPACE",
+                value: "unpoller",
+              },
+              {
+                name: "UP_PROMETHEUS_HTTP_LISTEN",
+                value: "0.0.0.0:9130",
+              },
+              {
+                name: "UP_INFLUXDB_DISABLE",
+                value: "true",
+              },
+            ],
+            resources: {
+              requests: {
+                memory: "128Mi",
+                cpu: "50m",
+              },
+              limits: {
+                memory: "256Mi",
+                cpu: "200m",
+              },
             },
-            {
-              name: "UP_UNIFI_DEFAULT_VERIFY_SSL",
-              value: "false",
+            livenessProbe: {
+              httpGet: {
+                path: "/metrics",
+                port: 9130,
+              },
+              initialDelaySeconds: 30,
+              periodSeconds: 30,
             },
-            {
-              name: "UP_PROMETHEUS_NAMESPACE",
-              value: "unpoller",
-            },
-            {
-              name: "UP_PROMETHEUS_HTTP_LISTEN",
-              value: "0.0.0.0:9130",
-            },
-            {
-              name: "UP_INFLUXDB_DISABLE",
-              value: "true",
-            },
-          ],
-          resources: {
-            requests: {
-              memory: "128Mi",
-              cpu: "50m",
-            },
-            limits: {
-              memory: "256Mi",
-              cpu: "200m",
+            readinessProbe: {
+              httpGet: {
+                path: "/metrics",
+                port: 9130,
+              },
+              initialDelaySeconds: 10,
+              periodSeconds: 10,
             },
           },
-          livenessProbe: {
-            httpGet: {
-              path: "/metrics",
-              port: 9130,
-            },
-            initialDelaySeconds: 30,
-            periodSeconds: 30,
-          },
-          readinessProbe: {
-            httpGet: {
-              path: "/metrics",
-              port: 9130,
-            },
-            initialDelaySeconds: 10,
-            periodSeconds: 10,
-          },
-        }],
+        ],
       },
     },
   },
@@ -142,12 +147,14 @@ const unpollerService = new k8s.core.v1.Service("unpoller-service", {
     selector: {
       app: "unpoller",
     },
-    ports: [{
-      name: "metrics",
-      port: 9130,
-      targetPort: 9130,
-      protocol: "TCP",
-    }],
+    ports: [
+      {
+        name: "metrics",
+        port: 9130,
+        targetPort: 9130,
+        protocol: "TCP",
+      },
+    ],
   },
 });
 

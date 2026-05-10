@@ -37,14 +37,19 @@ const grafanaPVC = new k8s.core.v1.PersistentVolumeClaim("grafana-pvc", {
 // Get Pulumi config for Authentik OAuth credentials
 const config = new pulumi.Config();
 const authentikClientId = config.requireSecret("grafana-oauth-client-id");
-const authentikClientSecret = config.requireSecret("grafana-oauth-client-secret");
+const authentikClientSecret = config.requireSecret(
+  "grafana-oauth-client-secret",
+);
 const authentikUrl = "https://auth.mvissing.de";
 
 // Generate random password for Grafana admin user
-const grafanaAdminPassword = new random.RandomPassword("grafana-admin-password", {
-  length: 16,
-  special: false,
-});
+const grafanaAdminPassword = new random.RandomPassword(
+  "grafana-admin-password",
+  {
+    length: 16,
+    special: false,
+  },
+);
 
 // Install Grafana using Helm chart
 const grafana = new k8s.helm.v3.Chart("grafana", {
@@ -101,7 +106,7 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
     // Ingress configuration
     ingress: {
       enabled: true,
-      ingressClassName: "traefik",  // Changed from traefik-external - now using port forwarding on ionos
+      ingressClassName: "traefik", // Changed from traefik-external - now using port forwarding on ionos
       annotations: {
         "cert-manager.io/cluster-issuer": "letsencrypt-prod",
         // Homepage dashboard discovery
@@ -113,9 +118,11 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
         "gethomepage.dev/href": "https://grafana.mvissing.de",
         // Grafana widget - shows dashboard and alert stats
         "gethomepage.dev/widget.type": "grafana",
-        "gethomepage.dev/widget.url": "http://grafana.monitoring.svc.cluster.local",
+        "gethomepage.dev/widget.url":
+          "http://grafana.monitoring.svc.cluster.local",
         "gethomepage.dev/widget.username": "admin",
-        "gethomepage.dev/widget.password": '{{ "{{HOMEPAGE_VAR_GRAFANA_PASSWORD}}" }}',
+        "gethomepage.dev/widget.password":
+          '{{ "{{HOMEPAGE_VAR_GRAFANA_PASSWORD}}" }}',
       },
       hosts: ["grafana.mvissing.de"],
       tls: [
@@ -153,7 +160,8 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
         token_url: `${authentikUrl}/application/o/token/`,
         api_url: `${authentikUrl}/application/o/userinfo/`,
         // Role mapping from Authentik groups
-        role_attribute_path: "contains(groups, 'Grafana Admins') && 'Admin' || contains(groups, 'Grafana Editors') && 'Editor' || 'Viewer'",
+        role_attribute_path:
+          "contains(groups, 'Grafana Admins') && 'Admin' || contains(groups, 'Grafana Editors') && 'Editor' || 'Viewer'",
         allow_sign_up: true,
         auto_login: false, // Set to true to skip Grafana login page
       },

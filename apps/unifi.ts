@@ -51,14 +51,15 @@ const mongoInitJob = new k8s.batch.v1.Job("unifi-mongo-init", {
     template: {
       spec: {
         restartPolicy: "OnFailure",
-        containers: [{
-          name: "mongo-init",
-          image: "mongo:8.2",
-          command: ["mongosh"],
-          args: [
-            pulumi.interpolate`mongodb://root:${mongodbRootPasswordValue}@${mongodbHost}:27017/admin`,
-            "--eval",
-            pulumi.interpolate`
+        containers: [
+          {
+            name: "mongo-init",
+            image: "mongo:8.2",
+            command: ["mongosh"],
+            args: [
+              pulumi.interpolate`mongodb://root:${mongodbRootPasswordValue}@${mongodbHost}:27017/admin`,
+              "--eval",
+              pulumi.interpolate`
 db = db.getSiblingDB('unifi');
 try {
   db.createUser({
@@ -78,8 +79,9 @@ try {
   }
 }
 `,
-          ],
-        }],
+            ],
+          },
+        ],
       },
     },
   },
@@ -103,148 +105,158 @@ const unifiDataPVC = new k8s.core.v1.PersistentVolumeClaim("unifi-data-pvc", {
 });
 
 // UniFi Network Application Deployment
-const unifiDeployment = new k8s.apps.v1.Deployment("unifi", {
-  metadata: {
-    name: "unifi",
-    namespace: namespace.metadata.name,
-    labels: {
-      app: "unifi",
-    },
-  },
-  spec: {
-    replicas: 1,
-    selector: {
-      matchLabels: {
+const unifiDeployment = new k8s.apps.v1.Deployment(
+  "unifi",
+  {
+    metadata: {
+      name: "unifi",
+      namespace: namespace.metadata.name,
+      labels: {
         app: "unifi",
       },
     },
-    template: {
-      metadata: {
-        labels: {
+    spec: {
+      replicas: 1,
+      selector: {
+        matchLabels: {
           app: "unifi",
         },
       },
-      spec: {
-        nodeSelector: {
-          "kubernetes.io/arch": "amd64",
+      template: {
+        metadata: {
+          labels: {
+            app: "unifi",
+          },
         },
-        containers: [{
-          name: "unifi",
-          image: "lscr.io/linuxserver/unifi-network-application:10.3.58",
-          ports: [
+        spec: {
+          nodeSelector: {
+            "kubernetes.io/arch": "amd64",
+          },
+          containers: [
             {
-              containerPort: 8443,
-              name: "https",
-              protocol: "TCP",
-            },
-            {
-              containerPort: 8080,
-              name: "inform",
-              protocol: "TCP",
-            },
-            {
-              containerPort: 3478,
-              name: "stun",
-              protocol: "UDP",
-            },
-            {
-              containerPort: 10001,
-              name: "discovery",
-              protocol: "UDP",
-            },
-            {
-              containerPort: 6789,
-              name: "speedtest",
-              protocol: "TCP",
-            },
-          ],
-          env: [
-            {
-              name: "MONGO_HOST",
-              value: mongodbHost,
-            },
-            {
-              name: "MONGO_PORT",
-              value: "27017",
-            },
-            {
-              name: "MONGO_DBNAME",
-              value: "unifi",
-            },
-            {
-              name: "MONGO_USER",
-              valueFrom: {
-                secretKeyRef: {
-                  name: unifiMongoSecret.metadata.name,
-                  key: "username",
+              name: "unifi",
+              image: "lscr.io/linuxserver/unifi-network-application:10.3.58",
+              ports: [
+                {
+                  containerPort: 8443,
+                  name: "https",
+                  protocol: "TCP",
+                },
+                {
+                  containerPort: 8080,
+                  name: "inform",
+                  protocol: "TCP",
+                },
+                {
+                  containerPort: 3478,
+                  name: "stun",
+                  protocol: "UDP",
+                },
+                {
+                  containerPort: 10001,
+                  name: "discovery",
+                  protocol: "UDP",
+                },
+                {
+                  containerPort: 6789,
+                  name: "speedtest",
+                  protocol: "TCP",
+                },
+              ],
+              env: [
+                {
+                  name: "MONGO_HOST",
+                  value: mongodbHost,
+                },
+                {
+                  name: "MONGO_PORT",
+                  value: "27017",
+                },
+                {
+                  name: "MONGO_DBNAME",
+                  value: "unifi",
+                },
+                {
+                  name: "MONGO_USER",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: unifiMongoSecret.metadata.name,
+                      key: "username",
+                    },
+                  },
+                },
+                {
+                  name: "MONGO_PASS",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: unifiMongoSecret.metadata.name,
+                      key: "password",
+                    },
+                  },
+                },
+                {
+                  name: "MONGO_AUTHSOURCE",
+                  value: "unifi",
+                },
+                {
+                  name: "TZ",
+                  value: "Europe/Berlin",
+                },
+                {
+                  name: "MEM_LIMIT",
+                  value: "1024",
+                },
+                {
+                  name: "MEM_STARTUP",
+                  value: "1024",
+                },
+              ],
+              volumeMounts: [
+                {
+                  name: "data",
+                  mountPath: "/config",
+                },
+              ],
+              resources: {
+                requests: {
+                  memory: "1Gi",
+                  cpu: "500m",
+                },
+                limits: {
+                  memory: "3Gi",
+                  cpu: "2000m",
                 },
               },
-            },
-            {
-              name: "MONGO_PASS",
-              valueFrom: {
-                secretKeyRef: {
-                  name: unifiMongoSecret.metadata.name,
-                  key: "password",
+              livenessProbe: {
+                tcpSocket: {
+                  port: 8443,
                 },
+                initialDelaySeconds: 120,
+                periodSeconds: 30,
+              },
+              readinessProbe: {
+                tcpSocket: {
+                  port: 8443,
+                },
+                initialDelaySeconds: 90,
+                periodSeconds: 10,
               },
             },
+          ],
+          volumes: [
             {
-              name: "MONGO_AUTHSOURCE",
-              value: "unifi",
-            },
-            {
-              name: "TZ",
-              value: "Europe/Berlin",
-            },
-            {
-              name: "MEM_LIMIT",
-              value: "1024",
-            },
-            {
-              name: "MEM_STARTUP",
-              value: "1024",
+              name: "data",
+              persistentVolumeClaim: {
+                claimName: unifiDataPVC.metadata.name,
+              },
             },
           ],
-          volumeMounts: [{
-            name: "data",
-            mountPath: "/config",
-          }],
-          resources: {
-            requests: {
-              memory: "1Gi",
-              cpu: "500m",
-            },
-            limits: {
-              memory: "3Gi",
-              cpu: "2000m",
-            },
-          },
-          livenessProbe: {
-            tcpSocket: {
-              port: 8443,
-            },
-            initialDelaySeconds: 120,
-            periodSeconds: 30,
-          },
-          readinessProbe: {
-            tcpSocket: {
-              port: 8443,
-            },
-            initialDelaySeconds: 90,
-            periodSeconds: 10,
-          },
-        }],
-        volumes: [{
-          name: "data",
-          persistentVolumeClaim: {
-            claimName: unifiDataPVC.metadata.name,
-          },
-        }],
+        },
       },
     },
   },
-}, { dependsOn: [unifiDataPVC, mongoInitJob] });
+  { dependsOn: [unifiDataPVC, mongoInitJob] },
+);
 
 // UniFi LoadBalancer Service
 const unifiService = new k8s.core.v1.Service("unifi-service", {
@@ -293,11 +305,7 @@ const unifiService = new k8s.core.v1.Service("unifi-service", {
   },
 });
 
-export {
-  namespace as unifiNamespace,
-  unifiDeployment,
-  unifiService,
-};
+export { namespace as unifiNamespace, unifiDeployment, unifiService };
 
 // Setup Instructions:
 //

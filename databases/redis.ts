@@ -27,105 +27,121 @@ const redisPVC = new k8s.core.v1.PersistentVolumeClaim("redis-pvc", {
 });
 
 // Redis Deployment with persistence
-const redisDeployment = new k8s.apps.v1.Deployment("redis", {
-  metadata: {
-    name: "redis",
-    namespace: postgresqlNamespace,
-    labels: {
-      app: "redis",
-    },
-  },
-  spec: {
-    replicas: 1,
-    selector: {
-      matchLabels: {
+const redisDeployment = new k8s.apps.v1.Deployment(
+  "redis",
+  {
+    metadata: {
+      name: "redis",
+      namespace: postgresqlNamespace,
+      labels: {
         app: "redis",
       },
     },
-    template: {
-      metadata: {
-        labels: {
+    spec: {
+      replicas: 1,
+      selector: {
+        matchLabels: {
           app: "redis",
         },
-        annotations: {
-          "prometheus.io/scrape": "true",
-          "prometheus.io/port": "9121",
-        },
       },
-      spec: {
-        containers: [
-          {
-            name: "redis",
-            image: "redis:8.6.2-alpine",
-            args: [
-              "redis-server",
-              "--appendonly", "yes",
-              "--appendfsync", "everysec",
-              "--maxmemory", "1gb",
-              "--maxmemory-policy", "allkeys-lru",
-            ],
-            ports: [{
-              containerPort: 6379,
+      template: {
+        metadata: {
+          labels: {
+            app: "redis",
+          },
+          annotations: {
+            "prometheus.io/scrape": "true",
+            "prometheus.io/port": "9121",
+          },
+        },
+        spec: {
+          containers: [
+            {
               name: "redis",
-            }],
-            volumeMounts: [{
+              image: "redis:8.6.2-alpine",
+              args: [
+                "redis-server",
+                "--appendonly",
+                "yes",
+                "--appendfsync",
+                "everysec",
+                "--maxmemory",
+                "1gb",
+                "--maxmemory-policy",
+                "allkeys-lru",
+              ],
+              ports: [
+                {
+                  containerPort: 6379,
+                  name: "redis",
+                },
+              ],
+              volumeMounts: [
+                {
+                  name: "data",
+                  mountPath: "/data",
+                },
+              ],
+              resources: {
+                requests: {
+                  memory: "256Mi",
+                  cpu: "100m",
+                },
+                limits: {
+                  memory: "2Gi",
+                  cpu: "1000m",
+                },
+              },
+              livenessProbe: {
+                exec: {
+                  command: ["redis-cli", "ping"],
+                },
+                initialDelaySeconds: 30,
+                periodSeconds: 10,
+              },
+              readinessProbe: {
+                exec: {
+                  command: ["redis-cli", "ping"],
+                },
+                initialDelaySeconds: 5,
+                periodSeconds: 5,
+              },
+            },
+            {
+              name: "redis-exporter",
+              image: "oliver006/redis_exporter:v1.82.0",
+              ports: [
+                {
+                  containerPort: 9121,
+                  name: "metrics",
+                },
+              ],
+              resources: {
+                requests: {
+                  memory: "32Mi",
+                  cpu: "10m",
+                },
+                limits: {
+                  memory: "64Mi",
+                  cpu: "100m",
+                },
+              },
+            },
+          ],
+          volumes: [
+            {
               name: "data",
-              mountPath: "/data",
-            }],
-            resources: {
-              requests: {
-                memory: "256Mi",
-                cpu: "100m",
-              },
-              limits: {
-                memory: "2Gi",
-                cpu: "1000m",
+              persistentVolumeClaim: {
+                claimName: "redis-data",
               },
             },
-            livenessProbe: {
-              exec: {
-                command: ["redis-cli", "ping"],
-              },
-              initialDelaySeconds: 30,
-              periodSeconds: 10,
-            },
-            readinessProbe: {
-              exec: {
-                command: ["redis-cli", "ping"],
-              },
-              initialDelaySeconds: 5,
-              periodSeconds: 5,
-            },
-          },
-          {
-            name: "redis-exporter",
-            image: "oliver006/redis_exporter:v1.82.0",
-            ports: [{
-              containerPort: 9121,
-              name: "metrics",
-            }],
-            resources: {
-              requests: {
-                memory: "32Mi",
-                cpu: "10m",
-              },
-              limits: {
-                memory: "64Mi",
-                cpu: "100m",
-              },
-            },
-          },
-        ],
-        volumes: [{
-          name: "data",
-          persistentVolumeClaim: {
-            claimName: "redis-data",
-          },
-        }],
+          ],
+        },
       },
     },
   },
-}, { dependsOn: redisPVC });
+  { dependsOn: redisPVC },
+);
 
 // Redis Service
 const redisService = new k8s.core.v1.Service("redis-service", {
@@ -141,11 +157,13 @@ const redisService = new k8s.core.v1.Service("redis-service", {
     selector: {
       app: "redis",
     },
-    ports: [{
-      port: 6379,
-      targetPort: 6379,
-      name: "redis",
-    }],
+    ports: [
+      {
+        port: 6379,
+        targetPort: 6379,
+        name: "redis",
+      },
+    ],
   },
 });
 

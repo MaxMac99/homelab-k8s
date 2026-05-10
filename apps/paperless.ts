@@ -29,7 +29,9 @@ const namespace = new k8s.core.v1.Namespace("paperless", {
 const config = new pulumi.Config();
 const paperlessSecretKey = config.requireSecret("paperless-secret-key");
 const authentikClientId = config.requireSecret("paperless-authentik-client-id");
-const authentikClientSecret = config.requireSecret("paperless-authentik-client-secret");
+const authentikClientSecret = config.requireSecret(
+  "paperless-authentik-client-secret",
+);
 const metricsApiToken = config.requireSecret("paperless-metrics-api-token");
 
 // Store secrets in Kubernetes (in paperless namespace)
@@ -43,22 +45,27 @@ const paperlessSecret = new k8s.core.v1.Secret("paperless-secret", {
     PAPERLESS_SECRET_KEY: paperlessSecretKey,
     // Authentik OAuth2/OIDC credentials
     PAPERLESS_APPS: "allauth.socialaccount.providers.openid_connect",
-    PAPERLESS_SOCIALACCOUNT_PROVIDERS: pulumi.all([authentikClientId, authentikClientSecret]).apply(([clientId, clientSecret]) =>
-      JSON.stringify({
-        openid_connect: {
-          SERVERS: [{
-            id: "authentik",
-            name: "Authentik",
-            server_url: "https://auth.mvissing.de/application/o/paperless/.well-known/openid-configuration",
-            token_auth_method: "client_secret_basic",
-            APP: {
-              client_id: clientId,
-              secret: clientSecret,
-            },
-          }],
-        },
-      })
-    ),
+    PAPERLESS_SOCIALACCOUNT_PROVIDERS: pulumi
+      .all([authentikClientId, authentikClientSecret])
+      .apply(([clientId, clientSecret]) =>
+        JSON.stringify({
+          openid_connect: {
+            SERVERS: [
+              {
+                id: "authentik",
+                name: "Authentik",
+                server_url:
+                  "https://auth.mvissing.de/application/o/paperless/.well-known/openid-configuration",
+                token_auth_method: "client_secret_basic",
+                APP: {
+                  client_id: clientId,
+                  secret: clientSecret,
+                },
+              },
+            ],
+          },
+        }),
+      ),
   },
 });
 
@@ -75,101 +82,112 @@ const metricsTokenSecret = new k8s.core.v1.Secret("paperless-metrics-token", {
 });
 
 // Declaratively create Paperless database using CloudNativePG
-const paperlessDatabase = new k8s.apiextensions.CustomResource("paperless-database", {
-  apiVersion: "postgresql.cnpg.io/v1",
-  kind: "Database",
-  metadata: {
-    name: "paperless-db",
-    namespace: postgresqlNamespace,
-  },
-  spec: {
-    name: "paperless",
-    owner: "paperless",
-    cluster: {
-      name: postgresqlClusterName,
+const paperlessDatabase = new k8s.apiextensions.CustomResource(
+  "paperless-database",
+  {
+    apiVersion: "postgresql.cnpg.io/v1",
+    kind: "Database",
+    metadata: {
+      name: "paperless-db",
+      namespace: postgresqlNamespace,
+    },
+    spec: {
+      name: "paperless",
+      owner: "paperless",
+      cluster: {
+        name: postgresqlClusterName,
+      },
     },
   },
-});
+);
 
 // Update PostgreSQL cluster to add paperless role
 // Note: This should be added to postgresql.ts managed.roles array
 // For now, we'll document this as a manual step
 
 // NFS Persistent Volume for media storage (on tank pool)
-const paperlessMediaPV = new k8s.core.v1.PersistentVolume("paperless-media-pv", {
-  metadata: {
-    name: "paperless-media",
-  },
-  spec: {
-    capacity: {
-      storage: "300Gi", // Large capacity for document archive
+const paperlessMediaPV = new k8s.core.v1.PersistentVolume(
+  "paperless-media-pv",
+  {
+    metadata: {
+      name: "paperless-media",
     },
-    accessModes: ["ReadWriteMany"],
-    persistentVolumeReclaimPolicy: "Retain",
-    storageClassName: "nfs",
-    mountOptions: [
-      "nfsvers=4.2",
-      "hard",
-      "intr",
-    ],
-    nfs: {
-      server: "192.168.178.2", // maxdata NFS server
-      path: "/tank/k8s/nfs/paperless-media",
+    spec: {
+      capacity: {
+        storage: "300Gi", // Large capacity for document archive
+      },
+      accessModes: ["ReadWriteMany"],
+      persistentVolumeReclaimPolicy: "Retain",
+      storageClassName: "nfs",
+      mountOptions: ["nfsvers=4.2", "hard", "intr"],
+      nfs: {
+        server: "192.168.178.2", // maxdata NFS server
+        path: "/tank/k8s/nfs/paperless-media",
+      },
     },
   },
-});
+);
 
 // PVC for NFS media storage
-const paperlessMediaPVC = new k8s.core.v1.PersistentVolumeClaim("paperless-media-pvc", {
-  metadata: {
-    name: "paperless-media",
-    namespace: namespace.metadata.name,
-  },
-  spec: {
-    accessModes: ["ReadWriteMany"],
-    storageClassName: "nfs",
-    volumeName: paperlessMediaPV.metadata.name,
-    resources: {
-      requests: {
-        storage: "300Gi",
+const paperlessMediaPVC = new k8s.core.v1.PersistentVolumeClaim(
+  "paperless-media-pvc",
+  {
+    metadata: {
+      name: "paperless-media",
+      namespace: namespace.metadata.name,
+    },
+    spec: {
+      accessModes: ["ReadWriteMany"],
+      storageClassName: "nfs",
+      volumeName: paperlessMediaPV.metadata.name,
+      resources: {
+        requests: {
+          storage: "300Gi",
+        },
       },
     },
   },
-});
+);
 
 // PVC for data storage (search index, ML models, cache)
-const paperlessDataPVC = new k8s.core.v1.PersistentVolumeClaim("paperless-data-pvc", {
-  metadata: {
-    name: "paperless-data",
-    namespace: namespace.metadata.name,
-  },
-  spec: {
-    accessModes: ["ReadWriteOnce"],
-    storageClassName: "local-path",
-    resources: {
-      requests: {
-        storage: "20Gi",
+const paperlessDataPVC = new k8s.core.v1.PersistentVolumeClaim(
+  "paperless-data-pvc",
+  {
+    metadata: {
+      name: "paperless-data",
+      namespace: namespace.metadata.name,
+    },
+    spec: {
+      accessModes: ["ReadWriteOnce"],
+      storageClassName: "local-path",
+      resources: {
+        requests: {
+          storage: "20Gi",
+        },
       },
     },
   },
-});
+);
 
 // PVC for consume directory (incoming documents)
-const paperlessConsumePVC = new k8s.core.v1.PersistentVolumeClaim("paperless-consume-pvc", {
-  metadata: {
-    name: "paperless-consume",
-    namespace: namespace.metadata.name,
-  },
-  spec: {
-    accessModes: ["ReadWriteOnce"],
-    storageClassName: "local-path",
-    resources: {
-      requests: {
-        storage: "10Gi",
+const paperlessConsumePVC = new k8s.core.v1.PersistentVolumeClaim(
+  "paperless-consume-pvc",
+  {
+    metadata: {
+      name: "paperless-consume",
+      namespace: namespace.metadata.name,
+    },
+    spec: {
+      accessModes: ["ReadWriteOnce"],
+      storageClassName: "local-path",
+      resources: {
+        requests: {
+          storage: "10Gi",
+        },
       },
     },
   },
-});
+);
 
 // Gotenberg Deployment (Office document conversion)
 const gotenbergDeployment = new k8s.apps.v1.Deployment("gotenberg", {
@@ -191,29 +209,33 @@ const gotenbergDeployment = new k8s.apps.v1.Deployment("gotenberg", {
         },
       },
       spec: {
-        containers: [{
-          name: "gotenberg",
-          image: "gotenberg/gotenberg:8.31.0",
-          ports: [{
-            containerPort: 3000,
-            name: "http",
-          }],
-          command: [
-            "gotenberg",
-            "--chromium-disable-javascript=true",
-            "--chromium-allow-list=file:///tmp/.*",
-          ],
-          resources: {
-            requests: {
-              memory: "256Mi",
-              cpu: "100m",
-            },
-            limits: {
-              memory: "1Gi",
-              cpu: "1000m",
+        containers: [
+          {
+            name: "gotenberg",
+            image: "gotenberg/gotenberg:8.31.0",
+            ports: [
+              {
+                containerPort: 3000,
+                name: "http",
+              },
+            ],
+            command: [
+              "gotenberg",
+              "--chromium-disable-javascript=true",
+              "--chromium-allow-list=file:///tmp/.*",
+            ],
+            resources: {
+              requests: {
+                memory: "256Mi",
+                cpu: "100m",
+              },
+              limits: {
+                memory: "1Gi",
+                cpu: "1000m",
+              },
             },
           },
-        }],
+        ],
       },
     },
   },
@@ -229,11 +251,13 @@ const gotenbergService = new k8s.core.v1.Service("gotenberg-service", {
     selector: {
       app: "gotenberg",
     },
-    ports: [{
-      port: 3000,
-      targetPort: 3000,
-      name: "http",
-    }],
+    ports: [
+      {
+        port: 3000,
+        targetPort: 3000,
+        name: "http",
+      },
+    ],
   },
 });
 
@@ -257,24 +281,28 @@ const tikaDeployment = new k8s.apps.v1.Deployment("tika", {
         },
       },
       spec: {
-        containers: [{
-          name: "tika",
-          image: "apache/tika:3.3.0.0",
-          ports: [{
-            containerPort: 9998,
-            name: "http",
-          }],
-          resources: {
-            requests: {
-              memory: "512Mi",
-              cpu: "100m",
-            },
-            limits: {
-              memory: "2Gi",
-              cpu: "1000m",
+        containers: [
+          {
+            name: "tika",
+            image: "apache/tika:3.3.0.0",
+            ports: [
+              {
+                containerPort: 9998,
+                name: "http",
+              },
+            ],
+            resources: {
+              requests: {
+                memory: "512Mi",
+                cpu: "100m",
+              },
+              limits: {
+                memory: "2Gi",
+                cpu: "1000m",
+              },
             },
           },
-        }],
+        ],
       },
     },
   },
@@ -290,263 +318,274 @@ const tikaService = new k8s.core.v1.Service("tika-service", {
     selector: {
       app: "tika",
     },
-    ports: [{
-      port: 9998,
-      targetPort: 9998,
-      name: "http",
-    }],
+    ports: [
+      {
+        port: 9998,
+        targetPort: 9998,
+        name: "http",
+      },
+    ],
   },
 });
 
 // Paperless-ngx Deployment
-const paperlessDeployment = new k8s.apps.v1.Deployment("paperless", {
-  metadata: {
-    name: "paperless",
-    namespace: namespace.metadata.name,
-  },
-  spec: {
-    replicas: 1,
-    strategy: {
-      type: "RollingUpdate",
-      rollingUpdate: {
-        maxUnavailable: 1,
-        maxSurge: 0,
-      },
+const paperlessDeployment = new k8s.apps.v1.Deployment(
+  "paperless",
+  {
+    metadata: {
+      name: "paperless",
+      namespace: namespace.metadata.name,
     },
-    selector: {
-      matchLabels: {
-        app: "paperless",
+    spec: {
+      replicas: 1,
+      strategy: {
+        type: "RollingUpdate",
+        rollingUpdate: {
+          maxUnavailable: 1,
+          maxSurge: 0,
+        },
       },
-    },
-    template: {
-      metadata: {
-        labels: {
+      selector: {
+        matchLabels: {
           app: "paperless",
         },
-        annotations: {
-          "prometheus.io/scrape": "true",
-          "prometheus.io/port": "9999",  // Metrics exporter sidecar
-          "prometheus.io/path": "/metrics",
-        },
       },
-      spec: {
-        containers: [{
-          name: "paperless",
-          image: "ghcr.io/paperless-ngx/paperless-ngx:2.20",
-          ports: [{
-            containerPort: 8000,
-            name: "http",
-          }],
-          env: [
-            // Database configuration
+      template: {
+        metadata: {
+          labels: {
+            app: "paperless",
+          },
+          annotations: {
+            "prometheus.io/scrape": "true",
+            "prometheus.io/port": "9999", // Metrics exporter sidecar
+            "prometheus.io/path": "/metrics",
+          },
+        },
+        spec: {
+          containers: [
             {
-              name: "PAPERLESS_DBHOST",
-              value: postgresqlHost,
-            },
-            {
-              name: "PAPERLESS_DBNAME",
-              value: "paperless",
-            },
-            {
-              name: "PAPERLESS_DBUSER",
-              value: "paperless",
-            },
-            {
-              name: "PAPERLESS_DBPASS",
-              valueFrom: {
-                secretKeyRef: {
-                  name: "postgres-paperless",
-                  key: "password",
+              name: "paperless",
+              image: "ghcr.io/paperless-ngx/paperless-ngx:2.20",
+              ports: [
+                {
+                  containerPort: 8000,
+                  name: "http",
+                },
+              ],
+              env: [
+                // Database configuration
+                {
+                  name: "PAPERLESS_DBHOST",
+                  value: postgresqlHost,
+                },
+                {
+                  name: "PAPERLESS_DBNAME",
+                  value: "paperless",
+                },
+                {
+                  name: "PAPERLESS_DBUSER",
+                  value: "paperless",
+                },
+                {
+                  name: "PAPERLESS_DBPASS",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: "postgres-paperless",
+                      key: "password",
+                    },
+                  },
+                },
+                {
+                  name: "PAPERLESS_DBPORT",
+                  value: "5432",
+                },
+                // Redis configuration
+                {
+                  name: "PAPERLESS_REDIS",
+                  value: pulumi.interpolate`redis://${redisHost}:6379`,
+                },
+                // Secret key
+                {
+                  name: "PAPERLESS_SECRET_KEY",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: paperlessSecret.metadata.name,
+                      key: "PAPERLESS_SECRET_KEY",
+                    },
+                  },
+                },
+                // URL and CORS
+                {
+                  name: "PAPERLESS_URL",
+                  value: "https://dms.mvissing.de",
+                },
+                {
+                  name: "PAPERLESS_CSRF_TRUSTED_ORIGINS",
+                  value: "https://dms.mvissing.de",
+                },
+                {
+                  name: "PAPERLESS_ALLOWED_HOSTS",
+                  value:
+                    "dms.mvissing.de,paperless.paperless.svc.cluster.local",
+                },
+                {
+                  name: "PAPERLESS_CORS_ALLOWED_HOSTS",
+                  value: "https://dms.mvissing.de",
+                },
+                // Gotenberg and Tika
+                {
+                  name: "PAPERLESS_TIKA_ENABLED",
+                  value: "1",
+                },
+                {
+                  name: "PAPERLESS_TIKA_ENDPOINT",
+                  value: "http://tika:9998",
+                },
+                {
+                  name: "PAPERLESS_TIKA_GOTENBERG_ENDPOINT",
+                  value: "http://gotenberg:3000",
+                },
+                // OCR settings
+                {
+                  name: "PAPERLESS_OCR_LANGUAGE",
+                  value: "deu", // German + English
+                },
+                {
+                  name: "PAPERLESS_OCR_LANGUAGES",
+                  value: "deu eng", // German + English
+                },
+                // Time zone
+                {
+                  name: "PAPERLESS_TIME_ZONE",
+                  value: "Europe/Berlin",
+                },
+                // Override Kubernetes-injected PAPERLESS_PORT (otherwise Granian fails)
+                {
+                  name: "PAPERLESS_PORT",
+                  value: "8000",
+                },
+                // Authentik SSO configuration
+                {
+                  name: "PAPERLESS_APPS",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: paperlessSecret.metadata.name,
+                      key: "PAPERLESS_APPS",
+                    },
+                  },
+                },
+                {
+                  name: "PAPERLESS_SOCIALACCOUNT_PROVIDERS",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: paperlessSecret.metadata.name,
+                      key: "PAPERLESS_SOCIALACCOUNT_PROVIDERS",
+                    },
+                  },
+                },
+                // Enable auto-login via SSO (optional)
+                {
+                  name: "PAPERLESS_SOCIAL_AUTO_SIGNUP",
+                  value: "True",
+                },
+                {
+                  name: "PAPERLESS_REDIRECT_LOGIN_TO_SSO",
+                  value: "True",
+                },
+                {
+                  name: "PAPERLESS_DISABLE_REGULAR_LOGIN",
+                  value: "True",
+                },
+              ],
+              volumeMounts: [
+                {
+                  name: "data",
+                  mountPath: "/usr/src/paperless/data",
+                },
+                {
+                  name: "media",
+                  mountPath: "/usr/src/paperless/media",
+                },
+                {
+                  name: "consume",
+                  mountPath: "/usr/src/paperless/consume",
+                },
+              ],
+              resources: {
+                requests: {
+                  memory: "1Gi",
+                  cpu: "500m",
+                },
+                limits: {
+                  memory: "4Gi",
+                  cpu: "2000m",
                 },
               },
             },
+            // Prometheus exporter sidecar
             {
-              name: "PAPERLESS_DBPORT",
-              value: "5432",
-            },
-            // Redis configuration
-            {
-              name: "PAPERLESS_REDIS",
-              value: pulumi.interpolate`redis://${redisHost}:6379`,
-            },
-            // Secret key
-            {
-              name: "PAPERLESS_SECRET_KEY",
-              valueFrom: {
-                secretKeyRef: {
-                  name: paperlessSecret.metadata.name,
-                  key: "PAPERLESS_SECRET_KEY",
+              name: "metrics-exporter",
+              image: "ghcr.io/hansmi/prometheus-paperless-exporter:v0.0.9",
+              args: ["--web.listen-address=:9999"],
+              env: [
+                {
+                  name: "PAPERLESS_URL",
+                  value: "http://localhost:8000",
+                },
+                {
+                  name: "PAPERLESS_AUTH_TOKEN",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: metricsTokenSecret.metadata.name,
+                      key: "token",
+                    },
+                  },
+                },
+              ],
+              ports: [
+                {
+                  containerPort: 9999,
+                  name: "metrics",
+                },
+              ],
+              resources: {
+                requests: {
+                  memory: "32Mi",
+                  cpu: "50m",
+                },
+                limits: {
+                  memory: "128Mi",
+                  cpu: "200m",
                 },
               },
-            },
-            // URL and CORS
-            {
-              name: "PAPERLESS_URL",
-              value: "https://dms.mvissing.de",
-            },
-            {
-              name: "PAPERLESS_CSRF_TRUSTED_ORIGINS",
-              value: "https://dms.mvissing.de",
-            },
-            {
-              name: "PAPERLESS_ALLOWED_HOSTS",
-              value: "dms.mvissing.de,paperless.paperless.svc.cluster.local",
-            },
-            {
-              name: "PAPERLESS_CORS_ALLOWED_HOSTS",
-              value: "https://dms.mvissing.de",
-            },
-            // Gotenberg and Tika
-            {
-              name: "PAPERLESS_TIKA_ENABLED",
-              value: "1",
-            },
-            {
-              name: "PAPERLESS_TIKA_ENDPOINT",
-              value: "http://tika:9998",
-            },
-            {
-              name: "PAPERLESS_TIKA_GOTENBERG_ENDPOINT",
-              value: "http://gotenberg:3000",
-            },
-            // OCR settings
-            {
-              name: "PAPERLESS_OCR_LANGUAGE",
-              value: "deu", // German + English
-            },
-            {
-              name: "PAPERLESS_OCR_LANGUAGES",
-              value: "deu eng", // German + English
-            },
-            // Time zone
-            {
-              name: "PAPERLESS_TIME_ZONE",
-              value: "Europe/Berlin",
-            },
-            // Override Kubernetes-injected PAPERLESS_PORT (otherwise Granian fails)
-            {
-              name: "PAPERLESS_PORT",
-              value: "8000",
-            },
-            // Authentik SSO configuration
-            {
-              name: "PAPERLESS_APPS",
-              valueFrom: {
-                secretKeyRef: {
-                  name: paperlessSecret.metadata.name,
-                  key: "PAPERLESS_APPS",
-                },
-              },
-            },
-            {
-              name: "PAPERLESS_SOCIALACCOUNT_PROVIDERS",
-              valueFrom: {
-                secretKeyRef: {
-                  name: paperlessSecret.metadata.name,
-                  key: "PAPERLESS_SOCIALACCOUNT_PROVIDERS",
-                },
-              },
-            },
-            // Enable auto-login via SSO (optional)
-            {
-              name: "PAPERLESS_SOCIAL_AUTO_SIGNUP",
-              value: "True",
-            },
-            {
-              name: "PAPERLESS_REDIRECT_LOGIN_TO_SSO",
-              value: "True",
-            },
-            {
-              name: "PAPERLESS_DISABLE_REGULAR_LOGIN",
-              value: "True",
             },
           ],
-          volumeMounts: [
+          volumes: [
             {
               name: "data",
-              mountPath: "/usr/src/paperless/data",
+              persistentVolumeClaim: {
+                claimName: paperlessDataPVC.metadata.name,
+              },
             },
             {
               name: "media",
-              mountPath: "/usr/src/paperless/media",
+              persistentVolumeClaim: {
+                claimName: paperlessMediaPVC.metadata.name,
+              },
             },
             {
               name: "consume",
-              mountPath: "/usr/src/paperless/consume",
-            },
-          ],
-          resources: {
-            requests: {
-              memory: "1Gi",
-              cpu: "500m",
-            },
-            limits: {
-              memory: "4Gi",
-              cpu: "2000m",
-            },
-          },
-        },
-        // Prometheus exporter sidecar
-        {
-          name: "metrics-exporter",
-          image: "ghcr.io/hansmi/prometheus-paperless-exporter:v0.0.9",
-          args: [
-            "--web.listen-address=:9999",
-          ],
-          env: [
-            {
-              name: "PAPERLESS_URL",
-              value: "http://localhost:8000",
-            },
-            {
-              name: "PAPERLESS_AUTH_TOKEN",
-              valueFrom: {
-                secretKeyRef: {
-                  name: metricsTokenSecret.metadata.name,
-                  key: "token",
-                },
+              persistentVolumeClaim: {
+                claimName: paperlessConsumePVC.metadata.name,
               },
             },
           ],
-          ports: [{
-            containerPort: 9999,
-            name: "metrics",
-          }],
-          resources: {
-            requests: {
-              memory: "32Mi",
-              cpu: "50m",
-            },
-            limits: {
-              memory: "128Mi",
-              cpu: "200m",
-            },
-          },
-        }],
-        volumes: [
-          {
-            name: "data",
-            persistentVolumeClaim: {
-              claimName: paperlessDataPVC.metadata.name,
-            },
-          },
-          {
-            name: "media",
-            persistentVolumeClaim: {
-              claimName: paperlessMediaPVC.metadata.name,
-            },
-          },
-          {
-            name: "consume",
-            persistentVolumeClaim: {
-              claimName: paperlessConsumePVC.metadata.name,
-            },
-          },
-        ],
+        },
       },
     },
   },
-}, { dependsOn: [paperlessDatabase, gotenbergDeployment, tikaDeployment] });
+  { dependsOn: [paperlessDatabase, gotenbergDeployment, tikaDeployment] },
+);
 
 // Paperless Service
 const paperlessService = new k8s.core.v1.Service("paperless-service", {
@@ -558,11 +597,13 @@ const paperlessService = new k8s.core.v1.Service("paperless-service", {
     selector: {
       app: "paperless",
     },
-    ports: [{
-      port: 80,
-      targetPort: 8000,
-      name: "http",
-    }],
+    ports: [
+      {
+        port: 80,
+        targetPort: 8000,
+        name: "http",
+      },
+    ],
   },
 });
 
@@ -587,33 +628,40 @@ const paperlessIngress = new k8s.networking.v1.Ingress("paperless-ingress", {
       "gethomepage.dev/href": "https://dms.mvissing.de",
       // Paperless widget - shows document counts
       "gethomepage.dev/widget.type": "paperlessngx",
-      "gethomepage.dev/widget.url": "http://paperless.paperless.svc.cluster.local",
+      "gethomepage.dev/widget.url":
+        "http://paperless.paperless.svc.cluster.local",
       "gethomepage.dev/widget.key": "{{HOMEPAGE_VAR_PAPERLESS_TOKEN}}",
     },
   },
   spec: {
     ingressClassName: "traefik",
-    rules: [{
-      host: "dms.mvissing.de",
-      http: {
-        paths: [{
-          path: "/",
-          pathType: "Prefix",
-          backend: {
-            service: {
-              name: paperlessService.metadata.name,
-              port: {
-                number: 80,
+    rules: [
+      {
+        host: "dms.mvissing.de",
+        http: {
+          paths: [
+            {
+              path: "/",
+              pathType: "Prefix",
+              backend: {
+                service: {
+                  name: paperlessService.metadata.name,
+                  port: {
+                    number: 80,
+                  },
+                },
               },
             },
-          },
-        }],
+          ],
+        },
       },
-    }],
-    tls: [{
-      secretName: "paperless-tls",
-      hosts: ["dms.mvissing.de"],
-    }],
+    ],
+    tls: [
+      {
+        secretName: "paperless-tls",
+        hosts: ["dms.mvissing.de"],
+      },
+    ],
   },
 });
 

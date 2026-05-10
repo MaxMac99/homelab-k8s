@@ -143,38 +143,43 @@ const loki = new k8s.helm.v3.Chart("loki", {
 
 // Create a LoadBalancer service for external access (e.g., from maxdata host)
 // This allows log shippers running on bare metal hosts to send logs to Loki
-const lokiLoadBalancer = new k8s.core.v1.Service("loki-external", {
-  metadata: {
-    name: "loki-external",
-    namespace: namespaceName,
-    labels: {
-      "app.kubernetes.io/name": "loki",
-      "app.kubernetes.io/component": "external-access",
-    },
-    annotations: {
-      "metallb.universe.tf/loadBalancerIPs": "192.168.178.11",
-    },
-  },
-  spec: {
-    type: "LoadBalancer",
-    ports: [
-      {
-        name: "http",
-        port: 3100,
-        targetPort: 3100,
-        protocol: "TCP",
+const lokiLoadBalancer = new k8s.core.v1.Service(
+  "loki-external",
+  {
+    metadata: {
+      name: "loki-external",
+      namespace: namespaceName,
+      labels: {
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/component": "external-access",
       },
-    ],
-    selector: {
-      "app.kubernetes.io/name": "loki",
-      "app.kubernetes.io/component": "single-binary",
+      annotations: {
+        "metallb.universe.tf/loadBalancerIPs": "192.168.178.11",
+      },
+    },
+    spec: {
+      type: "LoadBalancer",
+      ports: [
+        {
+          name: "http",
+          port: 3100,
+          targetPort: 3100,
+          protocol: "TCP",
+        },
+      ],
+      selector: {
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/component": "single-binary",
+      },
     },
   },
-}, { dependsOn: [loki] });
+  { dependsOn: [loki] },
+);
 
 // Export Loki service URL for Grafana data source and log shippers (Alloy)
 export const lokiUrl = "http://loki.monitoring.svc.cluster.local:3100";
-export const lokiExternalIp = lokiLoadBalancer.status.loadBalancer.ingress[0].ip;
+export const lokiExternalIp =
+  lokiLoadBalancer.status.loadBalancer.ingress[0].ip;
 
 export { loki, lokiLoadBalancer };
 

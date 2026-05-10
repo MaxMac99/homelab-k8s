@@ -30,12 +30,14 @@ K3S VMs (k3s-node1/2/3) - Proxmox VMs
 Before deploying:
 
 1. **Create NFS directory on Proxmox:**
+
    ```bash
    ssh max@192.168.178.97
    sudo zfs create tank/k8s/adguard
    ```
 
 2. **Ensure Pi is in K3S cluster:**
+
    ```bash
    kubectl get nodes
    # Should show pi-k3s

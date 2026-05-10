@@ -91,9 +91,12 @@ const tempo = new k8s.helm.v3.Chart("tempo", {
 
 // Export Tempo service URLs for Grafana data source and application instrumentation
 export const tempoQueryUrl = "http://tempo.monitoring.svc.cluster.local:3100";
-export const tempoOtlpGrpcUrl = "http://tempo.monitoring.svc.cluster.local:4317";
-export const tempoOtlpHttpUrl = "http://tempo.monitoring.svc.cluster.local:4318";
-export const tempoJaegerGrpcUrl = "http://tempo.monitoring.svc.cluster.local:14250";
+export const tempoOtlpGrpcUrl =
+  "http://tempo.monitoring.svc.cluster.local:4317";
+export const tempoOtlpHttpUrl =
+  "http://tempo.monitoring.svc.cluster.local:4318";
+export const tempoJaegerGrpcUrl =
+  "http://tempo.monitoring.svc.cluster.local:14250";
 
 export { tempo };
 

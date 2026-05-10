@@ -28,7 +28,8 @@ const githubPatSecret = new k8s.core.v1.Secret("github-pat", {
 
 // ARC controller
 const arcController = new k8s.helm.v3.Release("arc-controller", {
-  chart: "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller",
+  chart:
+    "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller",
   version: "0.14.1",
   namespace: arcSystemsNamespace.metadata.name,
 });
@@ -57,14 +58,15 @@ const arcRunnerClusterRoleBinding = new k8s.rbac.v1.ClusterRoleBinding(
         namespace: "arc-runners",
       },
     ],
-  }
+  },
 );
 
 // ARC runner scale set
 const arcRunnerScaleSet = new k8s.helm.v3.Release(
   "arc-runner-set",
   {
-    chart: "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
+    chart:
+      "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
     version: "0.14.1",
     namespace: arcRunnersNamespace.metadata.name,
     values: {
@@ -90,7 +92,7 @@ const arcRunnerScaleSet = new k8s.helm.v3.Release(
       },
     },
   },
-  { dependsOn: [arcController, arcRunnerSA, arcRunnerClusterRoleBinding] }
+  { dependsOn: [arcController, arcRunnerSA, arcRunnerClusterRoleBinding] },
 );
 
 export {

@@ -10,8 +10,8 @@ import { adminPassword as grafanaAdminPassword } from "../monitoring/grafana";
 const config = new pulumi.Config();
 const authentikApiToken = config.requireSecret("authentikApiToken");
 const paperlessApiToken = config.requireSecret("paperless-metrics-api-token");
-const proxmoxUser = config.requireSecret("proxmox-api-user");       // Format: user@pam!tokenid
-const proxmoxToken = config.requireSecret("proxmox-api-token");     // API token secret
+const proxmoxUser = config.requireSecret("proxmox-api-user"); // Format: user@pam!tokenid
+const proxmoxToken = config.requireSecret("proxmox-api-token"); // API token secret
 
 // Create namespace for Homepage
 const homepageNamespace = new k8s.core.v1.Namespace("homepage", {
@@ -42,50 +42,59 @@ const homepageSecrets = new k8s.core.v1.Secret("homepage-secrets", {
 });
 
 // ClusterRole for cluster-wide service discovery (ingresses across all namespaces)
-const homepageClusterRole = new k8s.rbac.v1.ClusterRole("homepage-cluster-role", {
-  metadata: {
-    name: "homepage",
+const homepageClusterRole = new k8s.rbac.v1.ClusterRole(
+  "homepage-cluster-role",
+  {
+    metadata: {
+      name: "homepage",
+    },
+    rules: [
+      {
+        apiGroups: [""],
+        resources: ["namespaces", "pods", "nodes"],
+        verbs: ["get", "list"],
+      },
+      {
+        apiGroups: ["extensions", "networking.k8s.io"],
+        resources: ["ingresses"],
+        verbs: ["get", "list"],
+      },
+      {
+        apiGroups: ["traefik.io", "traefik.containo.us"],
+        resources: ["ingressroutes"],
+        verbs: ["get", "list"],
+      },
+      {
+        apiGroups: ["metrics.k8s.io"],
+        resources: ["nodes", "pods"],
+        verbs: ["get", "list"],
+      },
+    ],
   },
-  rules: [
-    {
-      apiGroups: [""],
-      resources: ["namespaces", "pods", "nodes"],
-      verbs: ["get", "list"],
-    },
-    {
-      apiGroups: ["extensions", "networking.k8s.io"],
-      resources: ["ingresses"],
-      verbs: ["get", "list"],
-    },
-    {
-      apiGroups: ["traefik.io", "traefik.containo.us"],
-      resources: ["ingressroutes"],
-      verbs: ["get", "list"],
-    },
-    {
-      apiGroups: ["metrics.k8s.io"],
-      resources: ["nodes", "pods"],
-      verbs: ["get", "list"],
-    },
-  ],
-});
+);
 
 // ClusterRoleBinding to allow homepage service account to use the ClusterRole
-const homepageClusterRoleBinding = new k8s.rbac.v1.ClusterRoleBinding("homepage-cluster-role-binding", {
-  metadata: {
-    name: "homepage",
+const homepageClusterRoleBinding = new k8s.rbac.v1.ClusterRoleBinding(
+  "homepage-cluster-role-binding",
+  {
+    metadata: {
+      name: "homepage",
+    },
+    roleRef: {
+      apiGroup: "rbac.authorization.k8s.io",
+      kind: "ClusterRole",
+      name: homepageClusterRole.metadata.name,
+    },
+    subjects: [
+      {
+        kind: "ServiceAccount",
+        name: "homepage",
+        namespace: homepageNamespace.metadata.name,
+      },
+    ],
   },
-  roleRef: {
-    apiGroup: "rbac.authorization.k8s.io",
-    kind: "ClusterRole",
-    name: homepageClusterRole.metadata.name,
-  },
-  subjects: [{
-    kind: "ServiceAccount",
-    name: "homepage",
-    namespace: homepageNamespace.metadata.name,
-  }],
-}, { dependsOn: [homepageClusterRole, homepageNamespace] });
+  { dependsOn: [homepageClusterRole, homepageNamespace] },
+);
 
 // Install Homepage using Helm chart
 const homepage = new k8s.helm.v3.Chart(
@@ -131,7 +140,8 @@ const homepage = new k8s.helm.v3.Chart(
           annotations: {
             "cert-manager.io/cluster-issuer": "letsencrypt-prod",
             // Protect with Authentik forward auth middleware
-            "traefik.ingress.kubernetes.io/router.middlewares": "traefik-authentik@kubernetescrd",
+            "traefik.ingress.kubernetes.io/router.middlewares":
+              "traefik-authentik@kubernetescrd",
           },
           hosts: [
             {
@@ -170,16 +180,12 @@ const homepage = new k8s.helm.v3.Chart(
                   widget: {
                     type: "fritzbox",
                     url: "http://192.168.178.1",
-                    fields: [
-                      "connectionStatus",
-                      "maxDown",
-                      "maxUp",
-                    ],
+                    fields: ["connectionStatus", "maxDown", "maxUp"],
                   },
                 },
               },
               {
-                "Proxmox": {
+                Proxmox: {
                   icon: "proxmox",
                   href: "https://192.168.178.2:8006",
                   description: "Hypervisor",
@@ -192,7 +198,7 @@ const homepage = new k8s.helm.v3.Chart(
                 },
               },
               {
-                "Cockpit": {
+                Cockpit: {
                   icon: "cockpit",
                   href: "https://192.168.178.2:9090",
                   description: "Server Management",
@@ -284,7 +290,7 @@ const homepage = new k8s.helm.v3.Chart(
       },
     },
   },
-  { dependsOn: [homepageNamespace, homepageSecrets] }
+  { dependsOn: [homepageNamespace, homepageSecrets] },
 );
 
 export { homepage, homepageNamespace };

@@ -33,12 +33,14 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
   fetchOpts: {
     repo: "https://prometheus-community.github.io/helm-charts",
   },
-  transformations: [(obj: any) => {
-    if (obj.kind === "PersistentVolumeClaim") {
-      obj.metadata.annotations = obj.metadata.annotations || {};
-      obj.metadata.annotations["pulumi.com/skipAwait"] = "true";
-    }
-  }],
+  transformations: [
+    (obj: any) => {
+      if (obj.kind === "PersistentVolumeClaim") {
+        obj.metadata.annotations = obj.metadata.annotations || {};
+        obj.metadata.annotations["pulumi.com/skipAwait"] = "true";
+      }
+    },
+  ],
   values: {
     // Prometheus server configuration
     server: {

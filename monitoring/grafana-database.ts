@@ -13,21 +13,24 @@ import { namespaceName } from "./namespace";
 
 // Declaratively create Grafana database using CloudNativePG
 // Uses the 'grafana' user created via declarative role management
-const grafanaDatabase = new k8s.apiextensions.CustomResource("grafana-database", {
-  apiVersion: "postgresql.cnpg.io/v1",
-  kind: "Database",
-  metadata: {
-    name: "grafana-db",
-    namespace: postgresqlNamespace,
-  },
-  spec: {
-    name: "grafana",
-    owner: "grafana", // Use per-app user from declarative role management
-    cluster: {
-      name: postgresqlClusterName,
+const grafanaDatabase = new k8s.apiextensions.CustomResource(
+  "grafana-database",
+  {
+    apiVersion: "postgresql.cnpg.io/v1",
+    kind: "Database",
+    metadata: {
+      name: "grafana-db",
+      namespace: postgresqlNamespace,
+    },
+    spec: {
+      name: "grafana",
+      owner: "grafana", // Use per-app user from declarative role management
+      cluster: {
+        name: postgresqlClusterName,
+      },
     },
   },
-});
+);
 
 // Create postgres-grafana secret directly in monitoring namespace
 // (Workaround for Reflector mirroring issues - creating it directly instead)
