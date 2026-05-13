@@ -85,7 +85,7 @@ const mongodbDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "mongodb",
-              image: "mongo:8.2",
+              image: "mongo:8.3",
               args: ["--auth"],
               ports: [
                 {
