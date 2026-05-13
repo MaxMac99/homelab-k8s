@@ -54,7 +54,7 @@ const mongoInitJob = new k8s.batch.v1.Job("unifi-mongo-init", {
         containers: [
           {
             name: "mongo-init",
-            image: "mongo:8.2",
+            image: "mongo:8.3",
             command: ["mongosh"],
             args: [
               pulumi.interpolate`mongodb://root:${mongodbRootPasswordValue}@${mongodbHost}:27017/admin`,
