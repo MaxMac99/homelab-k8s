@@ -28,7 +28,7 @@ const homeassistantPrometheusTokenSecret = new k8s.core.v1.Secret(
 // Install Prometheus using Helm chart
 const prometheus = new k8s.helm.v3.Chart("prometheus", {
   chart: "prometheus",
-  version: "29.6.0",
+  version: "29.7.0",
   namespace: namespaceName,
   fetchOpts: {
     repo: "https://prometheus-community.github.io/helm-charts",
