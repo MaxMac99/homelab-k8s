@@ -264,7 +264,7 @@ const adguardDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "adguard",
-              image: "adguard/adguardhome:v0.107.76",
+              image: "adguard/adguardhome:v0.107.77",
               ports: [
                 {
                   containerPort: 3000,
