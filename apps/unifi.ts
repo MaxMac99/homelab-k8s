@@ -1,18 +1,22 @@
-// UniFi Network Controller - Network Management System
-// Uses shared MongoDB database for storing network data
-// Deployed with LinuxServer.io UniFi Network Application
+// UniFi OS Server - self-hosted UniFi OS (Network + Org/IdP/Site Magic features)
 //
-// Migration Notes:
-// - Initially deployed with version 8.0.7 (matching Pi version)
-// - Upgrade to latest after successful restore
-// - Update image version in deployment and run pulumi up
+// Replaces the previous LinuxServer.io UniFi Network Application. UniFi OS
+// Server (UOS) is a monolithic appliance image that bundles its OWN MongoDB,
+// PostgreSQL, RabbitMQ, nginx and the Java/Go services, all running as systemd
+// services with systemd as PID 1. Because of that it:
+//   - does NOT use the shared MongoDB in databases/mongodb.ts (bundled instead)
+//   - requires a PRIVILEGED container with host cgroup access + NET_ADMIN/NET_RAW
+//
+// Image is the community build that re-packages Ubiquiti's official installer:
+//   https://github.com/chrissnell/unifi-os-kubernetes
+//
+// Migration from the old Network Application:
+//   - The shared-MongoDB init Job / secret are gone (UOS owns its DB).
+//   - Restore your existing UniFi Network `.unf` backup via the UOS web UI.
+//   - Web UI moved from :8443 to :443; discovery from :10001 to :10003.
+// See the Setup / Migration notes at the bottom of this file.
 
 import * as k8s from "@pulumi/kubernetes";
-import * as pulumi from "@pulumi/pulumi";
-import * as random from "@pulumi/random";
-
-// Import shared MongoDB connection info
-import { mongodbHost, mongodbRootPasswordValue } from "../databases/mongodb";
 
 // Create namespace for UniFi
 const namespace = new k8s.core.v1.Namespace("unifi", {
@@ -21,73 +25,8 @@ const namespace = new k8s.core.v1.Namespace("unifi", {
   },
 });
 
-// Generate password for UniFi's MongoDB user
-const unifiMongoPassword = new random.RandomPassword("unifi-mongo-password", {
-  length: 32,
-  special: false,
-});
-
-// Secret for UniFi MongoDB credentials
-const unifiMongoSecret = new k8s.core.v1.Secret("unifi-mongo-secret", {
-  metadata: {
-    name: "unifi-mongo-credentials",
-    namespace: namespace.metadata.name,
-  },
-  type: "Opaque",
-  stringData: {
-    username: "unifi",
-    password: unifiMongoPassword.result,
-  },
-});
-
-// MongoDB initialization job - creates UniFi databases and user
-// Runs once on deployment to set up UniFi-specific databases
-const mongoInitJob = new k8s.batch.v1.Job("unifi-mongo-init", {
-  metadata: {
-    name: "unifi-mongo-init",
-    namespace: namespace.metadata.name,
-  },
-  spec: {
-    template: {
-      spec: {
-        restartPolicy: "OnFailure",
-        containers: [
-          {
-            name: "mongo-init",
-            image: "mongo:8.3",
-            command: ["mongosh"],
-            args: [
-              pulumi.interpolate`mongodb://root:${mongodbRootPasswordValue}@${mongodbHost}:27017/admin`,
-              "--eval",
-              pulumi.interpolate`
-db = db.getSiblingDB('unifi');
-try {
-  db.createUser({
-    user: '${unifiMongoPassword.result}',
-    pwd: '${unifiMongoPassword.result}',
-    roles: [
-      { role: 'dbOwner', db: 'unifi' },
-      { role: 'dbOwner', db: 'unifi_stat' }
-    ]
-  });
-  print('Created user in unifi database with access to both unifi and unifi_stat');
-} catch (e) {
-  if (e.code === 51003) {
-    print('User already exists');
-  } else {
-    throw e;
-  }
-}
-`,
-            ],
-          },
-        ],
-      },
-    },
-  },
-});
-
-// PVC for UniFi application data
+// PVC for main UOS state: config, /persistent, /data, /srv, network app data,
+// logs and rabbitmq SSL (mounted via subPaths below).
 const unifiDataPVC = new k8s.core.v1.PersistentVolumeClaim("unifi-data-pvc", {
   metadata: {
     name: "unifi-data",
@@ -98,13 +37,31 @@ const unifiDataPVC = new k8s.core.v1.PersistentVolumeClaim("unifi-data-pvc", {
     storageClassName: "local-path",
     resources: {
       requests: {
-        storage: "5Gi",
+        storage: "20Gi",
       },
     },
   },
 });
 
-// UniFi Network Application Deployment
+// PVC for the bundled MongoDB datadir (/var/lib/mongodb). Kept separate so the
+// database can be sized / snapshotted independently of the rest of UOS state.
+const unifiMongoPVC = new k8s.core.v1.PersistentVolumeClaim("unifi-mongo-pvc", {
+  metadata: {
+    name: "unifi-mongo",
+    namespace: namespace.metadata.name,
+  },
+  spec: {
+    accessModes: ["ReadWriteOnce"],
+    storageClassName: "local-path",
+    resources: {
+      requests: {
+        storage: "10Gi",
+      },
+    },
+  },
+});
+
+// UniFi OS Server Deployment
 const unifiDeployment = new k8s.apps.v1.Deployment(
   "unifi",
   {
@@ -117,6 +74,11 @@ const unifiDeployment = new k8s.apps.v1.Deployment(
     },
     spec: {
       replicas: 1,
+      // Stateful appliance on RWO volumes: tear the old pod down before the new
+      // one starts so the volumes aren't double-mounted.
+      strategy: {
+        type: "Recreate",
+      },
       selector: {
         matchLabels: {
           app: "unifi",
@@ -134,11 +96,19 @@ const unifiDeployment = new k8s.apps.v1.Deployment(
           },
           containers: [
             {
-              name: "unifi",
-              image: "lscr.io/linuxserver/unifi-network-application:10.3.58",
+              name: "unifi-os-server",
+              image: "ghcr.io/chrissnell/unifi-os-server:5.0.8",
+              // UOS runs systemd and bundled services as root and needs host
+              // cgroup access; privileged is the only reliable mode today.
+              securityContext: {
+                privileged: true,
+                capabilities: {
+                  add: ["NET_ADMIN", "NET_RAW"],
+                },
+              },
               ports: [
                 {
-                  containerPort: 8443,
+                  containerPort: 443,
                   name: "https",
                   protocol: "TCP",
                 },
@@ -153,101 +123,103 @@ const unifiDeployment = new k8s.apps.v1.Deployment(
                   protocol: "UDP",
                 },
                 {
-                  containerPort: 10001,
+                  containerPort: 10003,
                   name: "discovery",
                   protocol: "UDP",
                 },
-                {
-                  containerPort: 6789,
-                  name: "speedtest",
-                  protocol: "TCP",
-                },
               ],
-              env: [
-                {
-                  name: "MONGO_HOST",
-                  value: mongodbHost,
-                },
-                {
-                  name: "MONGO_PORT",
-                  value: "27017",
-                },
-                {
-                  name: "MONGO_DBNAME",
-                  value: "unifi",
-                },
-                {
-                  name: "MONGO_USER",
-                  valueFrom: {
-                    secretKeyRef: {
-                      name: unifiMongoSecret.metadata.name,
-                      key: "username",
-                    },
-                  },
-                },
-                {
-                  name: "MONGO_PASS",
-                  valueFrom: {
-                    secretKeyRef: {
-                      name: unifiMongoSecret.metadata.name,
-                      key: "password",
-                    },
-                  },
-                },
-                {
-                  name: "MONGO_AUTHSOURCE",
-                  value: "unifi",
-                },
-                {
-                  name: "TZ",
-                  value: "Europe/Berlin",
-                },
-                {
-                  name: "MEM_LIMIT",
-                  value: "1024",
-                },
-                {
-                  name: "MEM_STARTUP",
-                  value: "1024",
-                },
-              ],
-              volumeMounts: [
-                {
-                  name: "data",
-                  mountPath: "/config",
-                },
-              ],
+              // Optionally pin the address UOS advertises to devices/controllers
+              // once you know the LoadBalancer IP (see migration notes):
+              //   env: [{ name: "UOS_SYSTEM_IP", value: "192.168.178.XX" }],
               resources: {
                 requests: {
-                  memory: "1Gi",
+                  memory: "2Gi",
                   cpu: "500m",
                 },
                 limits: {
-                  memory: "3Gi",
-                  cpu: "2000m",
+                  memory: "6Gi",
+                  cpu: "4",
                 },
               },
+              // Bundled nginx serves /api/ping on :80. First boot runs a full
+              // systemd init and can take several minutes.
               livenessProbe: {
-                tcpSocket: {
-                  port: 8443,
+                httpGet: {
+                  path: "/api/ping",
+                  port: 80,
                 },
-                initialDelaySeconds: 120,
-                periodSeconds: 30,
+                initialDelaySeconds: 180,
+                periodSeconds: 60,
+                timeoutSeconds: 10,
+                failureThreshold: 5,
               },
               readinessProbe: {
-                tcpSocket: {
-                  port: 8443,
+                httpGet: {
+                  path: "/api/ping",
+                  port: 80,
                 },
-                initialDelaySeconds: 90,
-                periodSeconds: 10,
+                initialDelaySeconds: 60,
+                periodSeconds: 15,
+                timeoutSeconds: 5,
+                failureThreshold: 10,
               },
+              volumeMounts: [
+                // Host cgroup mount so systemd-in-container works.
+                {
+                  name: "cgroup",
+                  mountPath: "/sys/fs/cgroup",
+                },
+                // Writable tmpfs mounts required by systemd / UniFi.
+                { name: "tmp-run", mountPath: "/run" },
+                { name: "tmp-run-lock", mountPath: "/run/lock" },
+                { name: "tmp-tmp", mountPath: "/tmp" },
+                { name: "tmp-journal", mountPath: "/var/lib/journal" },
+                { name: "tmp-unifi", mountPath: "/var/opt/unifi/tmp" },
+                // Persistent UOS state, split across paths via subPaths.
+                {
+                  name: "data",
+                  mountPath: "/persistent",
+                  subPath: "persistent",
+                },
+                { name: "data", mountPath: "/var/log", subPath: "log" },
+                { name: "data", mountPath: "/data", subPath: "data" },
+                { name: "data", mountPath: "/srv", subPath: "srv" },
+                { name: "data", mountPath: "/var/lib/unifi", subPath: "unifi" },
+                {
+                  name: "data",
+                  mountPath: "/etc/rabbitmq/ssl",
+                  subPath: "rabbitmq-ssl",
+                },
+                // Bundled MongoDB datadir on its own PVC.
+                { name: "mongo", mountPath: "/var/lib/mongodb" },
+              ],
             },
           ],
           volumes: [
             {
+              name: "cgroup",
+              hostPath: {
+                path: "/sys/fs/cgroup",
+              },
+            },
+            { name: "tmp-run", emptyDir: { medium: "Memory" } },
+            { name: "tmp-run-lock", emptyDir: { medium: "Memory" } },
+            { name: "tmp-tmp", emptyDir: { medium: "Memory" } },
+            { name: "tmp-journal", emptyDir: { medium: "Memory" } },
+            {
+              name: "tmp-unifi",
+              emptyDir: { medium: "Memory", sizeLimit: "64Mi" },
+            },
+            {
               name: "data",
               persistentVolumeClaim: {
                 claimName: unifiDataPVC.metadata.name,
+              },
+            },
+            {
+              name: "mongo",
+              persistentVolumeClaim: {
+                claimName: unifiMongoPVC.metadata.name,
               },
             },
           ],
@@ -255,7 +227,7 @@ const unifiDeployment = new k8s.apps.v1.Deployment(
       },
     },
   },
-  { dependsOn: [unifiDataPVC, mongoInitJob] },
+  { dependsOn: [unifiDataPVC, unifiMongoPVC] },
 );
 
 // UniFi LoadBalancer Service
@@ -273,8 +245,8 @@ const unifiService = new k8s.core.v1.Service("unifi-service", {
     ports: [
       {
         name: "https",
-        port: 8443,
-        targetPort: 8443,
+        port: 443,
+        targetPort: 443,
         protocol: "TCP",
       },
       {
@@ -291,15 +263,9 @@ const unifiService = new k8s.core.v1.Service("unifi-service", {
       },
       {
         name: "discovery",
-        port: 10001,
-        targetPort: 10001,
+        port: 10003,
+        targetPort: 10003,
         protocol: "UDP",
-      },
-      {
-        name: "speedtest",
-        port: 6789,
-        targetPort: 6789,
-        protocol: "TCP",
       },
     ],
   },
@@ -307,65 +273,48 @@ const unifiService = new k8s.core.v1.Service("unifi-service", {
 
 export { namespace as unifiNamespace, unifiDeployment, unifiService };
 
-// Setup Instructions:
+// Setup / Migration Instructions:
 //
-// 1. Deploy initial infrastructure:
-//    cd ~/Git/setup/pulumi/k8s
+// 1. Deploy:
 //    pulumi up
 //
-// 2. Verify deployment:
+// 2. Verify the appliance boots (first boot runs full systemd init, give it a
+//    few minutes):
 //    kubectl get pods -n unifi
-//    kubectl get pods -n database  # Check MongoDB
-//    kubectl get svc -n unifi  # Note the EXTERNAL-IP assigned by MetalLB
-//    kubectl logs -n unifi -l app=unifi
+//    kubectl logs -n unifi -l app=unifi -f
+//    kubectl get svc -n unifi   # note the EXTERNAL-IP from MetalLB
 //
-// 3. Access UniFi Controller:
-//    https://<EXTERNAL-IP>:8443
-//    (Get EXTERNAL-IP from: kubectl get svc -n unifi)
+// 3. Access the UOS web UI:
+//    https://<EXTERNAL-IP>      (UOS serves the UI on 443, no longer :8443)
 //
-// 4. Restore backup from Pi:
-//    - Via Web UI: Setup Wizard → Restore from Backup → Upload .unf file
-//    - Wait for restore to complete (5-10 minutes)
+// 4. Restore your old UniFi Network backup:
+//    - Complete the UOS first-run setup.
+//    - Open the Network application → Settings → System → Backups (or the
+//      setup wizard) → Restore → upload your .unf backup from the old
+//      controller. Wait for the restore + migration to finish.
 //
-// 5. Set inform URL for devices:
-//    Settings → System → Advanced → Override Inform Host
-//    Set to: http://<EXTERNAL-IP>:8080/inform
-//    (Use the IP from kubectl get svc -n unifi)
+// 5. (Recommended) Pin the advertised address so devices inform reliably:
+//    - Uncomment the UOS_SYSTEM_IP env above and set it to the EXTERNAL-IP,
+//      then `pulumi up`. (Or set the Override Inform Host in the UI to
+//      http://<EXTERNAL-IP>:8080/inform.)
 //
 // 6. Adopt devices:
-//    Devices → Pending Adoption → Adopt All
+//    Network → Devices → Pending Adoption → Adopt.
 //
-// 7. Upgrade to latest version (after successful restore):
-//    - Edit this file: Change image version from 8.0.7 to latest
-//    - Run: pulumi up
-//    - Monitor: kubectl logs -n unifi -l app=unifi -f
-//    - Wait 5-10 minutes for automatic database migration
-//
-// Architecture:
-// - MongoDB 8.0: Shared instance in database namespace (mongodb.ts)
-// - UniFi 8.0.7: Initial deployment (upgrade to latest post-restore)
-// - LoadBalancer: MetalLB auto-assigns IP from pool (192.168.178.10-20)
-// - Storage: local-path (ZFS-backed) for UniFi config
-// - Node Affinity: amd64 nodes (can change to Pi hostname later)
+// Why this differs from the old deployment:
+// - UOS bundles MongoDB/PostgreSQL/RabbitMQ; the shared databases/mongodb.ts
+//   instance and the old MONGO_* env / init Job are no longer used here.
+// - The pod is privileged with a host /sys/fs/cgroup mount because UOS runs
+//   systemd as PID 1.
 //
 // Storage:
-// - UniFi config: /config (5Gi PVC on local-path)
-// - MongoDB data: Managed in mongodb.ts (20Gi in database namespace)
-// - Backup: ZFS snapshots via sanoid/syncoid
+// - UOS state:   /persistent,/data,/srv,/var/lib/unifi,/var/log (20Gi, local-path)
+// - Bundled DB:  /var/lib/mongodb (10Gi, local-path)
+// - Backup:      ZFS snapshots via sanoid/syncoid
 //
 // Ports:
-// - 8443/TCP: Web UI (HTTPS)
-// - 8080/TCP: Device inform (required for adoption)
-// - 3478/UDP: STUN service (required)
-// - 10001/UDP: Device discovery (required)
-// - 6789/TCP: Mobile speed test
-//
-// Remote Access:
-// - Continue using ui.com for remote access
-// - Local access via https://<EXTERNAL-IP>:8443 (check: kubectl get svc -n unifi)
-//
-// Migration to Pi (future):
-// 1. Add Pi to k3s cluster
-// 2. Update nodeSelector in both mongodb.ts and this file
-// 3. Run: pulumi up
-// 4. Pods reschedule to Pi, devices reconnect automatically
+// - 443/TCP:    Web UI / API (HTTPS)
+// - 8080/TCP:   Device communication / inform
+// - 3478/UDP:   STUN
+// - 10003/UDP:  L2 device discovery
+//   (enable extra ports — hotspot 8444/8880, speedtest 6789, etc. — only if used)

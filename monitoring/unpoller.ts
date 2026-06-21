@@ -8,8 +8,10 @@ import { namespaceName } from "./namespace";
 
 // Get UniFi credentials from Pulumi config
 const config = new pulumi.Config();
+// UniFi OS Server serves its API on :443 (the old Network Application used
+// :8443). Override via the `unpoller-url` config if you front it differently.
 const unifiUrl =
-  config.get("unpoller-url") || "https://unifi.unifi.svc.cluster.local:8443";
+  config.get("unpoller-url") || "https://unifi.unifi.svc.cluster.local";
 const unifiUser = config.get("unpoller-user") || "unpoller";
 const unifiPassword = config.requireSecret("unpoller-password");
 
