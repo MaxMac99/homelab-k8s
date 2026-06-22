@@ -56,7 +56,7 @@ jobs:
                 tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
           EOF
 
-      - uses: pulumi/actions@v6
+      - uses: pulumi/actions@v7
         with:
           command: up
           stack-name: default
