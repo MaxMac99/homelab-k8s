@@ -244,7 +244,7 @@ const adguardDeployment = new k8s.apps.v1.Deployment(
           initContainers: [
             {
               name: "config-init",
-              image: "busybox:1.37.0",
+              image: "busybox:1.38.0",
               command: ["sh", "-c"],
               args: [
                 "if [ ! -f /opt/adguardhome/conf/AdGuardHome.yaml ]; then cp /tmp/config/AdGuardHome.yaml /opt/adguardhome/conf/AdGuardHome.yaml; fi",
