@@ -58,7 +58,7 @@ const redisDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "redis",
-              image: "redis:8.6.3-alpine",
+              image: "redis:8.10.0-alpine",
               args: [
                 "redis-server",
                 "--appendonly",
