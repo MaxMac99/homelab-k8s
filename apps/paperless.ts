@@ -525,7 +525,7 @@ const paperlessDeployment = new k8s.apps.v1.Deployment(
             // Prometheus exporter sidecar
             {
               name: "metrics-exporter",
-              image: "ghcr.io/hansmi/prometheus-paperless-exporter:v0.0.9",
+              image: "ghcr.io/hansmi/prometheus-paperless-exporter:v0.0.10",
               args: ["--web.listen-address=:9999"],
               env: [
                 {
