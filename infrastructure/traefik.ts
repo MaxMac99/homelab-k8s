@@ -27,8 +27,15 @@ const traefik = new k8s.helm.v3.Chart(
     },
     values: {
       // Configure Traefik to use LoadBalancer service
+      //
+      // ⚠️ Anything that belongs in the Service's `spec` must go under
+      // `service.spec`. The chart's `traefik.service-spec` template renders
+      // *only* `.Values.service.spec` (templates/_service.tpl); keys placed
+      // directly under `service` that are not in its schema — `type`,
+      // `ipFamilyPolicy`, `ipFamilies` — are silently dropped. They are not
+      // rejected either, because only the root of values.schema.json sets
+      // `additionalProperties: false`.
       service: {
-        type: "LoadBalancer",
         // Pinned, not requested. This address is already load-bearing: both
         // sites' AdGuard rewrites *.mvissing.de to their own ingressVIP, so
         // Winkel clients resolve every hostname here whether or not anything
@@ -37,13 +44,16 @@ const traefik = new k8s.helm.v3.Chart(
         annotations: {
           "metallb.universe.tf/loadBalancerIPs": lb.traefikWinkel,
         },
-        // Single-stack IPv4. D1 dropped cluster dual-stack — k3s now runs
-        // --cluster-cidr=10.42.0.0/16 with no IPv6 CIDR, so RequireDualStack
-        // cannot be satisfied and the Service fails to create outright.
-        // Native IPv6 survives as site-to-site transport and public
-        // termination at ionos, neither of which is a cluster address family.
-        ipFamilyPolicy: "SingleStack",
-        ipFamilies: ["IPv4"],
+        spec: {
+          type: "LoadBalancer",
+          // Single-stack IPv4. D1 dropped cluster dual-stack — k3s runs
+          // --cluster-cidr=10.42.0.0/16 with no IPv6 CIDR, so a dual-stack
+          // request cannot be satisfied. Native IPv6 survives as site-to-site
+          // transport and public termination at ionos, neither of which is a
+          // cluster address family.
+          ipFamilyPolicy: "SingleStack",
+          ipFamilies: ["IPv4"],
+        },
       },
       // Keep the ingress at the site whose address it announces. A Traefik pod
       // at Brink serving 192.168.178.240 would take every Winkel request
@@ -55,19 +65,22 @@ const traefik = new k8s.helm.v3.Chart(
       // *.mvissing.de to it.
       nodeSelector: winkelSite,
       // Logs configuration - JSON format for Loki/Grafana
-      logs: {
-        general: {
-          level: "INFO",
-          format: "json",
-        },
-        access: {
-          enabled: true,
-          format: "json",
-          fields: {
+      //
+      // ⚠️ These were a single `logs: { general, access }` block, which this
+      // chart version rejects outright — the root of its values schema sets
+      // `additionalProperties: false`, so an unknown key fails the render
+      // rather than being ignored. Split into `log` and `accessLog`.
+      log: {
+        level: "INFO",
+        format: "json",
+      },
+      accessLog: {
+        enabled: true,
+        format: "json",
+        fields: {
+          defaultMode: "keep",
+          headers: {
             defaultMode: "keep",
-            headers: {
-              defaultMode: "keep",
-            },
           },
         },
       },

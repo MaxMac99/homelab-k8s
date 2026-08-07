@@ -1,6 +1,5 @@
 encryptionsalt: v1:6M7SmjRdv/0=:v1:lahUjUqjC328s3Zp:z1KtWCzKwZLouENrLg3XGPijbj7IMQ==
 config:
-  kubernetes:kubeconfig: ~/.kube/k3s-config
   k8s-resources:maxPassword:
     secure: v1:3O7D7U3xVfZASEwv:DZdXEjgJyYY/gmYLBQVrbsv8XUh/pUsrAAIPeQ==
   k8s-resources:michaelPassword:
