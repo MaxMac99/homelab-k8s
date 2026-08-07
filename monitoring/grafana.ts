@@ -6,6 +6,7 @@
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
+import { onNode, MAXDATA } from "../infrastructure/sites";
 import { namespaceName } from "./namespace";
 import { prometheusUrl } from "./prometheus";
 import { lokiUrl } from "./loki";
@@ -79,6 +80,9 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
     initChownData: {
       enabled: false,
     },
+
+    // Pinned to maxdata: the `grafana` PVC below is local-path (D6).
+    nodeSelector: onNode(MAXDATA),
 
     // Environment variables for database connection
     envFromSecret: grafanaDatabaseSecretName,

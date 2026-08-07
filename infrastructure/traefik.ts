@@ -6,6 +6,7 @@ import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import { authentikOutpostService } from "../auth/authentik-outpost";
 import { authentikNamespace } from "../auth/authentik";
+import { lb, winkelSite } from "./sites";
 
 // Create namespace for Traefik
 const traefikNamespace = new k8s.core.v1.Namespace("traefik", {
@@ -28,12 +29,31 @@ const traefik = new k8s.helm.v3.Chart(
       // Configure Traefik to use LoadBalancer service
       service: {
         type: "LoadBalancer",
-        // Request specific IP from MetalLB pool (optional, MetalLB will auto-assign if not specified)
-        // loadBalancerIP: "192.168.178.10",
-        // Enable dual-stack IPv4+IPv6
-        ipFamilyPolicy: "RequireDualStack",
-        ipFamilies: ["IPv4", "IPv6"],
+        // Pinned, not requested. This address is already load-bearing: both
+        // sites' AdGuard rewrites *.mvissing.de to their own ingressVIP, so
+        // Winkel clients resolve every hostname here whether or not anything
+        // answers. The previous cluster held 192.168.178.10 by allocation
+        // order alone, which is why a rebuild broke six DNAT rules on ionos.
+        annotations: {
+          "metallb.universe.tf/loadBalancerIPs": lb.traefikWinkel,
+        },
+        // Single-stack IPv4. D1 dropped cluster dual-stack — k3s now runs
+        // --cluster-cidr=10.42.0.0/16 with no IPv6 CIDR, so RequireDualStack
+        // cannot be satisfied and the Service fails to create outright.
+        // Native IPv6 survives as site-to-site transport and public
+        // termination at ionos, neither of which is a cluster address family.
+        ipFamilyPolicy: "SingleStack",
+        ipFamilies: ["IPv4"],
       },
+      // Keep the ingress at the site whose address it announces. A Traefik pod
+      // at Brink serving 192.168.178.240 would take every Winkel request
+      // across the WAN overlay and back.
+      //
+      // ⚠️ Brink's own ingressVIP (192.168.1.240) is therefore unserved until
+      // Phase 9, which adds the per-site internal Traefik alongside the
+      // hostNetwork one on ionos (D7). Brink AdGuard already rewrites
+      // *.mvissing.de to it.
+      nodeSelector: winkelSite,
       // Logs configuration - JSON format for Loki/Grafana
       logs: {
         general: {

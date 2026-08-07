@@ -14,6 +14,7 @@ import {
   postgresqlClusterName,
 } from "../databases/postgresql";
 import { redisHost } from "../databases/redis";
+import { onNode, winkelSite, MAXDATA } from "../infrastructure/sites";
 
 // Create namespace for Paperless
 const namespace = new k8s.core.v1.Namespace("paperless", {
@@ -209,6 +210,10 @@ const gotenbergDeployment = new k8s.apps.v1.Deployment("gotenberg", {
         },
       },
       spec: {
+        // Stateless, but kept at Winkel: Paperless calls these synchronously
+        // for every document, so a pod at Brink would put the WAN overlay in
+        // the middle of each OCR and conversion.
+        nodeSelector: winkelSite,
         containers: [
           {
             name: "gotenberg",
@@ -281,6 +286,10 @@ const tikaDeployment = new k8s.apps.v1.Deployment("tika", {
         },
       },
       spec: {
+        // Stateless, but kept at Winkel: Paperless calls these synchronously
+        // for every document, so a pod at Brink would put the WAN overlay in
+        // the middle of each OCR and conversion.
+        nodeSelector: winkelSite,
         containers: [
           {
             name: "tika",
@@ -362,6 +371,11 @@ const paperlessDeployment = new k8s.apps.v1.Deployment(
           },
         },
         spec: {
+          // Pinned to maxdata. Paperless holds two local-path PVCs (data and
+          // consume) alongside its NFS media share, and NFS is served by this
+          // same node — so anywhere else means node-local volumes that do not
+          // follow it plus a WAN hop for every document read.
+          nodeSelector: onNode(MAXDATA),
           containers: [
             {
               name: "paperless",

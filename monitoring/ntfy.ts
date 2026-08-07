@@ -4,6 +4,7 @@
 
 import * as k8s from "@pulumi/kubernetes";
 import { namespaceName } from "./namespace";
+import { onNode, MAXDATA } from "../infrastructure/sites";
 
 // PersistentVolumeClaim for ntfy cache and attachment storage
 const ntfyPVC = new k8s.core.v1.PersistentVolumeClaim("ntfy-pvc", {
@@ -100,6 +101,8 @@ const ntfyDeployment = new k8s.apps.v1.Deployment("ntfy", {
         },
       },
       spec: {
+        // Pinned to maxdata: local-path cache/attachment volume (D6).
+        nodeSelector: onNode(MAXDATA),
         containers: [
           {
             name: "ntfy",

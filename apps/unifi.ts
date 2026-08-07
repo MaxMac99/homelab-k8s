@@ -17,6 +17,7 @@
 // See the Setup / Migration notes at the bottom of this file.
 
 import * as k8s from "@pulumi/kubernetes";
+import { lb, onNode, MAXDATA } from "../infrastructure/sites";
 
 // Create namespace for UniFi
 const namespace = new k8s.core.v1.Namespace("unifi", {
@@ -91,9 +92,14 @@ const unifiDeployment = new k8s.apps.v1.Deployment(
           },
         },
         spec: {
-          nodeSelector: {
-            "kubernetes.io/arch": "amd64",
-          },
+          // Pinned to maxdata, not merely to amd64.
+          //
+          // "amd64" now also matches brink-server and ionos. Both PVCs below
+          // are local-path, so the first binding permanently fixes which
+          // node's disk holds 30 Gi of controller state — leaving that to the
+          // scheduler makes it arbitrary. The UniFi switches and APs are at
+          // Winkel, so maxdata is also where the traffic is.
+          nodeSelector: onNode(MAXDATA),
           containers: [
             {
               name: "unifi-os-server",
@@ -235,6 +241,12 @@ const unifiService = new k8s.core.v1.Service("unifi-service", {
   metadata: {
     name: "unifi",
     namespace: namespace.metadata.name,
+    annotations: {
+      // Was unpinned and drifted on every rebuild. Adopted devices remember
+      // the controller's address, so this one moving is not a cosmetic change
+      // — it is a re-adoption.
+      "metallb.universe.tf/loadBalancerIPs": lb.unifi,
+    },
   },
   spec: {
     type: "LoadBalancer",

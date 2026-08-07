@@ -5,6 +5,12 @@
 
 import * as k8s from "@pulumi/kubernetes";
 import * as random from "@pulumi/random";
+import {
+  HOSTNAME_LABEL,
+  ZONE_LABEL,
+  MAXDATA,
+  BRINK_SERVER,
+} from "../infrastructure/sites";
 
 // Create namespace for database infrastructure
 const namespace = new k8s.core.v1.Namespace("database", {
@@ -178,7 +184,25 @@ const postgresCluster = new k8s.apiextensions.CustomResource(
       namespace: namespace.metadata.name,
     },
     spec: {
-      instances: 1, // Start with 1, can scale to 3 for HA later
+      // Two instances, one per site.
+      //
+      // This is what lets Authentik survive maxdata. Authentik sits on the
+      // forward-auth path for every ingress at both sites, so its database
+      // being single-instance on one node made a Winkel outage into a total
+      // authentication outage — including for Home Assistant running three
+      // metres away at Brink.
+      //
+      // Two is deliberate rather than three: only maxdata and brink-server can
+      // hold a local-path volume at all. ionos is tainted with a small disk
+      // and winkel-pi boots from USB-SATA, so a third instance has nowhere to
+      // live. Quorum is not affected — CNPG elects via the Kubernetes API, not
+      // a Postgres-level consensus, and etcd keeps quorum without maxdata
+      // (ionos + brink-server).
+      //
+      // Replication is asynchronous. The cross-site path measured p99 6.8 ms,
+      // so synchronous would be viable, but it would make every commit at
+      // either site depend on a consumer uplink at the other.
+      instances: 2,
 
       // PostgreSQL configuration
       imageName: "ghcr.io/cloudnative-pg/postgresql:18.4",
@@ -288,8 +312,37 @@ const postgresCluster = new k8s.apiextensions.CustomResource(
       // - Sanoid creates snapshots on fast pool (48 hourly, 30 daily, 6 monthly)
       // - Syncoid replicates to tank pool for off-pool backup
 
-      // Node affinity - can run on any k3s node since /mnt/k8s-fast is shared via virtiofs
-      // The local-path provisioner will bind to whichever node it schedules on first
+      // One instance per site, on the only two nodes that can hold storage.
+      //
+      // ⚠️ This previously read "can run on any k3s node since /mnt/k8s-fast
+      // is shared via virtiofs". That was true only while every node was a
+      // microVM on maxdata sharing its host's filesystem. Those microVMs are
+      // destroyed and maxdata is a real node now, so each instance's volume is
+      // genuinely local to the node it was created on.
+      //
+      // The anti-affinity is on the *zone*, not the hostname: two instances on
+      // one site would survive a node failure but not a site failure, which is
+      // the case this exists for.
+      affinity: {
+        enablePodAntiAffinity: true,
+        topologyKey: ZONE_LABEL,
+        podAntiAffinityType: "required",
+        nodeAffinity: {
+          requiredDuringSchedulingIgnoredDuringExecution: {
+            nodeSelectorTerms: [
+              {
+                matchExpressions: [
+                  {
+                    key: HOSTNAME_LABEL,
+                    operator: "In",
+                    values: [MAXDATA, BRINK_SERVER],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
     },
   },
   { dependsOn: [cnpgOperator, namespace] },

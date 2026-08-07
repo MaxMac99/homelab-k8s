@@ -1,5 +1,6 @@
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
+import { lb, onNode, MAXDATA } from "../infrastructure/sites";
 
 // Time Machine service for macOS backups - Multi-user setup
 // Uses mbentley/timemachine which provides SMB with Avahi service discovery
@@ -12,11 +13,22 @@ const maxPassword = config.requireSecret("maxPassword");
 const michaelPassword = config.requireSecret("michaelPassword");
 const annaPassword = config.requireSecret("annaPassword");
 
+// Own namespace, like every other app.
+//
+// Everything here previously omitted metadata.namespace entirely and so landed
+// in `default` — including the SMB credentials for three people. Nothing
+// scoped to this app could be selected, quota'd or deleted without touching
+// whatever else `default` accumulated.
+const namespace = new k8s.core.v1.Namespace("timemachine", {
+  metadata: { name: "timemachine" },
+});
+
 // ConfigMap with user configurations
 // Each user gets their own .conf file with credentials and settings
 const timemachineUsersConfig = new k8s.core.v1.ConfigMap("timemachine-users", {
   metadata: {
     name: "timemachine-users",
+    namespace: namespace.metadata.name,
   },
   data: {
     "max.conf": pulumi.interpolate`TM_USERNAME=max
@@ -69,6 +81,7 @@ const timemachinePVC = new k8s.core.v1.PersistentVolumeClaim(
   {
     metadata: {
       name: "timemachine-pvc",
+      namespace: namespace.metadata.name,
     },
     spec: {
       accessModes: ["ReadWriteMany"],
@@ -87,6 +100,7 @@ const timemachinePVC = new k8s.core.v1.PersistentVolumeClaim(
 const timemachineDeployment = new k8s.apps.v1.Deployment("timemachine", {
   metadata: {
     name: "timemachine",
+    namespace: namespace.metadata.name,
   },
   spec: {
     replicas: 1,
@@ -103,18 +117,27 @@ const timemachineDeployment = new k8s.apps.v1.Deployment("timemachine", {
       },
       spec: {
         hostNetwork: true, // Required for Avahi mDNS advertisement
-        nodeSelector: {
-          // Run on x86_64 nodes (not on Pi)
-          "kubernetes.io/arch": "amd64",
-        },
+        // Pinned to maxdata, not merely to amd64.
+        //
+        // "amd64" now matches brink-server and ionos too. Landing at Brink
+        // would mount 3 Ti of NFS across the WAN overlay, and — because this
+        // is hostNetwork for Avahi — advertise mDNS onto Brink's segment while
+        // the Service announces a Winkel address. The backups, the NFS export
+        // and the LoadBalancer address are all at Winkel; the pod belongs
+        // there too.
+        nodeSelector: onNode(MAXDATA),
         containers: [
           {
             name: "timemachine",
             image: "mbentley/timemachine:smb",
             env: [
               {
+                // ⚠️ Must equal the Service's pinned address below. This is
+                // what Avahi advertises to Macs, so a mismatch does not fail
+                // loudly — Time Machine simply advertises a destination that
+                // does not answer, and backups stop being offered.
                 name: "ADVERTISED_HOSTNAME",
-                value: "192.168.178.12", // Use IP instead of hostname for mDNS
+                value: lb.timemachine, // Use IP instead of hostname for mDNS
               },
               {
                 name: "CUSTOM_SMB_CONF",
@@ -217,8 +240,10 @@ const timemachineDeployment = new k8s.apps.v1.Deployment("timemachine", {
 const timemachineService = new k8s.core.v1.Service("timemachine", {
   metadata: {
     name: "timemachine",
+    namespace: namespace.metadata.name,
     annotations: {
-      "metallb.universe.tf/loadBalancerIPs": "192.168.178.12", // Using IP from MetalLB pool (11-19)
+      // Paired with ADVERTISED_HOSTNAME above — change both or neither.
+      "metallb.universe.tf/loadBalancerIPs": lb.timemachine,
     },
   },
   spec: {

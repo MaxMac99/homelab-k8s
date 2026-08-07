@@ -8,6 +8,7 @@ import * as pulumi from "@pulumi/pulumi";
 // Redis will be deployed in the database namespace alongside PostgreSQL
 // Import the namespace from postgresql.ts
 import { postgresqlNamespace } from "./postgresql";
+import { onNode, MAXDATA } from "../infrastructure/sites";
 
 // PVC for Redis persistence (created first)
 const redisPVC = new k8s.core.v1.PersistentVolumeClaim("redis-pvc", {
@@ -55,6 +56,15 @@ const redisDeployment = new k8s.apps.v1.Deployment(
           },
         },
         spec: {
+          // Pinned to maxdata alongside Paperless, its only remaining
+          // consumer now that Authentik has its own Redis at Brink.
+          //
+          // The pin decides *where the volume is first created*, which is
+          // permanent: local-path stamps nodeAffinity onto the PV, so once
+          // bound the pod cannot move anyway. Without a pin the choice would
+          // fall to whichever node the scheduler happened to pick — including
+          // winkel-pi, which has no nodePathMap entry and would simply fail.
+          nodeSelector: onNode(MAXDATA),
           containers: [
             {
               name: "redis",

@@ -2,6 +2,7 @@
 // Provides LoadBalancer IPs for services in the K3s cluster
 
 import * as k8s from "@pulumi/kubernetes";
+import { sites, ZONE_LABEL } from "./sites";
 
 // Create metallb-system namespace
 const namespace = new k8s.core.v1.Namespace("metallb-system", {
@@ -30,45 +31,106 @@ const metallb = new k8s.helm.v3.Release("metallb", {
   },
 });
 
-// Configure IP address pool for LoadBalancer services
-// This assigns IPs from the local network range
-const ipAddressPool = new k8s.apiextensions.CustomResource(
-  "ip-pool",
+// One pool per site.
+//
+// L2 mode announces an address by answering ARP for it, which only works on a
+// segment the announcing node shares with the client. The two sites are
+// different L2 segments joined by a WireGuard overlay, so a single pool cannot
+// serve both — an address from Winkel's range announced at Brink is announced
+// to nobody.
+//
+// `autoAssign: false` on both pools is deliberate. It means a LoadBalancer
+// service with no explicit address gets *no* address and stays visibly
+// Pending, rather than silently taking whatever is free. That is exactly the
+// failure this phase exists to end: the old cluster's Traefik held
+// 192.168.178.10 by first-come luck from the pool, not by configuration, and a
+// rebuild does not reproduce it — while six iptables DNAT rules on ionos
+// depended on that address.
+//
+// There is no `public` pool. ionos has no LAN segment to ARP on; it is reached
+// over its fixed public address, and Phase 9 gives it a hostNetwork Traefik
+// instead.
+const brinkPool = new k8s.apiextensions.CustomResource(
+  "ip-pool-brink",
   {
     apiVersion: "metallb.io/v1beta1",
     kind: "IPAddressPool",
     metadata: {
-      name: "default-pool",
+      name: "brink-pool",
       namespace: namespace.metadata.name,
     },
     spec: {
-      addresses: [
-        // Reserve IPs for LoadBalancer services
-        // Using .10-.20 range to avoid conflicts with static IPs
-        "192.168.178.10-192.168.178.20",
-        // IPv6 range for dual-stack
-        "fda8:a1db:5685::10-fda8:a1db:5685::20",
-      ],
+      addresses: [sites.brink.pool],
+      autoAssign: false,
     },
   },
   { dependsOn: [metallb] },
 );
 
-// L2 Advertisement - announces the LoadBalancer IPs on the local network
-const l2Advertisement = new k8s.apiextensions.CustomResource(
-  "l2-advertisement",
+const winkelPool = new k8s.apiextensions.CustomResource(
+  "ip-pool-winkel",
+  {
+    apiVersion: "metallb.io/v1beta1",
+    kind: "IPAddressPool",
+    metadata: {
+      name: "winkel-pool",
+      namespace: namespace.metadata.name,
+    },
+    spec: {
+      addresses: [sites.winkel.pool],
+      autoAssign: false,
+    },
+  },
+  { dependsOn: [metallb] },
+);
+
+// L2 advertisement, restricted to the nodes that can actually reach the segment.
+//
+// Without `nodeSelectors` every speaker is a candidate announcer, so Brink's
+// addresses could be announced by a Winkel node — onto a segment where no
+// client can hear them, while the site that needs them hears nothing.
+const brinkL2Advertisement = new k8s.apiextensions.CustomResource(
+  "l2-advertisement-brink",
   {
     apiVersion: "metallb.io/v1beta1",
     kind: "L2Advertisement",
     metadata: {
-      name: "default",
+      name: "brink",
       namespace: namespace.metadata.name,
     },
     spec: {
-      ipAddressPools: ["default-pool"],
+      ipAddressPools: ["brink-pool"],
+      // brink-server is the only node at Brink today. The selector is on the
+      // zone rather than the hostname so a second Brink node needs no change
+      // here.
+      nodeSelectors: [{ matchLabels: { [ZONE_LABEL]: sites.brink.zone } }],
     },
   },
-  { dependsOn: [ipAddressPool] },
+  { dependsOn: [brinkPool] },
 );
 
-export { metallb, ipAddressPool, l2Advertisement };
+const winkelL2Advertisement = new k8s.apiextensions.CustomResource(
+  "l2-advertisement-winkel",
+  {
+    apiVersion: "metallb.io/v1beta1",
+    kind: "L2Advertisement",
+    metadata: {
+      name: "winkel",
+      namespace: namespace.metadata.name,
+    },
+    spec: {
+      ipAddressPools: ["winkel-pool"],
+      // maxdata and winkel-pi both sit on 192.168.178.0/24.
+      nodeSelectors: [{ matchLabels: { [ZONE_LABEL]: sites.winkel.zone } }],
+    },
+  },
+  { dependsOn: [winkelPool] },
+);
+
+export {
+  metallb,
+  brinkPool,
+  winkelPool,
+  brinkL2Advertisement,
+  winkelL2Advertisement,
+};

@@ -1,10 +1,11 @@
 // Home Assistant - Home Automation Platform
 // Uses shared PostgreSQL database for recorder
-// Configuration stored on NFS (tank pool)
+// Configuration stored on brink-server local NVMe (local-path)
 // Integrates with Authentik for OAuth2/OIDC SSO
 
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
+import { onNode, BRINK_SERVER } from "../infrastructure/sites";
 
 // Import shared service connection info
 import {
@@ -58,53 +59,21 @@ const homeassistantDatabase = new k8s.apiextensions.CustomResource(
   },
 );
 
-// NFS Persistent Volume for configuration storage (on tank pool)
-const homeassistantConfigPV = new k8s.core.v1.PersistentVolume(
-  "homeassistant-config-pv",
-  {
-    metadata: {
-      name: "homeassistant-config",
-    },
-    spec: {
-      capacity: {
-        storage: "10Gi",
-      },
-      accessModes: ["ReadWriteMany"],
-      persistentVolumeReclaimPolicy: "Retain",
-      storageClassName: "nfs",
-      mountOptions: ["nfsvers=4.2", "hard", "intr"],
-      nfs: {
-        server: "192.168.178.2", // maxdata NFS server
-        path: "/tank/k8s/nfs/homeassistant",
-      },
-    },
-  },
-);
-
-// NFS Persistent Volume for Matter Server data
-const matterServerDataPV = new k8s.core.v1.PersistentVolume(
-  "matter-server-data-pv",
-  {
-    metadata: {
-      name: "matter-server-data",
-    },
-    spec: {
-      capacity: {
-        storage: "1Gi",
-      },
-      accessModes: ["ReadWriteMany"],
-      persistentVolumeReclaimPolicy: "Retain",
-      storageClassName: "nfs",
-      mountOptions: ["nfsvers=4.2", "hard", "intr"],
-      nfs: {
-        server: "192.168.178.2", // maxdata NFS server
-        path: "/tank/k8s/nfs/matter-server",
-      },
-    },
-  },
-);
-
-// PVC for NFS config storage
+// Configuration and Matter Server storage — local-path on brink-server.
+//
+// Both were NFS PVs on maxdata (/tank/k8s/nfs/{homeassistant,matter-server}).
+// Home Assistant moved to Brink (8.2) because it runs `hostNetwork: true` for
+// mDNS discovery and every smart-home device is now at Brink — at Winkel it
+// would be listening on the wrong segment entirely. Serving its config from
+// Winkel over the WAN overlay would also put a consumer uplink in the path of
+// every state write.
+//
+// ReadWriteOnce, not ReadWriteMany: local-path cannot do RWX, and Home
+// Assistant is a single writer with `strategy: Recreate`.
+//
+// ⚠️ The existing config must be copied from maxdata before first start, or
+// Home Assistant silently onboards itself from scratch — an empty instance
+// looks like a working one.
 const homeassistantConfigPVC = new k8s.core.v1.PersistentVolumeClaim(
   "homeassistant-config-pvc",
   {
@@ -113,9 +82,8 @@ const homeassistantConfigPVC = new k8s.core.v1.PersistentVolumeClaim(
       namespace: namespace.metadata.name,
     },
     spec: {
-      accessModes: ["ReadWriteMany"],
-      storageClassName: "nfs",
-      volumeName: homeassistantConfigPV.metadata.name,
+      accessModes: ["ReadWriteOnce"],
+      storageClassName: "local-path",
       resources: {
         requests: {
           storage: "10Gi",
@@ -134,9 +102,8 @@ const matterServerDataPVC = new k8s.core.v1.PersistentVolumeClaim(
       namespace: namespace.metadata.name,
     },
     spec: {
-      accessModes: ["ReadWriteMany"],
-      storageClassName: "nfs",
-      volumeName: matterServerDataPV.metadata.name,
+      accessModes: ["ReadWriteOnce"],
+      storageClassName: "local-path",
       resources: {
         requests: {
           storage: "1Gi",
@@ -177,6 +144,11 @@ const homeassistantDeployment = new k8s.apps.v1.Deployment(
           // Use host network for full mDNS/Bonjour discovery support
           hostNetwork: true,
           dnsPolicy: "ClusterFirstWithHostNet",
+          // Pinned to brink-server. hostNetwork means the pod discovers
+          // whatever segment its node sits on, and every smart-home device is
+          // at Brink — so the node choice *is* the discovery domain, not just
+          // a scheduling detail. It also holds the local-path config volume.
+          nodeSelector: onNode(BRINK_SERVER),
           containers: [
             {
               name: "homeassistant",
@@ -277,6 +249,9 @@ const matterServerDeployment = new k8s.apps.v1.Deployment(
           // Use host network for mDNS/Thread discovery
           hostNetwork: true,
           dnsPolicy: "ClusterFirstWithHostNet",
+          // Same node as Home Assistant: Thread/Matter commissioning has to
+          // happen on the segment the devices are on.
+          nodeSelector: onNode(BRINK_SERVER),
           containers: [
             {
               name: "matter-server",

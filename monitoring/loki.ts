@@ -4,6 +4,7 @@
 
 import * as k8s from "@pulumi/kubernetes";
 import { namespaceName } from "./namespace";
+import { lb, onNode, MAXDATA } from "../infrastructure/sites";
 
 // Install Loki using Helm chart (single binary mode for simplicity)
 const loki = new k8s.helm.v3.Chart("loki", {
@@ -98,6 +99,15 @@ const loki = new k8s.helm.v3.Chart("loki", {
         size: "100Gi", // Can be expanded later if needed
       },
 
+      // Pinned to maxdata, not merely to Winkel.
+      //
+      // Winkel has two nodes, and a zone selector would let 100 Gi of logs
+      // land on winkel-pi's USB-SATA boot disk — or fail outright, since the
+      // Pi has no nodePathMap entry. local-path binds permanently on first
+      // use, so this choice is made once and cannot be revised by moving the
+      // pod.
+      nodeSelector: onNode(MAXDATA),
+
       // Resource limits
       resources: {
         requests: {
@@ -154,7 +164,13 @@ const lokiLoadBalancer = new k8s.core.v1.Service(
         "app.kubernetes.io/component": "external-access",
       },
       annotations: {
-        "metallb.universe.tf/loadBalancerIPs": "192.168.178.11",
+        // ⚠️ This address is duplicated in the `setup` repo, at
+        // hosts/nixos/maxdata/monitoring.nix, where Alloy ships maxdata's
+        // journal to it. Nothing links the two: change this without changing
+        // that and log shipping stops with no error on either side — Alloy
+        // keeps retrying into a void and Loki simply never hears from maxdata.
+        // The two must move in the same change.
+        "metallb.universe.tf/loadBalancerIPs": lb.loki,
       },
     },
     spec: {

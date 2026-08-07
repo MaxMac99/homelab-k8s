@@ -5,6 +5,7 @@
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import { namespaceName } from "./namespace";
+import { onNode, MAXDATA } from "../infrastructure/sites";
 
 // Get Home Assistant Prometheus token from config
 const config = new pulumi.Config();
@@ -53,6 +54,9 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
 
       // Data retention - keep metrics for 1 year
       retention: "365d",
+
+      // Pinned to maxdata: 100 Gi of local-path with no replica (D6).
+      nodeSelector: onNode(MAXDATA),
 
       // Resource limits
       resources: {
@@ -122,6 +126,8 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
         storageClass: "local-path",
         size: "5Gi",
       },
+      // Pinned for the same reason as the server above.
+      nodeSelector: onNode(MAXDATA),
       resources: {
         requests: {
           cpu: "100m",

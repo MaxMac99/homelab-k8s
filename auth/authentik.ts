@@ -5,6 +5,7 @@
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
+import { onNode, BRINK_SERVER } from "../infrastructure/sites";
 
 // Import shared service connection info
 import {
@@ -13,7 +14,6 @@ import {
   postgresqlClusterName,
   authentikDbPassword,
 } from "../databases/postgresql";
-import { redisHost } from "../databases/redis";
 
 // Create namespace for Authentik
 const namespace = new k8s.core.v1.Namespace("authentik", {
@@ -95,6 +95,106 @@ const authentikMediaPVC = new k8s.core.v1.PersistentVolumeClaim(
   },
 );
 
+// Dedicated Redis for Authentik, at Brink.
+//
+// Authentik used to share the Redis in databases/redis.ts, which is pinned to
+// maxdata — so moving Authentik to brink-server without this would have left
+// the exact dependency this move exists to remove. Postgres is replicated
+// across both sites; Redis has no cross-site failover, so the answer is a
+// second, small instance rather than replication.
+//
+// It stays dedicated rather than becoming a second shared instance: Paperless
+// is the other Redis consumer and it lives at Winkel, so a shared broker would
+// put the WAN overlay in the middle of one site's queue whichever node it sat
+// on.
+const authentikRedisPVC = new k8s.core.v1.PersistentVolumeClaim(
+  "authentik-redis-pvc",
+  {
+    metadata: {
+      name: "authentik-redis",
+      namespace: namespace.metadata.name,
+    },
+    spec: {
+      accessModes: ["ReadWriteOnce"],
+      storageClassName: "local-path",
+      resources: {
+        requests: {
+          storage: "5Gi",
+        },
+      },
+    },
+  },
+);
+
+const authentikRedisDeployment = new k8s.apps.v1.Deployment(
+  "authentik-redis",
+  {
+    metadata: {
+      name: "authentik-redis",
+      namespace: namespace.metadata.name,
+    },
+    spec: {
+      replicas: 1,
+      // Recreate, not RollingUpdate: the local-path volume is ReadWriteOnce,
+      // so a second pod could never attach alongside the first anyway.
+      strategy: { type: "Recreate" },
+      selector: { matchLabels: { app: "authentik-redis" } },
+      template: {
+        metadata: { labels: { app: "authentik-redis" } },
+        spec: {
+          // Same node as the Authentik pods it serves.
+          nodeSelector: onNode(BRINK_SERVER),
+          containers: [
+            {
+              name: "redis",
+              image: "redis:8.10.0-alpine",
+              args: ["--appendonly", "yes", "--dir", "/data"],
+              ports: [{ containerPort: 6379, name: "redis" }],
+              volumeMounts: [{ name: "data", mountPath: "/data" }],
+              resources: {
+                requests: { cpu: "50m", memory: "64Mi" },
+                limits: { cpu: "500m", memory: "512Mi" },
+              },
+              livenessProbe: {
+                tcpSocket: { port: 6379 },
+                initialDelaySeconds: 10,
+                periodSeconds: 15,
+              },
+              readinessProbe: {
+                exec: { command: ["redis-cli", "ping"] },
+                initialDelaySeconds: 5,
+                periodSeconds: 10,
+              },
+            },
+          ],
+          volumes: [
+            {
+              name: "data",
+              persistentVolumeClaim: {
+                claimName: authentikRedisPVC.metadata.name,
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
+  { dependsOn: [authentikRedisPVC] },
+);
+
+const authentikRedisService = new k8s.core.v1.Service("authentik-redis", {
+  metadata: {
+    name: "authentik-redis",
+    namespace: namespace.metadata.name,
+  },
+  spec: {
+    selector: { app: "authentik-redis" },
+    ports: [{ port: 6379, targetPort: 6379, name: "redis" }],
+  },
+});
+
+const authentikRedisHost = pulumi.interpolate`${authentikRedisService.metadata.name}.${namespace.metadata.name}.svc.cluster.local`;
+
 // Common environment variables for Authentik
 const authentikEnv = [
   {
@@ -129,7 +229,7 @@ const authentikEnv = [
   },
   {
     name: "AUTHENTIK_REDIS__HOST",
-    value: redisHost,
+    value: authentikRedisHost,
   },
   {
     name: "AUTHENTIK_ERROR_REPORTING__ENABLED",
@@ -172,6 +272,18 @@ const authentikServer = new k8s.apps.v1.Deployment(
           },
         },
         spec: {
+          // Pinned to brink-server, not maxdata.
+          //
+          // Authentik is on the forward-auth path for every ingress at both
+          // sites, so it must not depend on the site you are usually not at.
+          // With it here and Postgres replicated across both sites, losing
+          // maxdata no longer locks you out of Home Assistant running on this
+          // same node.
+          //
+          // The media PVC below is local-path on this node and the worker
+          // shares it, so both pods must agree — local-path is ReadWriteOnce
+          // and a volume does not follow a pod to another node (D6).
+          nodeSelector: onNode(BRINK_SERVER),
           containers: [
             {
               name: "authentik",
@@ -247,6 +359,8 @@ const authentikWorker = new k8s.apps.v1.Deployment(
           },
         },
         spec: {
+          // Same node as the server above — one local-path media volume.
+          nodeSelector: onNode(BRINK_SERVER),
           containers: [
             {
               name: "authentik",

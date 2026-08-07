@@ -4,6 +4,7 @@
 
 import * as k8s from "@pulumi/kubernetes";
 import { namespaceName } from "./namespace";
+import { onNode, MAXDATA } from "../infrastructure/sites";
 
 // Install Tempo using Helm chart (single binary mode for simplicity)
 const tempo = new k8s.helm.v3.Chart("tempo", {
@@ -69,6 +70,9 @@ const tempo = new k8s.helm.v3.Chart("tempo", {
       storageClassName: "local-path",
       size: "50Gi",
     },
+
+    // Pinned to maxdata: 50 Gi of local-path with no replica (D6).
+    nodeSelector: onNode(MAXDATA),
 
     // Resource limits
     resources: {

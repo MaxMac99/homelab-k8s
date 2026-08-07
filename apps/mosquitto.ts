@@ -5,6 +5,7 @@
 import * as k8s from "@pulumi/kubernetes";
 
 import { homeassistantNamespace } from "./homeassistant";
+import { lb, onNode, BRINK_SERVER } from "../infrastructure/sites";
 
 // ConfigMap with Mosquitto configuration
 const mosquittoConfig = new k8s.core.v1.ConfigMap("mosquitto-config", {
@@ -23,27 +24,15 @@ log_dest stdout
   },
 });
 
-// NFS Persistent Volume for Mosquitto data
-const mosquittoDataPV = new k8s.core.v1.PersistentVolume("mosquitto-data-pv", {
-  metadata: {
-    name: "mosquitto-data",
-  },
-  spec: {
-    capacity: {
-      storage: "1Gi",
-    },
-    accessModes: ["ReadWriteMany"],
-    persistentVolumeReclaimPolicy: "Retain",
-    storageClassName: "nfs",
-    mountOptions: ["nfsvers=4.2", "hard", "intr"],
-    nfs: {
-      server: "192.168.178.2",
-      path: "/tank/k8s/nfs/mosquitto",
-    },
-  },
-});
-
-// PVC for Mosquitto data
+// PVC for Mosquitto data — local-path on brink-server.
+//
+// Was an NFS PV on maxdata at /tank/k8s/nfs/mosquitto. Mosquitto moved to
+// Brink with Home Assistant (8.2): the two talk constantly, and every MQTT
+// message would otherwise cross the WAN overlay to reach a broker at the other
+// site. The retained data is a password file and a small persistence store.
+//
+// ReadWriteOnce, not ReadWriteMany — local-path cannot do RWX, and with
+// `strategy: Recreate` below there is never more than one writer anyway.
 const mosquittoDataPVC = new k8s.core.v1.PersistentVolumeClaim(
   "mosquitto-data-pvc",
   {
@@ -52,9 +41,8 @@ const mosquittoDataPVC = new k8s.core.v1.PersistentVolumeClaim(
       namespace: homeassistantNamespace.metadata.name,
     },
     spec: {
-      accessModes: ["ReadWriteMany"],
-      storageClassName: "nfs",
-      volumeName: mosquittoDataPV.metadata.name,
+      accessModes: ["ReadWriteOnce"],
+      storageClassName: "local-path",
       resources: {
         requests: {
           storage: "1Gi",
@@ -92,6 +80,9 @@ const mosquittoDeployment = new k8s.apps.v1.Deployment(
           },
         },
         spec: {
+          // Pinned to brink-server: its local-path volume lives on that node's
+          // NVMe and has no replica anywhere (D6).
+          nodeSelector: onNode(BRINK_SERVER),
           containers: [
             {
               name: "mosquitto",
@@ -170,7 +161,9 @@ const mosquittoService = new k8s.core.v1.Service("mosquitto-service", {
     name: "mosquitto",
     namespace: homeassistantNamespace.metadata.name,
     annotations: {
-      "metallb.universe.tf/loadBalancerIPs": "192.168.178.15",
+      // Moved from 192.168.178.15 to Brink's pool, with the broker. Every
+      // device configured against the old address must be repointed.
+      "metallb.universe.tf/loadBalancerIPs": lb.mosquitto,
     },
   },
   spec: {

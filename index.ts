@@ -2,7 +2,7 @@
 // This file imports all resource definitions
 
 import "./infrastructure"; // MetalLB, Traefik, cert-manager, Reflector
-import "./databases"; // PostgreSQL, Redis, MongoDB
+import "./databases"; // PostgreSQL, Redis
 import "./auth"; // Authentik, Authentik Outpost
-import "./apps"; // Paperless, Homepage, UniFi, AdGuard, Home Assistant, Time Machine
+import "./apps"; // Paperless, Homepage, UniFi, Home Assistant, Mosquitto, Time Machine
 import "./monitoring"; // Prometheus, Grafana, Loki, Tempo
