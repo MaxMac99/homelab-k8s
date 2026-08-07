@@ -350,7 +350,12 @@ const matterServerService = new k8s.core.v1.Service("matter-server-service", {
   },
 });
 
-// Home Assistant Service - ClusterIP (hostNetwork handles direct LAN access)
+// Home Assistant Service — ClusterIP.
+//
+// The endpoint is the *node* address, not a pod IP, because the pod runs
+// hostNetwork. That is what makes cross-node traffic to it get masqueraded,
+// and hence why trusted_proxies must include the overlay range as well as the
+// pod CIDR. See the note in the setup instructions at the bottom of this file.
 const homeassistantService = new k8s.core.v1.Service("homeassistant-service", {
   metadata: {
     name: "homeassistant",
@@ -387,9 +392,14 @@ const homeassistantIngress = new k8s.networking.v1.Ingress(
         // is no IngressClass at all, so that can never happen and the deploy
         // hangs — on a resource that is a declaration, not a running thing.
         //
-        // Home Assistant is reachable at 192.168.1.2:8123 regardless, because
-        // it runs hostNetwork. This annotation can come out once Traefik is
-        // deployed and the class exists.
+        // Traefik is deployed now, so this could come out — but it stays:
+        // the Ingress is a declaration, and blocking a deploy on a controller
+        // reconciling it buys nothing.
+        //
+        // ⚠️ Note there is no LAN fallback. hostNetwork means Home Assistant
+        // does listen on 192.168.1.2:8123, but brink-server's firewall allows
+        // only port 22 (deliberately — reverted 2026-08-07). If Traefik or its
+        // certificate is broken, the way in is `kubectl port-forward`.
         "pulumi.com/skipAwait": "true",
         "traefik.ingress.kubernetes.io/router.entrypoints": "websecure",
         "cert-manager.io/cluster-issuer": activeClusterIssuer,
@@ -474,14 +484,29 @@ export {
 //      commit_interval: 1
 //      auto_purge: true
 //
-//    # Add trusted proxies for Traefik
-//    http:
-//      use_x_forwarded_for: true
-//      trusted_proxies:
-//        - 10.0.0.0/8      # K8s pod network
-//        - 172.16.0.0/12   # Docker network
-//        - 192.168.0.0/16  # Local network
-//      ip_ban_enabled: false  # Let Authentik handle security
+//    # ⚠️ Do NOT put `http:` here — it will be silently ignored.
+//    #
+//    # As of 2026.8 the http integration is configured from the UI under
+//    # Settings > System > Network and stored in .storage/http on the config
+//    # volume. YAML is migrated exactly once, on the first boot that has an
+//    # `http:` block. A fresh instance that boots without one records
+//    # yaml_migration_done and ignores YAML from then on, so adding the block
+//    # later does nothing at all — Traefik keeps returning 400 while Home
+//    # Assistant looks perfectly healthy. Migration also stages YAML as a
+//    # *pending* config on a 5-minute auto-revert trial, so even a first boot
+//    # needs a UI promote to make it stick. There is no YAML-only path.
+//    #
+//    # Set via the UI (reachable through `kubectl port-forward`, which sends
+//    # no X-Forwarded-For and so bypasses the trust check):
+//    #   use_x_forwarded_for: true
+//    #   trusted_proxies: 10.42.0.0/16, 100.64.0.0/24
+//    #
+//    # Both entries are required. Traefik running on the same node as Home
+//    # Assistant arrives as its pod IP, but Home Assistant runs hostNetwork,
+//    # so its Service endpoint is the node address — outside the pod CIDR,
+//    # which means k3s masquerades traffic from another node's Traefik to that
+//    # node's overlay IP (verified: 100.64.0.5 for maxdata). Trusting only the
+//    # pod CIDR works at Brink and fails at Winkel.
 //
 //    # Add Prometheus metrics
 //    prometheus:

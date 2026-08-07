@@ -31,6 +31,18 @@ const outpostSecret = new k8s.core.v1.Secret("authentik-outpost-token", {
 const authentikOutpost = new k8s.apps.v1.Deployment("authentik-outpost", {
   metadata: {
     name: "authentik-outpost",
+    // ⚠️ Do not wait for this to become ready.
+    //
+    // The outpost is a proxy that health-checks itself against the Authentik
+    // server. Pulumi awaiting its readiness deadlocks the whole deploy: the
+    // outpost cannot pass its probe until the server exists, and the server is
+    // never created because the run is still blocked here. Observed as
+    // "[1/3] Finding Pods to direct traffic to" for 280+ seconds while
+    // authentik-server and authentik-worker were never created at all.
+    //
+    // The Service needs the same treatment for the same reason — it has no
+    // endpoints until the outpost is ready.
+    annotations: { "pulumi.com/skipAwait": "true" },
     namespace: authentikNamespace.metadata.name,
     labels: {
       app: "authentik-outpost",
@@ -172,6 +184,8 @@ const authentikOutpostService = new k8s.core.v1.Service(
   {
     metadata: {
       name: "authentik-outpost",
+      // See the Deployment above — awaiting endpoints here deadlocks too.
+      annotations: { "pulumi.com/skipAwait": "true" },
       namespace: authentikNamespace.metadata.name,
       labels: {
         app: "authentik-outpost",

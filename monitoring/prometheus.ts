@@ -6,7 +6,7 @@ import * as k8s from "@pulumi/kubernetes";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import { namespaceName } from "./namespace";
-import { onNode, MAXDATA } from "../infrastructure/sites";
+import { onNode, HOSTNAME_LABEL, MAXDATA } from "../infrastructure/sites";
 
 // Get Home Assistant Prometheus token from config
 const config = new pulumi.Config();
@@ -122,7 +122,13 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
     // AlertManager - for handling alerts (optional, can be disabled initially)
     alertmanager: {
       enabled: true,
-      persistentVolume: {
+      // ⚠️ `persistence`, not `persistentVolume`. Alertmanager is a *subchart*
+      // with its own key naming; `server` above uses `persistentVolume` and
+      // both are correct for their own chart. Getting it wrong is silent — the
+      // unknown key is ignored, the PVC is created with no storageClassName at
+      // all, and it sits Pending with "no persistent volumes available for
+      // this claim and no storage class is set".
+      persistence: {
         enabled: true,
         storageClass: "local-path",
         size: "5Gi",
@@ -147,21 +153,43 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
     },
 
     // Node Exporter - collects node-level metrics
-    nodeExporter: {
+    // ⚠️ The subchart is keyed `prometheus-node-exporter`, not `nodeExporter`.
+    // This block previously used the latter and was therefore ignored in its
+    // entirety — including its tolerations. The DaemonSet reaches ionos only
+    // because the subchart's own default toleration is a blanket
+    // `NoSchedule / Exists`, not because anything here asked for it.
+    "prometheus-node-exporter": {
       enabled: true,
-      // Run on all nodes including control plane and edge nodes
-      tolerations: [
-        {
-          effect: "NoSchedule",
-          operator: "Exists",
+      // ⚠️ Skip maxdata. It already runs a **native** node_exporter on 9100
+      // from NixOS (hosts/nixos/maxdata/monitoring.nix), and this DaemonSet
+      // uses host networking, so both cannot bind: the pod crash-loops with
+      // "listen tcp 0.0.0.0:9100: bind: address already in use" and blocks the
+      // whole rollout waiting for a DaemonSet that can never be fully ready.
+      //
+      // Excluding it rather than disabling the DaemonSet keeps coverage of the
+      // three nodes that have no native exporter, and keeps maxdata's ZFS and
+      // smartctl exporters, which exist nowhere else.
+      //
+      // ⚠️ Interim. The layering table assigns node/ZFS/smartctl exporters to
+      // NixOS while this chart ships its own DaemonSet, so the estate is
+      // currently doing both. Phase 12 should settle which one owns them.
+      affinity: {
+        nodeAffinity: {
+          requiredDuringSchedulingIgnoredDuringExecution: {
+            nodeSelectorTerms: [
+              {
+                matchExpressions: [
+                  {
+                    key: HOSTNAME_LABEL,
+                    operator: "NotIn",
+                    values: [MAXDATA],
+                  },
+                ],
+              },
+            ],
+          },
         },
-        {
-          key: "edge",
-          operator: "Equal",
-          value: "true",
-          effect: "NoSchedule",
-        },
-      ],
+      },
     },
 
     // Kube State Metrics - exposes cluster state metrics
