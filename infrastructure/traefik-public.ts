@@ -135,10 +135,29 @@ const traefikPublic = new k8s.helm.v3.Chart(
           },
         },
 
-        // Not reachable yet: nginx still hands the public :443 to Headscale,
-        // and splitting it by SNI is Stage B. The entrypoint is defined so the
-        // pod's shape does not change when that lands.
+        // The public HTTPS entrypoint, reachable since D16 Stage B: nginx on
+        // ionos splits :443 by SNI and hands everything that is not Headscale
+        // to this port.
+        //
+        // ⚠️ 8443 is duplicated in `hosts/nixos/ionos/public-ingress.nix` as
+        // `traefikWebsecure`, and Headscale sits next to it on 8444. Nothing
+        // checks that these agree.
         websecure: {
+          port: 8443,
+          // ⚠️ Not optional, and not the same mechanism as `web` above.
+          //
+          // `web` gets `forwardedHeaders` because nginx proxies it as HTTP and
+          // can set `X-Forwarded-For`. This entrypoint is reached by **TCP
+          // passthrough** — nginx only reads the SNI and copies bytes — so
+          // there is no HTTP layer in which to put a header, and PROXY protocol
+          // is the only channel for the client's address.
+          //
+          // Without this, every public HTTPS client is logged as 127.0.0.1:
+          // exactly the blindness the old DNAT caused and D7 exists to remove,
+          // and it would look like a Traefik bug rather than a missing option.
+          proxyProtocol: {
+            trustedIPs: ["127.0.0.1/32", "::1/128"],
+          },
           expose: {
             default: false,
           },
