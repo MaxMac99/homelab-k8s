@@ -199,6 +199,75 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
 
     // Scrape configs - what Prometheus monitors
     serverFiles: {
+      // Alert rules.
+      //
+      // These exist because of a failure mode introduced on 2026-08-07: every
+      // certificate in the estate is now issued by HTTP-01 through the public
+      // Traefik on ionos (D8/D16). Renewal therefore depends on that path
+      // staying reachable from the internet rather than on a DNS record — and
+      // when it breaks, **nothing looks wrong**. Certificates keep working for
+      // another month, then everything expires at once, long after whatever
+      // caused it. That is precisely the shape of failure a monitoring stack
+      // is for, and the one it could not previously report.
+      "alerting_rules.yml": {
+        groups: [
+          {
+            name: "certificates",
+            rules: [
+              {
+                // cert-manager renews at 30 days remaining by default. Below
+                // 21 days means renewal has already been failing for over a
+                // week, which is unambiguous — but still leaves three weeks to
+                // act, so this is urgent without being an emergency.
+                alert: "CertificateExpiringSoon",
+                expr: "(certmanager_certificate_expiration_timestamp_seconds - time()) / 86400 < 21",
+                for: "1h",
+                labels: { severity: "critical" },
+                annotations: {
+                  summary:
+                    'Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in {{ $value | printf "%.0f" }} days',
+                  description:
+                    "Renewal should have happened at 30 days and has not. Check the public ingress path on ionos: nginx on :80 and the traefik-public pod must be reachable from the internet for HTTP-01 to validate.",
+                },
+              },
+              {
+                // Catches a failing issuance long before expiry matters —
+                // including a brand-new certificate that never issued at all.
+                alert: "CertificateNotReady",
+                expr: 'certmanager_certificate_ready_status{condition="False"} == 1',
+                for: "1h",
+                labels: { severity: "warning" },
+                annotations: {
+                  summary:
+                    "Certificate {{ $labels.namespace }}/{{ $labels.name }} has not been ready for an hour",
+                  description:
+                    "Check `kubectl describe certificate` and any Order/Challenge in that namespace.",
+                },
+              },
+            ],
+          },
+          {
+            name: "public-ingress",
+            rules: [
+              {
+                // The ACME path has no other alarm on it. ionos is tainted and
+                // holds exactly one replica, so zero available means no
+                // certificate in the estate can issue or renew.
+                alert: "PublicIngressDown",
+                expr: 'kube_deployment_status_replicas_available{deployment="traefik-public"} == 0',
+                for: "15m",
+                labels: { severity: "critical" },
+                annotations: {
+                  summary:
+                    "The public Traefik on ionos has no available replica",
+                  description:
+                    "ACME HTTP-01 challenges cannot be served. Certificates will not renew, and nothing else will report this until they start expiring in ~30 days.",
+                },
+              },
+            ],
+          },
+        ],
+      },
       "prometheus.yml": {
         scrape_configs: [
           // Home Assistant - requires bearer token authentication

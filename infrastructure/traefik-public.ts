@@ -53,6 +53,7 @@ const traefikPublic = new k8s.helm.v3.Chart(
     // ./traefik.ts owns them. This release consumes them, and must be the same
     // chart version so it cannot want a CRD schema the other has not installed.
     skipCRDRendering: true,
+
     values: {
       deployment: {
         // One node can run it, so one replica. There is no second public edge
