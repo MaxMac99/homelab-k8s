@@ -6,7 +6,7 @@ import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import { authentikOutpostService } from "../auth/authentik-outpost";
 import { authentikNamespace } from "../auth/authentik";
-import { lb, winkelSite } from "./sites";
+import { lb, ZONE_LABEL } from "./sites";
 
 // Create namespace for Traefik
 const traefikNamespace = new k8s.core.v1.Namespace("traefik", {
@@ -35,12 +35,14 @@ const traefik = new k8s.helm.v3.Chart(
       // `ipFamilyPolicy`, `ipFamilies` — are silently dropped. They are not
       // rejected either, because only the root of values.schema.json sets
       // `additionalProperties: false`.
+      // One Deployment, one replica per site, one Service per site.
+      //
+      // Both addresses are already load-bearing: each site's AdGuard rewrites
+      // *.mvissing.de to its own ingressVIP, so clients at both sites resolve
+      // every hostname to these whether or not anything answers. The previous
+      // cluster held 192.168.178.10 by allocation order alone, which is why a
+      // rebuild broke six DNAT rules on ionos.
       service: {
-        // Pinned, not requested. This address is already load-bearing: both
-        // sites' AdGuard rewrites *.mvissing.de to their own ingressVIP, so
-        // Winkel clients resolve every hostname here whether or not anything
-        // answers. The previous cluster held 192.168.178.10 by allocation
-        // order alone, which is why a rebuild broke six DNAT rules on ionos.
         annotations: {
           "metallb.universe.tf/loadBalancerIPs": lb.traefikWinkel,
         },
@@ -53,17 +55,66 @@ const traefik = new k8s.helm.v3.Chart(
           // cluster address family.
           ipFamilyPolicy: "SingleStack",
           ipFamilies: ["IPv4"],
+          // ⚠️ Load-bearing, not a tuning knob. MetalLB only announces an
+          // address from a node that has a *local* ready endpoint, so with
+          // `Local` each site's VIP is announced only by a node at that site
+          // which is actually running a Traefik pod. Revert this to `Cluster`
+          // and Brink's traffic can be forwarded across the WAN overlay to a
+          // Winkel pod — working, but slow and silently cross-site.
+          externalTrafficPolicy: "Local",
+        },
+        // Brink's ingress. Until this existed, 192.168.1.240 resolved for
+        // every *.mvissing.de name at Brink and served nothing — which is also
+        // what stopped Phase 8's "Authentik survives maxdata" work from
+        // actually delivering.
+        additionalServices: {
+          brink: {
+            // ⚠️ Without this the chart emits a *second* Service,
+            // `traefik-brink-udp`, because HTTP/3 puts a UDP port on
+            // websecure. It would then ask brink-pool for its own address —
+            // and with autoAssign disabled it gets none and sits Pending.
+            // `single` shares one address across TCP and UDP, matching the
+            // main Service, which defaults to true for the same reason.
+            single: true,
+            annotations: {
+              "metallb.universe.tf/loadBalancerIPs": lb.traefikBrink,
+            },
+            spec: {
+              type: "LoadBalancer",
+              ipFamilyPolicy: "SingleStack",
+              ipFamilies: ["IPv4"],
+              externalTrafficPolicy: "Local",
+            },
+          },
         },
       },
-      // Keep the ingress at the site whose address it announces. A Traefik pod
-      // at Brink serving 192.168.178.240 would take every Winkel request
-      // across the WAN overlay and back.
+      // Two replicas so each site has one. `externalTrafficPolicy: Local`
+      // makes this a correctness requirement rather than redundancy: a site
+      // with no local pod gets no announcement and no ingress at all.
+      deployment: {
+        replicas: 2,
+      },
+      // Spread across sites, not merely across nodes.
       //
-      // ⚠️ Brink's own ingressVIP (192.168.1.240) is therefore unserved until
-      // Phase 9, which adds the per-site internal Traefik alongside the
-      // hostNetwork one on ionos (D7). Brink AdGuard already rewrites
-      // *.mvissing.de to it.
-      nodeSelector: winkelSite,
+      // `DoNotSchedule` rather than `ScheduleAnyway`: both replicas landing at
+      // Winkel is not a degraded state to tolerate, it is Brink having no
+      // ingress. Better to leave a replica Pending and visible.
+      //
+      // ionos excludes itself — it holds the edge=true:NoSchedule taint and
+      // this chart adds no toleration for it.
+      topologySpreadConstraints: [
+        {
+          maxSkew: 1,
+          topologyKey: ZONE_LABEL,
+          whenUnsatisfiable: "DoNotSchedule",
+          labelSelector: {
+            matchLabels: {
+              "app.kubernetes.io/name": "traefik",
+              "app.kubernetes.io/instance": "traefik-traefik",
+            },
+          },
+        },
+      ],
       // Logs configuration - JSON format for Loki/Grafana
       //
       // ⚠️ These were a single `logs: { general, access }` block, which this
@@ -94,6 +145,14 @@ const traefik = new k8s.helm.v3.Chart(
         web: {
           port: 80,
           exposedPort: 80,
+          // ⚠️ Keyed by *service* name, not a boolean. `default` is the main
+          // Service and `brink` is the additionalService above; a port missing
+          // from this map is simply absent from that Service, and the chart
+          // fails the render outright if a Service ends up with no ports.
+          expose: {
+            default: true,
+            brink: true,
+          },
         },
         websecure: {
           port: 443,
@@ -101,6 +160,10 @@ const traefik = new k8s.helm.v3.Chart(
           // Enable HTTP/3
           http3: {
             enabled: true,
+          },
+          expose: {
+            default: true,
+            brink: true,
           },
         },
         // Traefik dashboard/API port.
