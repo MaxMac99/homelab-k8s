@@ -50,21 +50,28 @@ const certManager = new k8s.helm.v3.Chart("cert-manager", {
 // This will issue real, trusted certificates
 // Which ClusterIssuer every Certificate and Ingress in this repo uses.
 //
-// ⚠️ **Currently STAGING, deliberately.** Certificates issued from here are
-// signed by a CA no browser trusts, so every hostname warns. That is expected
-// until the ionos front end exists.
+// **Production since 2026-08-07**, and only because the path was proven first.
 //
-// Why: this estate validates over HTTP-01 (D8 revised — DNS-01 and the IONOS
-// webhook are dropped, and there will be no API token). HTTP-01 needs port 80
-// on ionos to reach Traefik, and today Headscale answers :80 and :443 there for
-// every *.mvissing.de name, because public DNS wildcards onto ionos. So a
-// production issuance right now does not fail politely — it burns Let's
-// Encrypt's failed-validation budget for every hostname at once, and that is
-// the one limit you cannot refill by deleting resources.
+// This estate validates over HTTP-01 (D8 revised — DNS-01 and the IONOS webhook
+// are dropped, and there will be no API token), so issuance depends on port 80
+// at the address public DNS points to. Until Phase 9 that was Headscale, which
+// answered :80 and :443 on ionos for every *.mvissing.de name and returned 403
+// to every challenge. Staying on staging through that period was not caution
+// for its own sake: a production attempt would have burned Let's Encrypt's
+// failed-validation budget for every hostname at once, and that is the one
+// limit you cannot refill by deleting resources.
 //
-// Flip this to `letsencrypt-prod` once D16's nginx SNI router is in front of
-// Traefik on ionos and a staging certificate has been observed to issue.
-export const activeClusterIssuer = "letsencrypt-staging";
+// What changed: `hosts/nixos/ionos/public-ingress.nix` in the `setup` repo puts
+// nginx on :80 and routes everything except headscale.mvissing.de to
+// ./traefik-public.ts. Verified before flipping — `home.mvissing.de` issued from
+// `(STAGING) Dastardly Durum YR1`, order valid in ~20s.
+//
+// ⚠️ Renewal now depends on that nginx and that Traefik pod staying reachable
+// from the internet, not on a DNS record. Nothing user-facing breaks when they
+// fail; certificates simply stop renewing and everything expires ~30 days
+// later. Note Let's Encrypt validated over **IPv6** (2a02:2479:5c:a00::1), so
+// the v6 listener is load-bearing, not a nicety.
+export const activeClusterIssuer = "letsencrypt-prod";
 
 const letsencryptProd = new k8s.apiextensions.CustomResource(
   "letsencrypt-prod",
