@@ -4,6 +4,7 @@
 // Accessible via grafana.mvissing.de
 
 import * as k8s from "@pulumi/kubernetes";
+import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
 import { onNode, MAXDATA } from "../infrastructure/sites";
@@ -112,7 +113,7 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
       enabled: true,
       ingressClassName: "traefik", // Changed from traefik-external - now using port forwarding on ionos
       annotations: {
-        "cert-manager.io/cluster-issuer": "letsencrypt-prod",
+        "cert-manager.io/cluster-issuer": activeClusterIssuer,
         // Homepage dashboard discovery
         "gethomepage.dev/enabled": "true",
         "gethomepage.dev/name": "Grafana",

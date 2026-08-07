@@ -47,6 +47,24 @@ const certManager = new k8s.helm.v3.Chart("cert-manager", {
 
 // ClusterIssuer for Let's Encrypt Production
 // This will issue real, trusted certificates
+// Which ClusterIssuer every Certificate and Ingress in this repo uses.
+//
+// ⚠️ **Currently STAGING, deliberately.** Certificates issued from here are
+// signed by a CA no browser trusts, so every hostname warns. That is expected
+// until the ionos front end exists.
+//
+// Why: this estate validates over HTTP-01 (D8 revised — DNS-01 and the IONOS
+// webhook are dropped, and there will be no API token). HTTP-01 needs port 80
+// on ionos to reach Traefik, and today Headscale answers :80 and :443 there for
+// every *.mvissing.de name, because public DNS wildcards onto ionos. So a
+// production issuance right now does not fail politely — it burns Let's
+// Encrypt's failed-validation budget for every hostname at once, and that is
+// the one limit you cannot refill by deleting resources.
+//
+// Flip this to `letsencrypt-prod` once D16's nginx SNI router is in front of
+// Traefik on ionos and a staging certificate has been observed to issue.
+export const activeClusterIssuer = "letsencrypt-staging";
+
 const letsencryptProd = new k8s.apiextensions.CustomResource(
   "letsencrypt-prod",
   {

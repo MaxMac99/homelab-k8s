@@ -3,6 +3,7 @@
 // Accessible via ntfy.mvissing.de
 
 import * as k8s from "@pulumi/kubernetes";
+import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import { namespaceName } from "./namespace";
 import { onNode, MAXDATA } from "../infrastructure/sites";
 
@@ -204,7 +205,7 @@ const ntfyIngress = new k8s.networking.v1.Ingress("ntfy", {
     name: "ntfy",
     namespace: namespaceName,
     annotations: {
-      "cert-manager.io/cluster-issuer": "letsencrypt-prod",
+      "cert-manager.io/cluster-issuer": activeClusterIssuer,
       // Homepage dashboard discovery
       "gethomepage.dev/enabled": "true",
       "gethomepage.dev/name": "ntfy",

@@ -3,6 +3,7 @@
 // Accessible via prometheus.mvissing.de
 
 import * as k8s from "@pulumi/kubernetes";
+import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import { namespaceName } from "./namespace";
 import { onNode, MAXDATA } from "../infrastructure/sites";
@@ -75,7 +76,7 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
         enabled: true,
         ingressClassName: "traefik", // Changed from traefik-external - now using port forwarding on ionos
         annotations: {
-          "cert-manager.io/cluster-issuer": "letsencrypt-prod",
+          "cert-manager.io/cluster-issuer": activeClusterIssuer,
           // Protect with Authentik forward auth
           "traefik.ingress.kubernetes.io/router.middlewares":
             "traefik-authentik@kubernetescrd",

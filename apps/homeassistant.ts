@@ -4,6 +4,7 @@
 // Integrates with Authentik for OAuth2/OIDC SSO
 
 import * as k8s from "@pulumi/kubernetes";
+import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import { onNode, BRINK_SERVER } from "../infrastructure/sites";
 
@@ -372,7 +373,7 @@ const homeassistantIngress = new k8s.networking.v1.Ingress(
       namespace: namespace.metadata.name,
       annotations: {
         "traefik.ingress.kubernetes.io/router.entrypoints": "websecure",
-        "cert-manager.io/cluster-issuer": "letsencrypt-prod",
+        "cert-manager.io/cluster-issuer": activeClusterIssuer,
 
         // Redirect HTTP to HTTPS
         "traefik.ingress.kubernetes.io/redirect-entry-point": "websecure",

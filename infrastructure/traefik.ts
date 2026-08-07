@@ -7,6 +7,7 @@ import * as pulumi from "@pulumi/pulumi";
 import { authentikOutpostService } from "../auth/authentik-outpost";
 import { authentikNamespace } from "../auth/authentik";
 import { lb, ZONE_LABEL } from "./sites";
+import { activeClusterIssuer } from "./cert-manager";
 
 // Create namespace for Traefik
 const traefikNamespace = new k8s.core.v1.Namespace("traefik", {
@@ -290,7 +291,7 @@ const dashboardCertificate = new k8s.apiextensions.CustomResource(
       secretName: "traefik-dashboard-tls",
       dnsNames: ["traefik.mvissing.de"],
       issuerRef: {
-        name: "letsencrypt-prod",
+        name: activeClusterIssuer,
         kind: "ClusterIssuer",
         group: "cert-manager.io",
       },

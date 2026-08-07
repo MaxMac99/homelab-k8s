@@ -3,6 +3,7 @@
 // Provides authentication, authorization, and user management
 
 import * as k8s from "@pulumi/kubernetes";
+import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
 import { onNode, BRINK_SERVER } from "../infrastructure/sites";
@@ -433,7 +434,7 @@ const authentikIngress = new k8s.networking.v1.Ingress("authentik-ingress", {
     namespace: namespace.metadata.name,
     annotations: {
       "traefik.ingress.kubernetes.io/router.entrypoints": "websecure",
-      "cert-manager.io/cluster-issuer": "letsencrypt-prod",
+      "cert-manager.io/cluster-issuer": activeClusterIssuer,
       // Redirect HTTP to HTTPS
       "traefik.ingress.kubernetes.io/redirect-entry-point": "websecure",
       "traefik.ingress.kubernetes.io/redirect-permanent": "true",

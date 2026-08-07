@@ -4,6 +4,7 @@
 // Accessible via mvissing.de
 
 import * as k8s from "@pulumi/kubernetes";
+import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import { adminPassword as grafanaAdminPassword } from "../monitoring/grafana";
 
@@ -138,7 +139,7 @@ const homepage = new k8s.helm.v3.Chart(
           enabled: true,
           ingressClassName: "traefik",
           annotations: {
-            "cert-manager.io/cluster-issuer": "letsencrypt-prod",
+            "cert-manager.io/cluster-issuer": activeClusterIssuer,
             // Protect with Authentik forward auth middleware
             "traefik.ingress.kubernetes.io/router.middlewares":
               "traefik-authentik@kubernetescrd",
