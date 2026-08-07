@@ -50,6 +50,22 @@ reproduces it in two runs out of two.
 exclusion for unrelated apps and reported the deploy as `309 unchanged`, leaving
 `authentik-server` and `authentik-worker` absent from state entirely.
 
+⚠️ **The grpc cascade is a _symptom_, not a diagnosis — `--target` is only one
+of its triggers.** Any chart operation that fails hard tears down the provider
+while the others still have `helm template` in flight, and they all die with
+`grpc: the client connection is closing`. A transient DNS failure does it just
+as well: `arc-controller` once failed with `lookup ghcr.io: no such host` and
+produced **eight** identical grpc errors that looked exactly like the `--target`
+bug. **Scroll past the grpc errors and find the one error that names a cause** —
+there is normally exactly one, and it is the only one worth reading.
+
+⚠️ **This stack fetches 14 charts from 9 remote hosts on every run**, including
+two over OCI from `ghcr.io` (`infrastructure/github-runner.ts`). There is no
+vendoring, so every `preview` and every `up` needs all of them resolvable. A
+momentary network blip fails the whole deploy, and **retrying is usually the
+correct response** — check for a named root cause before concluding anything is
+actually broken.
+
 ## Architecture
 
 > ⚠️ **This cluster was rebuilt from scratch on 2026-08-07.** It is now a
