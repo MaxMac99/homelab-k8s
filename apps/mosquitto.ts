@@ -3,6 +3,8 @@
 // Used by Home Assistant for MQTT integrations (Zigbee2MQTT, sensors, etc.)
 
 import * as k8s from "@pulumi/kubernetes";
+import * as pulumi from "@pulumi/pulumi";
+import * as random from "@pulumi/random";
 
 import { homeassistantNamespace } from "./homeassistant";
 import { lb, onNode, BRINK_SERVER } from "../infrastructure/sites";
@@ -21,6 +23,30 @@ persistence true
 persistence_location /mosquitto/data/
 log_dest stdout
 `,
+  },
+});
+
+// MQTT credentials, generated rather than hand-made.
+//
+// ⚠️ `allow_anonymous false` with a `password_file` that does not exist means
+// Mosquitto starts happily and refuses every connection — it does not fail, it
+// just rejects. On a clean volume there is no password file, so one has to be
+// created before the broker is useful. Previously that was a manual
+// `mosquitto_passwd` run documented in a comment, which is exactly the kind of
+// step that is forgotten on a rebuild.
+const mosquittoPassword = new random.RandomPassword("mosquitto-password", {
+  length: 32,
+  special: false, // keep it safe to pass through a shell in the init container
+});
+
+const mosquittoSecret = new k8s.core.v1.Secret("mosquitto-credentials", {
+  metadata: {
+    name: "mosquitto-credentials",
+    namespace: homeassistantNamespace.metadata.name,
+  },
+  stringData: {
+    username: "homeassistant",
+    password: mosquittoPassword.result,
   },
 });
 
@@ -83,6 +109,46 @@ const mosquittoDeployment = new k8s.apps.v1.Deployment(
           // Pinned to brink-server: its local-path volume lives on that node's
           // NVMe and has no replica anywhere (D6).
           nodeSelector: onNode(BRINK_SERVER),
+          // Write the password file before the broker starts.
+          //
+          // `-c` recreates it every start, which is deliberate: the file is
+          // then a pure function of the Secret, so it cannot drift and a lost
+          // volume self-heals. Runs as uid 1883 (mosquitto) so the broker can
+          // read what it writes — local-path creates the directory 0777, so
+          // the non-root write succeeds.
+          initContainers: [
+            {
+              name: "init-passwd",
+              image: "eclipse-mosquitto:2.0.22",
+              securityContext: { runAsUser: 1883, runAsGroup: 1883 },
+              command: [
+                "sh",
+                "-c",
+                'mosquitto_passwd -c -b /mosquitto/data/password.txt "$MQTT_USER" "$MQTT_PASS"',
+              ],
+              env: [
+                {
+                  name: "MQTT_USER",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: mosquittoSecret.metadata.name,
+                      key: "username",
+                    },
+                  },
+                },
+                {
+                  name: "MQTT_PASS",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: mosquittoSecret.metadata.name,
+                      key: "password",
+                    },
+                  },
+                },
+              ],
+              volumeMounts: [{ name: "data", mountPath: "/mosquitto/data" }],
+            },
+          ],
           containers: [
             {
               name: "mosquitto",
@@ -208,3 +274,10 @@ export { mosquittoDeployment, mosquittoService };
 //    - Port: 1883
 //    - Username: homeassistant
 //    - Password: (password from step 3)
+
+// The generated MQTT credentials, for configuring Home Assistant's MQTT
+// integration. Read with:
+//   kubectl get secret mosquitto-credentials -n homeassistant \
+//     -o jsonpath='{.data.password}' | base64 -d
+export const mosquittoUsername = "homeassistant";
+export const mosquittoPasswordValue = pulumi.secret(mosquittoPassword.result);

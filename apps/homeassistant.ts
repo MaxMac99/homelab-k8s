@@ -380,6 +380,17 @@ const homeassistantIngress = new k8s.networking.v1.Ingress(
       name: "homeassistant",
       namespace: namespace.metadata.name,
       annotations: {
+        // ⚠️ Do not block the deploy waiting for an address.
+        //
+        // Pulumi awaits an Ingress becoming ready, which means an ingress
+        // controller assigning it an address. Until Traefik is deployed there
+        // is no IngressClass at all, so that can never happen and the deploy
+        // hangs — on a resource that is a declaration, not a running thing.
+        //
+        // Home Assistant is reachable at 192.168.1.2:8123 regardless, because
+        // it runs hostNetwork. This annotation can come out once Traefik is
+        // deployed and the class exists.
+        "pulumi.com/skipAwait": "true",
         "traefik.ingress.kubernetes.io/router.entrypoints": "websecure",
         "cert-manager.io/cluster-issuer": activeClusterIssuer,
 
