@@ -7,7 +7,7 @@ config:
   k8s-resources:annaPassword:
     secure: v1:V1aJeCGXnKCYJoak:j2ZUAHYZXf8oTqAWFjw3M26ublcn15o0r0KGlg==
   k8s-resources:authentikOutpostToken:
-    secure: v1:TIJgFgEIV5pB26h5:Rb3k31cDkZzXUs0pTlaZSL9roNY56HukMKYIXtnYgOkF8/ivn/LWNNaukSjsTi5uFzlnEBRyIujXqfEiwwPRt2VhvtuBt8vjYh1WeQ==
+    secure: v1:LVsNJLpg3iHRO92/:ayzEnfIdHiHW+MIgU8ppB/FxrFXTlBZny+VnvcUr1EjlBdDFR/EUGdGsSePsfeVShdFYTOgNSkqwAyR7J7Tw9/5sQPTLILR6n3JUug==
   k8s-resources:grafana-oauth-client-id:
     secure: v1:P0MJUVccKKeJcQNb:YUUDDD4iTjYY1MuEAo0+vgDgs48jaoCBtt3gDr2/aQaH19TdXjZfZbuxb4qik2VYmagUt56+BQU=
   k8s-resources:grafana-oauth-client-secret:

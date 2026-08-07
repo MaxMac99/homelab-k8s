@@ -4,7 +4,11 @@
 
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
-import { authentikNamespace, authentikService } from "./authentik";
+import {
+  authentikNamespace,
+  authentikService,
+  authentikServer,
+} from "./authentik";
 
 // Get configuration
 const config = new pulumi.Config();
@@ -28,155 +32,168 @@ const outpostSecret = new k8s.core.v1.Secret("authentik-outpost-token", {
 });
 
 // Authentik Outpost Deployment
-const authentikOutpost = new k8s.apps.v1.Deployment("authentik-outpost", {
-  metadata: {
-    name: "authentik-outpost",
-    // ⚠️ Do not wait for this to become ready.
-    //
-    // The outpost is a proxy that health-checks itself against the Authentik
-    // server. Pulumi awaiting its readiness deadlocks the whole deploy: the
-    // outpost cannot pass its probe until the server exists, and the server is
-    // never created because the run is still blocked here. Observed as
-    // "[1/3] Finding Pods to direct traffic to" for 280+ seconds while
-    // authentik-server and authentik-worker were never created at all.
-    //
-    // The Service needs the same treatment for the same reason — it has no
-    // endpoints until the outpost is ready.
-    annotations: { "pulumi.com/skipAwait": "true" },
-    namespace: authentikNamespace.metadata.name,
-    labels: {
-      app: "authentik-outpost",
-      "app.kubernetes.io/name": "authentik-outpost",
-      "app.kubernetes.io/component": "proxy",
-    },
-  },
-  spec: {
-    replicas: 1, // Temporarily using 1 replica for debugging
-    selector: {
-      matchLabels: {
+const authentikOutpost = new k8s.apps.v1.Deployment(
+  "authentik-outpost",
+  {
+    metadata: {
+      name: "authentik-outpost",
+      // ⚠️ This deliberately has **no** `pulumi.com/skipAwait`, and the
+      // `dependsOn` below is what makes that safe. Both were one change.
+      //
+      // It used to skip the await, because the outpost health-checks itself
+      // against the Authentik server and Pulumi awaiting its readiness deadlocked
+      // the deploy: the outpost could not pass its probe until the server
+      // existed, and the server was never created because the run was blocked
+      // here. Observed as "[1/3] Finding Pods to direct traffic to" for 280+
+      // seconds while authentik-server and authentik-worker were never created.
+      //
+      // But that was an ordering bug wearing an await bug's clothes, and skipping
+      // the await cost more than it saved: `skipAwait` also stops Pulumi waiting
+      // for the **delete** half of a replace. On 2026-08-07 a replace deleted
+      // this Deployment, created it again, and the un-awaited delete then landed
+      // on the *new* object — leaving Pulumi reporting `result=succeeded` with
+      // nothing in the cluster, and state insisting it was there.
+      //
+      // Ordering it after the server fixes the deadlock at its source, so the
+      // await can stay and actually tell us whether the outpost works. ⚠️ It will
+      // now block if the outpost cannot reach Authentik — most likely a stale
+      // `authentikOutpostToken`, which is a real failure and should be visible.
+      namespace: authentikNamespace.metadata.name,
+      labels: {
         app: "authentik-outpost",
+        "app.kubernetes.io/name": "authentik-outpost",
+        "app.kubernetes.io/component": "proxy",
       },
     },
-    template: {
-      metadata: {
-        labels: {
+    spec: {
+      replicas: 1, // Temporarily using 1 replica for debugging
+      selector: {
+        matchLabels: {
           app: "authentik-outpost",
-          "app.kubernetes.io/name": "authentik-outpost",
-          "app.kubernetes.io/component": "proxy",
         },
       },
-      spec: {
-        containers: [
-          {
-            name: "authentik-proxy",
-            image: "ghcr.io/goauthentik/proxy:2026.5.6",
-            env: [
-              {
-                name: "AUTHENTIK_HOST",
-                // In-cluster URL so outpost connectivity does not depend on the external ionos edge
-                value: "http://authentik.authentik.svc.cluster.local",
-              },
-              {
-                name: "AUTHENTIK_HOST_BROWSER",
-                // URL that browsers will use (public URL)
-                value: "https://auth.mvissing.de",
-              },
-              {
-                name: "AUTHENTIK_INSECURE",
-                value: "true",
-              },
-              {
-                name: "AUTHENTIK_TOKEN",
-                valueFrom: {
-                  secretKeyRef: {
-                    name: outpostSecret.metadata.name,
-                    key: "token",
-                  },
+      template: {
+        metadata: {
+          labels: {
+            app: "authentik-outpost",
+            "app.kubernetes.io/name": "authentik-outpost",
+            "app.kubernetes.io/component": "proxy",
+          },
+        },
+        spec: {
+          containers: [
+            {
+              name: "authentik-proxy",
+              image: "ghcr.io/goauthentik/proxy:2026.5.6",
+              env: [
+                {
+                  name: "AUTHENTIK_HOST",
+                  // In-cluster URL so outpost connectivity does not depend on the external ionos edge
+                  value: "http://authentik.authentik.svc.cluster.local",
                 },
-              },
-              {
-                name: "AUTHENTIK_LOG_LEVEL",
-                value: "info",
-              },
-            ],
-            ports: [
-              {
-                containerPort: 9000,
-                name: "http",
-                protocol: "TCP",
-              },
-              {
-                containerPort: 9300,
-                name: "http-metrics",
-                protocol: "TCP",
-              },
-            ],
-            volumeMounts: [
-              {
-                name: "sessions",
-                mountPath: "/sessions",
-              },
-            ],
-            livenessProbe: {
-              httpGet: {
-                path: "/outpost.goauthentik.io/ping",
-                port: "http",
-              },
-              initialDelaySeconds: 30,
-              periodSeconds: 10,
-              timeoutSeconds: 3,
-              failureThreshold: 3,
-            },
-            readinessProbe: {
-              httpGet: {
-                path: "/outpost.goauthentik.io/ping",
-                port: "http",
-              },
-              initialDelaySeconds: 10,
-              periodSeconds: 5,
-              timeoutSeconds: 3,
-              failureThreshold: 3,
-            },
-            resources: {
-              requests: {
-                memory: "128Mi",
-                cpu: "100m",
-              },
-              limits: {
-                memory: "512Mi",
-                cpu: "500m",
-              },
-            },
-          },
-        ],
-        volumes: [
-          {
-            name: "sessions",
-            emptyDir: {},
-          },
-        ],
-        // Distribute pods across nodes for better availability
-        affinity: {
-          podAntiAffinity: {
-            preferredDuringSchedulingIgnoredDuringExecution: [
-              {
-                weight: 100,
-                podAffinityTerm: {
-                  labelSelector: {
-                    matchLabels: {
-                      app: "authentik-outpost",
+                {
+                  name: "AUTHENTIK_HOST_BROWSER",
+                  // URL that browsers will use (public URL)
+                  value: "https://auth.mvissing.de",
+                },
+                {
+                  name: "AUTHENTIK_INSECURE",
+                  value: "true",
+                },
+                {
+                  name: "AUTHENTIK_TOKEN",
+                  valueFrom: {
+                    secretKeyRef: {
+                      name: outpostSecret.metadata.name,
+                      key: "token",
                     },
                   },
-                  topologyKey: "kubernetes.io/hostname",
+                },
+                {
+                  name: "AUTHENTIK_LOG_LEVEL",
+                  value: "info",
+                },
+              ],
+              ports: [
+                {
+                  containerPort: 9000,
+                  name: "http",
+                  protocol: "TCP",
+                },
+                {
+                  containerPort: 9300,
+                  name: "http-metrics",
+                  protocol: "TCP",
+                },
+              ],
+              volumeMounts: [
+                {
+                  name: "sessions",
+                  mountPath: "/sessions",
+                },
+              ],
+              livenessProbe: {
+                httpGet: {
+                  path: "/outpost.goauthentik.io/ping",
+                  port: "http",
+                },
+                initialDelaySeconds: 30,
+                periodSeconds: 10,
+                timeoutSeconds: 3,
+                failureThreshold: 3,
+              },
+              readinessProbe: {
+                httpGet: {
+                  path: "/outpost.goauthentik.io/ping",
+                  port: "http",
+                },
+                initialDelaySeconds: 10,
+                periodSeconds: 5,
+                timeoutSeconds: 3,
+                failureThreshold: 3,
+              },
+              resources: {
+                requests: {
+                  memory: "128Mi",
+                  cpu: "100m",
+                },
+                limits: {
+                  memory: "512Mi",
+                  cpu: "500m",
                 },
               },
-            ],
+            },
+          ],
+          volumes: [
+            {
+              name: "sessions",
+              emptyDir: {},
+            },
+          ],
+          // Distribute pods across nodes for better availability
+          affinity: {
+            podAntiAffinity: {
+              preferredDuringSchedulingIgnoredDuringExecution: [
+                {
+                  weight: 100,
+                  podAffinityTerm: {
+                    labelSelector: {
+                      matchLabels: {
+                        app: "authentik-outpost",
+                      },
+                    },
+                    topologyKey: "kubernetes.io/hostname",
+                  },
+                },
+              ],
+            },
           },
         },
       },
     },
   },
-});
+  { dependsOn: [authentikServer] },
+);
 
 // Service for Authentik Outpost
 const authentikOutpostService = new k8s.core.v1.Service(
@@ -184,8 +201,10 @@ const authentikOutpostService = new k8s.core.v1.Service(
   {
     metadata: {
       name: "authentik-outpost",
-      // See the Deployment above — awaiting endpoints here deadlocks too.
-      annotations: { "pulumi.com/skipAwait": "true" },
+      // Also no `skipAwait` — see the Deployment above. Pulumi awaits a
+      // Service until it has endpoints, which cannot happen before the pods
+      // behind it are ready, so this needs the Deployment ordered ahead of it
+      // for the same reason the Deployment needs the server ordered ahead.
       namespace: authentikNamespace.metadata.name,
       labels: {
         app: "authentik-outpost",
@@ -214,6 +233,7 @@ const authentikOutpostService = new k8s.core.v1.Service(
       ],
     },
   },
+  { dependsOn: [authentikOutpost] },
 );
 
 // Note: Outpost paths (/outpost.goauthentik.io/*) are now routed through the main
@@ -247,7 +267,15 @@ export { authentikOutpost, authentikOutpostService, outpostSecret };
 //    c. Configure:
 //       - Name: "Kubernetes Forward Auth"
 //       - Type: "Proxy"
-//       - Integration: "Local Kubernetes Cluster" (or create a new integration)
+//       - Integration: **`----` (none)**
+//
+//         ⚠️ NOT "Local Kubernetes Cluster", which this file used to say.
+//         An outpost with a Kubernetes integration is one authentik manages
+//         itself — it creates its own Deployment, Service and Secret named
+//         `ak-outpost-<name>`. Picking it here gives you a second outpost
+//         alongside the Pulumi-managed one in this file: two proxies for one
+//         job, one of them invisible to the state file and un-diffable by
+//         `pulumi preview`. Manual deployment is the whole point of this file.
 //    d. In the "Applications" field, select the provider you created in step 3
 //    e. After creation, copy the outpost integration token
 //
