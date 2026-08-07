@@ -250,9 +250,25 @@ const authentikMiddleware = new k8s.apiextensions.CustomResource(
     },
     spec: {
       forwardAuth: {
-        // MUST use public URL (not internal cluster URL) for domain-level forward auth
-        // This ensures browser cookies are properly forwarded through the ingress
-        address: "https://auth.mvissing.de/outpost.goauthentik.io/auth/traefik",
+        // ⚠️ The **cluster** endpoint, not the Ingress — authentik's own Traefik
+        // documentation says so in as many words: "This address should point to
+        // the cluster endpoint provided by the kubernetes service, not the
+        // Ingress."
+        //
+        // This used to be https://auth.mvissing.de/... with a comment claiming
+        // the public URL was required for cookies. It is not: the browser-facing
+        // redirect comes from the outpost's AUTHENTIK_HOST_BROWSER, and the
+        // cookie domain from the provider's own setting. What the public URL
+        // actually bought was a dependency on split-horizon DNS and a hairpin
+        // from a Traefik pod back through a MetalLB VIP — which failed two
+        // different ways on 2026-08-07: `remote error: tls: internal error` at
+        // Brink, and an outright timeout from a Winkel pod. Both surfaced as a
+        // bare 500 on every protected route, with Authentik perfectly healthy.
+        //
+        // Going direct to the Service also keeps forward auth working when the
+        // ingress or its certificate is broken, which is exactly when you want
+        // to be able to log in.
+        address: pulumi.interpolate`http://${authentikOutpostService.metadata.name}.${authentikNamespace.metadata.name}.svc.cluster.local:9000/outpost.goauthentik.io/auth/traefik`,
         trustForwardHeader: true,
         // Forward these headers to Authentik so it can redirect back to the original URL
         // Cookie is essential for Authentik to verify existing sessions
