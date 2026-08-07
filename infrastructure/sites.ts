@@ -72,6 +72,48 @@ export const lb = {
 /** Schedule onto any node at Winkel (maxdata or winkel-pi). */
 export const winkelSite = { [ZONE_LABEL]: sites.winkel.zone };
 
+/**
+ * Schedule onto the public edge — ionos, and only ionos.
+ *
+ * Deliberately not a member of `sites` above: it has no LAN, so no MetalLB
+ * pool and no `ingressVIP`, and everything iterating `sites` wants exactly the
+ * two that do. ⚠️ The label value is `public`; it was `external` on the old
+ * cluster, so any selector carried over from then matches nothing.
+ */
+export const publicSite = { [ZONE_LABEL]: "public" };
+
+/**
+ * Toleration for ionos's `edge=true:NoSchedule` taint.
+ *
+ * ⚠️ Required *in addition to* `publicSite`. The nodeSelector says where a pod
+ * may go; the taint says nothing may go there without opting in. Omit this and
+ * the pod sits Pending with an unschedulable message rather than landing
+ * anywhere unexpected — which is the intended failure.
+ */
+export const edgeToleration = {
+  key: "edge",
+  operator: "Equal",
+  value: "true",
+  effect: "NoSchedule",
+};
+
+/**
+ * The IngressClass served by the public Traefik on ionos, as opposed to the
+ * site-local ones.
+ *
+ * Lives here rather than in `traefik-public.ts` to keep one source of truth
+ * without a circular import: `cert-manager.ts` needs it for the HTTP-01 solver,
+ * `traefik-public.ts` needs it for the controller, and `traefik-public.ts`
+ * already imports `cert-manager.ts` transitively. This file imports nothing.
+ *
+ * ⚠️ Anything carrying this class is reachable from the internet. Site-local
+ * services keep `traefik` and stay on the LAN.
+ */
+export const publicIngressClass = "traefik-public";
+
+/** The label that opts an IngressRoute into being served publicly. */
+export const publicRouteSelector = { ingress: "public" };
+
 /** Schedule onto any node at Brink (brink-server only, today). */
 export const brinkSite = { [ZONE_LABEL]: sites.brink.zone };
 

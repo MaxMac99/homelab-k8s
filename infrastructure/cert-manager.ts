@@ -3,6 +3,7 @@
 // Works with Traefik ingress to provide HTTPS
 
 import * as k8s from "@pulumi/kubernetes";
+import { publicIngressClass } from "./sites";
 
 // Create namespace for cert-manager
 const namespace = new k8s.core.v1.Namespace("cert-manager", {
@@ -86,12 +87,24 @@ const letsencryptProd = new k8s.apiextensions.CustomResource(
           name: "letsencrypt-prod-account-key",
         },
 
-        // Use HTTP-01 challenge (requires port 80 accessible)
+        // HTTP-01, which needs port 80 reachable from the internet.
+        //
+        // ⚠️ The class is the **public** Traefik on ionos, not the site-local
+        // one. cert-manager creates a temporary Ingress per challenge; if a
+        // site-local Traefik claimed it, the challenge would live on a LAN
+        // address Let's Encrypt cannot reach, and validation would fail with
+        // nothing visibly wrong at either end (D8).
+        //
+        // ⚠️ This also makes renewal depend on public :80 staying reachable,
+        // rather than on a DNS record. Anything that breaks the ionos front end
+        // breaks renewal about 30 days later, long after the change that caused
+        // it — so treat a 502 from that nginx as urgent even though nothing
+        // user-facing is down at the time.
         solvers: [
           {
             http01: {
               ingress: {
-                ingressClassName: "traefik",
+                ingressClassName: publicIngressClass,
               },
             },
           },
@@ -133,7 +146,7 @@ const letsencryptStaging = new k8s.apiextensions.CustomResource(
           {
             http01: {
               ingress: {
-                ingressClassName: "traefik",
+                ingressClassName: publicIngressClass,
               },
             },
           },
