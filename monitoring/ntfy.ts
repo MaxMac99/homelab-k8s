@@ -3,6 +3,7 @@
 // Accessible via ntfy.mvissing.de
 
 import * as k8s from "@pulumi/kubernetes";
+import * as random from "@pulumi/random";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import { namespaceName } from "./namespace";
 import { onNode, MAXDATA } from "../infrastructure/sites";
@@ -77,6 +78,51 @@ metrics-listen-http: ":9090"
   },
 });
 
+// The topic Alertmanager publishes to, and the user it authenticates as.
+//
+// ⚠️ These two constants are the whole reason alerting worked at all. ntfy runs
+// `auth-default-access: deny-all` (above) and, until this existed, had **no
+// users whatsoever** — only the implicit anonymous `*`. Every publish was
+// therefore rejected, so Prometheus' alert rules fired into nothing and the
+// setup looked complete from every side: rules loaded, Alertmanager healthy,
+// ntfy healthy, no errors anywhere.
+//
+// ⚠️ `deny-all` is load-bearing rather than cautious, because this server's
+// Ingress carries **no Authentik middleware** (see below) — it answers to
+// anything on the LAN. Do not "fix" a publish failure by granting `everyone`
+// write access to the topic; grant it to a named user, as here.
+export const ntfyAlertTopic = "alerts";
+const ntfyAlertUser = "alertmanager";
+
+// `special: false` deliberately: this travels as an HTTP basic-auth credential
+// and through a shell in the init container below, and buys nothing over the
+// extra length.
+const ntfyAlertPassword = new random.RandomPassword(
+  "ntfy-alertmanager-password",
+  {
+    length: 40,
+    special: false,
+  },
+);
+
+// Consumed by Alertmanager in `monitoring/prometheus.ts`, mounted as a *file*
+// rather than inlined — the alertmanager subchart renders its config into a
+// plain ConfigMap, so an inline password would be readable by anything with
+// ConfigMap access in this namespace.
+export const ntfyAlertCredentials = new k8s.core.v1.Secret(
+  "ntfy-alertmanager-credentials",
+  {
+    metadata: {
+      name: "ntfy-alertmanager-credentials",
+      namespace: namespaceName,
+    },
+    stringData: {
+      username: ntfyAlertUser,
+      password: ntfyAlertPassword.result,
+    },
+  },
+);
+
 // Deployment for ntfy
 const ntfyDeployment = new k8s.apps.v1.Deployment("ntfy", {
   metadata: {
@@ -104,6 +150,55 @@ const ntfyDeployment = new k8s.apps.v1.Deployment("ntfy", {
       spec: {
         // Pinned to maxdata: local-path cache/attachment volume (D6).
         nodeSelector: onNode(MAXDATA),
+        // Create the publishing user before the server starts.
+        //
+        // Same shape as Mosquitto's `init-passwd` container, and for the same
+        // reason: the alternative is a `kubectl exec` documented in a comment,
+        // which is exactly the kind of step that is never run — as the total
+        // absence of ntfy users proved.
+        //
+        // ⚠️ All three commands are idempotent *by construction*, because this
+        // runs on every pod start. `--ignore-exists` alone would leave the
+        // password to drift out of sync with the Secret after the first
+        // creation, so `change-pass` re-asserts it and `access` re-asserts the
+        // ACL. The CLI finds `auth-file` via `/etc/ntfy/server.yml`, which is
+        // why the config volume is mounted here and not just the cache.
+        initContainers: [
+          {
+            name: "init-users",
+            image: "binwiederhier/ntfy:v2.27.0",
+            command: ["/bin/sh", "-c"],
+            args: [
+              [
+                "set -e",
+                `ntfy user add --ignore-exists --role=user ${ntfyAlertUser}`,
+                `ntfy user change-pass ${ntfyAlertUser}`,
+                `ntfy access ${ntfyAlertUser} ${ntfyAlertTopic} write-only`,
+              ].join("\n"),
+            ],
+            env: [
+              {
+                name: "NTFY_PASSWORD",
+                valueFrom: {
+                  secretKeyRef: {
+                    name: ntfyAlertCredentials.metadata.name,
+                    key: "password",
+                  },
+                },
+              },
+            ],
+            volumeMounts: [
+              {
+                name: "config",
+                mountPath: "/etc/ntfy",
+              },
+              {
+                name: "cache",
+                mountPath: "/var/cache/ntfy",
+              },
+            ],
+          },
+        ],
         containers: [
           {
             name: "ntfy",

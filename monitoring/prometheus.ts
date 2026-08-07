@@ -7,6 +7,7 @@ import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import { namespaceName } from "./namespace";
 import { onNode, HOSTNAME_LABEL, MAXDATA } from "../infrastructure/sites";
+import { ntfyAlertTopic, ntfyAlertCredentials } from "./ntfy";
 
 // Get Home Assistant Prometheus token from config
 const config = new pulumi.Config();
@@ -144,6 +145,63 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
           cpu: "500m",
           memory: "512Mi",
         },
+      },
+      // The ntfy publishing credential, as a file.
+      //
+      // ⚠️ Mounted rather than inlined because this subchart renders `config`
+      // below into a plain **ConfigMap**, not a Secret — an inline `password:`
+      // would be readable by anything able to read ConfigMaps in this
+      // namespace. The Secret's keys become filenames, so `password` lands at
+      // `/etc/alertmanager/ntfy/password`.
+      extraSecretMounts: [
+        {
+          name: "ntfy-credentials",
+          mountPath: "/etc/alertmanager/ntfy",
+          subPath: "",
+          secretName: ntfyAlertCredentials.metadata.name,
+          readOnly: true,
+        },
+      ],
+      // ⚠️ Until this block existed, Alertmanager ran the chart's default
+      // `default-receiver` — a receiver with a name and **no destination at
+      // all**. Alerts were grouped, deduplicated and then dropped, and nothing
+      // reported an error, because delivering to nowhere is not a failure. The
+      // alert rules in `serverFiles` below were therefore decorative.
+      config: {
+        global: {},
+        route: {
+          group_wait: "30s",
+          group_interval: "5m",
+          // 12 h rather than the chart's 3 h: these alerts are slow-moving
+          // (a certificate expiring, an ingress down), so re-notifying every
+          // three hours trains you to ignore the notification.
+          repeat_interval: "12h",
+          receiver: "ntfy",
+        },
+        receivers: [
+          {
+            name: "ntfy",
+            webhook_configs: [
+              {
+                // ⚠️ `?template=alertmanager` is a **built-in ntfy template**,
+                // not something defined here — verified present in the running
+                // v2.27.0 (`server/templates/alertmanager.yml`). Without it,
+                // ntfy publishes Alertmanager's raw JSON as the message body,
+                // which arrives as an unreadable wall of text on the phone.
+                // The template reads `.labels.severity`, `.annotations.summary`
+                // and `.annotations.description`, which the rules below set.
+                url: pulumi.interpolate`http://ntfy.${namespaceName}.svc.cluster.local/${ntfyAlertTopic}?template=alertmanager`,
+                send_resolved: true,
+                http_config: {
+                  basic_auth: {
+                    username: "alertmanager",
+                    password_file: "/etc/alertmanager/ntfy/password",
+                  },
+                },
+              },
+            ],
+          },
+        ],
       },
     },
 
