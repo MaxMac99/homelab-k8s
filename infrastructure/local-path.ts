@@ -185,6 +185,23 @@ const deployment = new k8s.apps.v1.Deployment(
                 "/etc/config/config.json",
                 "--service-account-name",
                 "local-path-provisioner-service-account",
+                // ⚠️ Load-bearing with the auto-named ConfigMap above.
+                //
+                // The provisioner does not only read its own config from this
+                // ConfigMap — it builds every helper pod with a volume
+                // referencing it *by name*, and that name defaults to the
+                // literal "local-path-config". Auto-naming without this flag
+                // leaves the helper pod mounting a ConfigMap that does not
+                // exist: it sits in ContainerCreating, the provisioner times
+                // out after 120 s, deletes it and retries forever. The PVC
+                // stays Pending and the only clue is a FailedMount event on a
+                // pod that is deleted before you can look at it.
+                //
+                // Passing the resolved name also keeps the two in step: the
+                // arg changes whenever the ConfigMap is replaced, so the
+                // Deployment rolls with it.
+                "--configmap-name",
+                config.metadata.name,
               ],
               volumeMounts: [
                 { name: "config-volume", mountPath: "/etc/config/" },

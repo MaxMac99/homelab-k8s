@@ -72,9 +72,17 @@ const homeassistantDatabase = new k8s.apiextensions.CustomResource(
 // ReadWriteOnce, not ReadWriteMany: local-path cannot do RWX, and Home
 // Assistant is a single writer with `strategy: Recreate`.
 //
-// ⚠️ The existing config must be copied from maxdata before first start, or
-// Home Assistant silently onboards itself from scratch — an empty instance
-// looks like a working one.
+// ⚠️ **Starting empty is deliberate.** The old configuration is NOT restored:
+// this instance onboards from scratch, by decision (2026-08-07). The previous
+// config still exists on maxdata at /tank/k8s/nfs/homeassistant and is
+// deliberately left in place as a fallback — do not delete it until the new
+// instance has been running long enough to trust, and note nothing references
+// it any more, so nothing will remind you.
+//
+// Consequence worth planning for rather than discovering: every integration is
+// re-added by hand, and any Matter, Thread, Zigbee or Z-Wave device must be
+// re-commissioned or re-paired. Devices do not migrate with the config, and a
+// device paired to the old instance will not simply appear in this one.
 const homeassistantConfigPVC = new k8s.core.v1.PersistentVolumeClaim(
   "homeassistant-config-pvc",
   {
