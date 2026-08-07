@@ -103,12 +103,23 @@ const traefik = new k8s.helm.v3.Chart(
             enabled: true,
           },
         },
-        // Traefik dashboard/API port - expose in service for Homepage widget
+        // Traefik dashboard/API port.
+        //
+        // ⚠️ `expose.default` is false on purpose. It used to be true, which
+        // put the **unauthenticated** API on the LoadBalancer address at
+        // :9000 — reachable from the whole LAN, and bypassing the
+        // Authentik-protected traefik.mvissing.de route entirely. Anyone on
+        // the network could read the full routing table and every service's
+        // internal address without a login.
+        //
+        // The port stays open on the pod so the Homepage widget can still
+        // reach it, but only through the ClusterIP service defined below,
+        // which has no presence outside the cluster.
         traefik: {
           port: 9000,
           exposedPort: 9000,
           expose: {
-            default: true,
+            default: false,
           },
         },
       },
@@ -128,6 +139,38 @@ const traefik = new k8s.helm.v3.Chart(
     },
   },
   { dependsOn: [traefikNamespace] },
+);
+
+// ClusterIP service for the Traefik API, for in-cluster consumers only.
+//
+// `api.insecure: true` serves the API without authentication, which is
+// tolerable on a ClusterIP and was not on a LoadBalancer. Homepage's widget is
+// the only consumer; the human-facing dashboard goes through
+// traefik.mvissing.de, which is behind Authentik forward auth.
+const traefikApiService = new k8s.core.v1.Service(
+  "traefik-api",
+  {
+    metadata: {
+      name: "traefik-api",
+      namespace: traefikNamespace.metadata.name,
+    },
+    spec: {
+      type: "ClusterIP",
+      selector: {
+        "app.kubernetes.io/name": "traefik",
+        "app.kubernetes.io/instance": "traefik-traefik",
+      },
+      ports: [
+        {
+          name: "traefik",
+          port: 9000,
+          targetPort: 9000,
+          protocol: "TCP",
+        },
+      ],
+    },
+  },
+  { dependsOn: [traefik] },
 );
 
 // Authentik Forward Auth Middleware
@@ -213,8 +256,10 @@ const dashboardIngressRoute = new k8s.apiextensions.CustomResource(
         "gethomepage.dev/pod-selector": "app.kubernetes.io/name=traefik",
         // Traefik widget
         "gethomepage.dev/widget.type": "traefik",
+        // The API is no longer on the LoadBalancer service; this is the
+        // in-cluster-only ClusterIP that replaced that exposure.
         "gethomepage.dev/widget.url":
-          "http://traefik.traefik.svc.cluster.local:9000",
+          "http://traefik-api.traefik.svc.cluster.local:9000",
       },
     },
     spec: {
@@ -248,6 +293,7 @@ const dashboardIngressRoute = new k8s.apiextensions.CustomResource(
 export {
   traefik,
   traefikNamespace,
+  traefikApiService,
   authentikMiddleware,
   dashboardCertificate,
   dashboardIngressRoute,
