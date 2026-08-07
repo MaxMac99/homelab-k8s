@@ -65,6 +65,36 @@ const traefikPublic = new k8s.helm.v3.Chart(
         dnsPolicy: "ClusterFirstWithHostNet",
       },
 
+      // ⚠️ **Old pod first, then the new one — the chart's default deadlocks
+      // this Deployment permanently.**
+      //
+      // The chart defaults to `maxSurge: 1, maxUnavailable: 0`, i.e. stand the
+      // replacement up *before* retiring the old pod. That is right for a
+      // normal workload and impossible here: `hostNetwork` means the ports are
+      // the node's, and `nodeSelector` + the edge taint mean exactly one node
+      // is eligible. The new pod therefore cannot be scheduled while the old
+      // one lives, and the old one is never retired because the new one is not
+      // ready — a wait with no timeout, which reads as a slow rollout rather
+      // than a stuck one:
+      //
+      //   0/4 nodes are available: 1 node(s) didn't have free ports for the
+      //   requested pod ports, 3 node(s) didn't match Pod's node affinity
+      //
+      // `maxSurge: 0` is equivalent to `type: Recreate` for a single replica,
+      // and avoids the chart schema's `additionalProperties: false` rejecting
+      // a nulled-out `rollingUpdate` block.
+      //
+      // The cost is real and accepted: every update to this pod is a brief
+      // outage of the public edge. ACME challenges in that window 502 and are
+      // retried; there is no way around it with one node holding the ports.
+      updateStrategy: {
+        type: "RollingUpdate",
+        rollingUpdate: {
+          maxSurge: 0,
+          maxUnavailable: 1,
+        },
+      },
+
       // The pod's ports become host ports on ionos. That is the point: nginx
       // reaches them on loopback.
       hostNetwork: true,
