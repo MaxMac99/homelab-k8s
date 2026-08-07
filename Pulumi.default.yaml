@@ -9,9 +9,9 @@ config:
   k8s-resources:authentikOutpostToken:
     secure: v1:LVsNJLpg3iHRO92/:ayzEnfIdHiHW+MIgU8ppB/FxrFXTlBZny+VnvcUr1EjlBdDFR/EUGdGsSePsfeVShdFYTOgNSkqwAyR7J7Tw9/5sQPTLILR6n3JUug==
   k8s-resources:grafana-oauth-client-id:
-    secure: v1:P0MJUVccKKeJcQNb:YUUDDD4iTjYY1MuEAo0+vgDgs48jaoCBtt3gDr2/aQaH19TdXjZfZbuxb4qik2VYmagUt56+BQU=
+    secure: v1:/+TeUTK0BY+HpCdS:IkELHgzQ66b7vwUz0pxbdlY3YuQOCrvbMj8TI/XWcGq6ypD6ng0x+TnqrlFLfue2+SUK2Xth370=
   k8s-resources:grafana-oauth-client-secret:
-    secure: v1:1+i50OBd4f7dDYFh:CW5fesPgt9E58zs9quUPElJhiNnFOv62vW1RWHsLcwYLV5+soQPfQEHmOB8SgP7EXfnTw4+7K/gTYouromx5dBjC8ykQP3mSIabSmbzjpSqjWTTn5BZJgZA/4vT+tTpqjwXbHMR47pkVSlf4VB8MUFrOHEOQgr69B+kmBg528qkp/fIVcalCSqjqA9wsVvlq
+    secure: v1:TkVwFLT/6OoSWsOB:PFFQKR3aVigI71ICUJuC2k75kbzKLTx8jPTKJ5DD87rJkrvVl/YZwX9v1qVziXYo3ykvE3St7B7HBvTv3tN8uPI2RQm3Ajs6gdGYRIaO/wfgxATXZmoi8YGt4GPADqI9kDLmNfDnd0f3Wq5kV8klfOCUrlXBpnSeWlQeJ/qhHENTrZHx7SQ5FAbFDffWE938
   k8s-resources:paperless-secret-key:
     secure: v1:OcJAiK6K95xRDsRa:EUMdSXcZe+rqx3qT9uDZOv5nBGk2NcssY1XgTbzXatC/cbUFHPpHLlU=
   k8s-resources:paperless-authentik-client-id:
