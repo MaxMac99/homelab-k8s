@@ -224,8 +224,13 @@ Three couplings can break silently, because nothing in this repo references
 them:
 
 1. **Alloy → Loki.** `hosts/nixos/maxdata/monitoring.nix` ships maxdata's logs
-   to a hardcoded in-cluster Loki LoadBalancer (`192.168.178.11`). Repinning
-   Loki without changing that value **stops log shipping with no error**.
+   to an in-cluster Loki LoadBalancer. ⚠️ **This used to say the address was
+   hardcoded to `192.168.178.11`; it is not.** It reads
+   `config.networkConfig.lokiVIP`, whose default is `192.168.178.241` and
+   matches the live Service — verified 2026-08-07 with 614 log lines from
+   maxdata arriving in the last 15 minutes. The coupling is still real, just
+   named rather than literal: repin Loki without changing `lokiVIP` in
+   `modules/data/network-config.nix` and **log shipping stops with no error**.
 2. **ionos's public ingress path.** The six DNAT rules that hardcoded Traefik's
    `192.168.178.10` are **gone**; `hosts/nixos/ionos/public-ingress.nix` now
    runs nginx on `:80` and splits by `Host` — `headscale.mvissing.de` to local
