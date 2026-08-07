@@ -68,39 +68,58 @@ Use `nodeSelector` for architecture (`winkel-pi` is the only arm64 node) and
 **File organization:**
 
 - `infrastructure/` — core cluster services (MetalLB, Traefik, cert-manager, Reflector)
-- `databases/` — shared database instances (PostgreSQL/CloudNativePG, Redis, MongoDB)
+- `databases/` — shared database instances (PostgreSQL/CloudNativePG, Redis).
+  MongoDB was **deleted** in Phase 8 — 50 Gi, zero consumers.
 - `auth/` — identity and authentication (Authentik, Authentik Outpost)
-- `apps/` — user-facing applications (Paperless, Homepage, UniFi, AdGuard, Home Assistant, Time Machine).
-  ⚠️ **`apps/adguard.ts` is scheduled for deletion** — DNS now runs natively on
-  brink-server and winkel-pi so it survives cluster rebuilds, and both routers
-  already point at those. ⚠️ **`apps/timemachine.ts` sets no
-  `metadata.namespace`** on its ConfigMap, PVC, Deployment or Service, so it all
-  lands in `default`; it also hardcodes its own LB IP into `ADVERTISED_HOSTNAME`
-  (`:116-118`), so the pin and the env var must change together.
+- `apps/` — user-facing applications (Paperless, Homepage, UniFi, Home
+  Assistant, Mosquitto, Time Machine). `apps/adguard.ts` was **deleted** in
+  Phase 8 — DNS runs natively on brink-server and winkel-pi so it survives
+  cluster rebuilds. Time Machine now has its **own namespace** rather than
+  landing in `default`. ⚠️ It still hardcodes its LB IP into
+  `ADVERTISED_HOSTNAME`, so that env var and the MetalLB pin must change
+  together — both now read from `infrastructure/sites.ts`.
 - `monitoring/` — observability stack (Prometheus, Grafana, Loki, Tempo, Alloy, ntfy, unpoller)
 - `index.ts` — orchestrator that imports all modules via directory barrel files
 - `Pulumi.default.yaml` — stack config with encrypted secrets
 
 **Key infrastructure layers:**
 
-- **MetalLB** — ⚠️ still a **single** `default-pool` of `192.168.178.10-20`
-  (`infrastructure/metallb.ts:45`), which only works for one site. Phase 8
-  splits it into **two** pools with `L2Advertisement` node selectors:
-  `192.168.1.240-250` (brink) and `192.168.178.240-250` (winkel). The pool also
-  still declares an IPv6 range `fda8:a1db:5685::10-20` — **dead**: cluster
-  dual-stack is dropped, and that ULA belonged to the old WireGuard tunnel.
-- **Traefik** — Ingress controller with Authentik forward auth. Its LB IP
-  `192.168.178.10` is **not pinned** (`infrastructure/traefik.ts:32` has the pin
-  commented out); it holds that address by first-come luck from the pool.
-- **cert-manager** — Let's Encrypt TLS. ⚠️ **The code is HTTP-01**
-  (`infrastructure/cert-manager.ts:72-80`), not the DNS challenge this file used
-  to claim. Phase 9 moves it to DNS-01 via the community
-  `cert-manager-webhook-ionos`, which enables a wildcard.
+- **MetalLB** — **two** pools, split per site in Phase 8 and deployed:
+  `brink-pool` `192.168.1.240-250` and `winkel-pool` `192.168.178.240-250`, each
+  with an `L2Advertisement` selecting `topology.kubernetes.io/zone`. The dead
+  `fda8:a1db:5685::` range is gone. ⚠️ **`autoAssign` is `false` on both.** A
+  LoadBalancer with no explicit address gets none and stays visibly Pending —
+  deliberate, so nothing can silently repeat Traefik's old habit of winning
+  `192.168.178.10` by allocation order. All pins live in
+  `infrastructure/sites.ts`; put new ones there, not inline.
+- **Traefik** — Ingress controller with Authentik forward auth, pinned to
+  `sites.winkel.ingressVIP` (`192.168.178.240`) and to the Winkel site. ⚠️
+  **Brink's `192.168.1.240` serves nothing yet** — Phase 9 adds the per-site
+  internal Traefik. Both sites' AdGuard already rewrite `*.mvissing.de` to their
+  own VIP, so Brink resolves every hostname to a dead address today. ⚠️
+  Anything belonging in the Service spec must go under **`service.spec`**; the
+  chart renders only that key and silently drops `type`/`ipFamilyPolicy` placed
+  directly under `service`. Logging keys are `log` and `accessLog`, not `logs`.
+- **cert-manager** — Let's Encrypt TLS, **HTTP-01 and staying that way**
+  (`infrastructure/cert-manager.ts:72-80`). ⚠️ **D8 was revised on 2026-08-07:
+  DNS-01 via `cert-manager-webhook-ionos` is dropped and there will be no IONOS
+  DNS API token.** D7 removes the need — once Phase 9 puts Traefik on ionos,
+  port 80 reaches it and HTTP-01 validates for every name. No wildcard;
+  per-hostname certs, which ~10 names keeps well inside Let's Encrypt's limits.
+- **local-path-provisioner** — deployed from Pulumi (`infrastructure/local-path.ts`),
+  **not** from NixOS, with a per-node `nodePathMap`: `/fast/k8s/local-path` on
+  maxdata, `/var/lib/k8s/local-path` on brink-server. ⚠️ ionos and winkel-pi are
+  deliberately absent so provisioning there fails loudly. `WaitForFirstConsumer`
+  and `Retain`; the ConfigMap is **auto-named on purpose** — a fixed name makes
+  pulumi-kubernetes' replace-on-data-change collide with the live object.
 - **Reflector** — mirrors Secrets/ConfigMaps across namespaces
 - **CloudNativePG** — PostgreSQL operator (shared DB, per-app clusters)
-- **Redis** — shared caching. ⚠️ **MongoDB is scheduled for deletion** in
-  Phase 8: a 50 Gi PVC with **zero consumers** since UniFi moved to a bundled
-  Mongo (`apps/unifi.ts:7`).
+- **Redis** — **two instances.** The shared one in `databases/redis.ts` is
+  pinned to maxdata and now serves only Paperless; Authentik has its own in
+  `auth/authentik.ts`, at Brink. ⚠️ That split is load-bearing, not tidiness:
+  Authentik gates forward auth for every ingress at both sites, so it must not
+  depend on maxdata. Postgres runs `instances: 2` with zone anti-affinity for
+  the same reason.
 
 **Storage:** `local-path` for databases and NFS for bulk data, both served by
 **`maxdata`** (`192.168.178.2`) — a bare-metal ZFS box, no longer Proxmox. Pools
@@ -112,11 +131,19 @@ trap). Every `local-path` PVC therefore needs an explicit site pin, and a pod
 that moves site loses its data. NFS is reachable cross-site over the overlay but
 at WAN latency, so treat it as Winkel-local.
 
-⚠️ **k3s runs with `--disable=local-storage`**, so nothing ships a
-`local-path-provisioner` by default. Deploying it — with a per-node
-`nodePathMap`, since the four nodes have genuinely different disks — is open
-Phase 8 work. It used to be deployed by NixOS, pinned to a virtiofs path that no
-longer exists.
+⚠️ **k3s runs with `--disable=local-storage`**, so no provisioner ships by
+default — Pulumi supplies it (above). Note the pins are to a **node**, not a
+site: Winkel has two nodes and winkel-pi's USB-SATA disk is not where anything
+belongs. local-path stamps `nodeAffinity` onto the PV it creates, so a _bound_
+volume already cannot move; what the pin controls is which node gets it on
+**first** binding, which is permanent.
+
+⚠️ **Both node paths sit under a parent that exists whether or not the dataset
+mounts** — `/fast/k8s` on maxdata, `/var/lib/k8s` (on `main/root`) on
+brink-server. If a dataset fails to mount, volumes are written to the parent
+filesystem and nothing complains; this is exactly how maxdata's 689 G of Time
+Machine data ended up shadowing an empty `tank/k8s/timemachine`. Monitor for
+_not mounted_, not for disk usage.
 
 ## The other repo, and what couples to it
 

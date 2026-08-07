@@ -41,13 +41,26 @@ const nodePathMap = [
   // that still holds the previous cluster's volumes and is left untouched
   // until Phase 11 proves the backups.
   { node: MAXDATA, paths: ["/fast/k8s/local-path"] },
-  // Dataset `main/k8s`, native mountpoint, created on the box.
-  { node: BRINK_SERVER, paths: ["/main/k8s/local-path"] },
+  // Dataset `main/k8s` — but note the mountpoint is `/var/lib/k8s`, not
+  // `/main/k8s`. brink-server's pool has `mountpoint=none` and every dataset
+  // carries an explicit one, so `/main` does not exist at all. Verified on the
+  // box: `main/k8s  mounted yes  mountpoint /var/lib/k8s`.
+  { node: BRINK_SERVER, paths: ["/var/lib/k8s/local-path"] },
 ];
 
+// Deliberately auto-named — no `metadata.name`.
+//
+// pulumi-kubernetes replaces a ConfigMap whenever `.data` changes rather than
+// updating it in place, and replacement is create-before-delete. With a fixed
+// name the new object collides with the one still present and the update fails
+// outright ("configmaps \\"local-path-config\\" already exists").
+//
+// Auto-naming also fixes a quieter problem: the Deployment mounts this by
+// name, so with a fixed name a `nodePathMap` edit would change the ConfigMap
+// without restarting the provisioner — the running process would keep serving
+// the old paths. A new name forces the Deployment to roll.
 const config = new k8s.core.v1.ConfigMap("local-path-config", {
   metadata: {
-    name: "local-path-config",
     namespace: namespace.metadata.name,
   },
   data: {
