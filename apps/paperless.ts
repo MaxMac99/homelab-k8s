@@ -533,9 +533,20 @@ const paperlessDeployment = new k8s.apps.v1.Deployment(
                 //    WHERE user_id = <paperless user> AND provider = 'authentik';
                 //
                 // See docs/multi-site-migration.md §10.2 in the `setup` repo.
+                //
+                // Off since 2026-08-08, once the restored link was confirmed
+                // working. It exists to bootstrap the *first* SSO user, and
+                // that is done — leaving it on means any Authentik account
+                // that reaches dms.mvissing.de silently gets a Paperless
+                // account. With it off, a subject that does not match an
+                // existing link fails the login visibly instead of quietly
+                // creating a second, empty-looking archive.
+                //
+                // ⚠️ Turn it back on temporarily to onboard a new person, or
+                // pre-create the socialaccount row as described above.
                 {
                   name: "PAPERLESS_SOCIAL_AUTO_SIGNUP",
-                  value: "True",
+                  value: "False",
                 },
                 {
                   name: "PAPERLESS_REDIRECT_LOGIN_TO_SSO",
@@ -736,8 +747,30 @@ export {
 //    b. Create new OAuth2/OpenID Provider:
 //       - Name: Paperless-ngx
 //       - Client type: Confidential
-//       - Redirect URIs: https://dms.mvissing.de/accounts/authentik/login/callback/
+//       - Redirect URIs: https://dms.mvissing.de/accounts/oidc/authentik/login/callback/
 //       - Signing Key: (auto-generated)
+//
+//    ⚠️ Note the `/oidc/` segment. This file previously documented
+//    `/accounts/authentik/login/callback/`, which Authentik rejects with
+//    "The request fails due to a missing, invalid, or mismatching redirection
+//    URI". allauth namespaces the openid_connect provider under
+//    `/accounts/oidc/<provider_id>/`, where <provider_id> is the `id` field in
+//    PAPERLESS_SOCIALACCOUNT_PROVIDERS above ("authentik"). Do not guess it —
+//    ask Django, which is what actually builds the URL:
+//
+//      kubectl exec -n paperless deploy/paperless -c paperless -- python3 -c \
+//        "import django,os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','paperless.settings'); \
+//         django.setup(); from django.urls import get_resolver; \
+//         print([str(p.pattern) for p in get_resolver().url_patterns])"
+//
+//    ⚠️ If you create the provider through `ak shell` rather than the UI or the
+//    REST API, `grant_types` comes out EMPTY — it is a serializer default, not
+//    a model default, so Model.objects.create() skips it. Authentik then fails
+//    with "Invalid grant_type for provider" and returns error=invalid_request
+//    to the callback, which looks like a client bug. Copy an existing working
+//    provider's `grant_types`, `access_token_validity` and
+//    `refresh_token_threshold` explicitly, then diff the two objects field by
+//    field before trusting it.
 //    c. Create new Application:
 //       - Name: Paperless-ngx
 //       - Slug: paperless
