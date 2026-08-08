@@ -73,12 +73,15 @@ actually broken.
 > single-site one. The three Proxmox x86_64 VMs described here previously
 > (`k3s-node1/2/3`) **no longer exist** — they were microVMs on `maxdata` and
 > were destroyed. See `docs/multi-site-migration.md` in the **`setup`** repo
-> (branch `multi-site`) for the full plan. Phases 0–7 are done, Phase 8 (storage
-> and site affinity) is code-complete, and **Phase 9 (ingress and certificates)
-> is the current work — mostly this repo**. Within Phase 9, internal ingress at
-> both sites and production certificates are done; **public HTTPS is not** —
-> ionos's `:443` still belongs to Headscale, so off-LAN access needs the mesh
-> until D16 Stage B lands.
+> (branch `multi-site`) for the full plan. Phases 0–9 are done and **Phase 10
+> (workloads and bootstrap) is the current work — mostly this repo**. ionos's
+> nginx now owns both `:80` and `:443`, splitting by `Host` and SNI, with
+> Headscale moved to `127.0.0.1:8444`.
+>
+> ⚠️ **Nothing is published to the internet, and that is a decision rather than
+> a gap.** `traefik-public` is default-closed, so every public name completes
+> TLS against `TRAEFIK DEFAULT CERT` and returns 404. Off-LAN access needs the
+> mesh until individual names are opted in.
 
 **Cluster topology**
 
@@ -191,6 +194,15 @@ Use `nodeSelector` for architecture (`winkel-pi` is the only arm64 node) and
 **Storage:** `local-path` for databases and NFS for bulk data, both served by
 **`maxdata`** (`192.168.178.2`) — a bare-metal ZFS box, no longer Proxmox. Pools
 are `tank` (spinning, RAIDZ1) and `fast` (NVMe).
+
+⚠️ **The NFS volumes are statically bound and their `storageClassName` names no
+real StorageClass** — `nfs` for Paperless media, `nfs-storage` for Time Machine,
+and `kubectl get sc` lists neither. **This is correct and must not be "fixed".**
+For a static bind the class name is only a matching key between PV and PVC, and
+`volumeName` on the PVC does the binding; no provisioner is involved. An NFS
+provisioner was very nearly added to solve this non-problem. ⚠️ What _does_
+stay Pending is a PVC that **omits** `storageClassName`, because there is no
+default StorageClass — the two failures look alike and are not.
 
 ⚠️ **`local-path` is node-local and there is no cross-site replication, by
 design** (Longhorn/Ceph over consumer uplinks was rejected as a reliability
