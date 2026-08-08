@@ -11,6 +11,7 @@ import "./paperless";
 import "./homepage";
 import "./unifi";
 import "./homeassistant";
+import "./musicassistant";
 import "./mosquitto";
 import "./timemachine";
 
@@ -18,5 +19,6 @@ export * from "./paperless";
 export * from "./homepage";
 export * from "./unifi";
 export * from "./homeassistant";
+export * from "./musicassistant";
 export * from "./mosquitto";
 export * from "./timemachine";
