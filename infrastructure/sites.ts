@@ -36,14 +36,28 @@ export const sites = {
     /** UDM SE. DHCP is .6-.199, so the pool sits clear of it. */
     pool: "192.168.1.240-192.168.1.250",
     ingressVIP: "192.168.1.240",
+    /** brink-server's native AdGuard. Mirrors networkConfig.sites.brink.adguard. */
+    resolver: "192.168.1.2",
   },
   winkel: {
     zone: "winkel",
     /** FritzBox. DHCP is .20-.200, so the pool sits clear of it. */
     pool: "192.168.178.240-192.168.178.250",
     ingressVIP: "192.168.178.240",
+    /** winkel-pi's native AdGuard. Mirrors networkConfig.sites.winkel.adguard. */
+    resolver: "192.168.178.3",
   },
 } as const;
+
+/**
+ * The DNS zone that resolves differently inside the estate than outside.
+ *
+ * ⚠️ Only the two site AdGuards above apply the split-horizon rewrites. Every
+ * other resolver reachable from these networks — the UDM SE, the FritzBox, and
+ * ionos's roaming AdGuard, which deliberately carries no rewrites — returns the
+ * *public* records, and the public edge is default-closed. See `coredns.ts`.
+ */
+export const SPLIT_HORIZON_ZONE = "mvissing.de";
 
 /**
  * Pinned LoadBalancer addresses.
