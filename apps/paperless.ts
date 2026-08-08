@@ -218,7 +218,7 @@ const gotenbergDeployment = new k8s.apps.v1.Deployment("gotenberg", {
         containers: [
           {
             name: "gotenberg",
-            image: "gotenberg/gotenberg:8.34.0",
+            image: "gotenberg/gotenberg:8.35.0",
             ports: [
               {
                 containerPort: 3000,
