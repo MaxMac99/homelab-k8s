@@ -15,9 +15,9 @@ config:
   k8s-resources:paperless-secret-key:
     secure: v1:OcJAiK6K95xRDsRa:EUMdSXcZe+rqx3qT9uDZOv5nBGk2NcssY1XgTbzXatC/cbUFHPpHLlU=
   k8s-resources:paperless-authentik-client-id:
-    secure: v1:ATzX1Gm3dHzw3IPZ:O2EB03E/cHPB6kuI7s0K0hhiriTXzQXdUflZBu8t6cUN+1WC37urAyL9n+R9TEptg82ZHPvGo+I=
+    secure: v1:HzcrAzemQjg23QCk:KXM5pYpFkRYftiXb5v4Z2sKf9kLsicxcMP0SkkonSZ6jNlE5mkQGyIP0xZ9HTvxO/lg+58p1OVQ=
   k8s-resources:paperless-authentik-client-secret:
-    secure: v1:303ATugfSJAizeiD:XYv9NqeEAzcuieltHZXXZq3GOyitJph/wN9y4/J5V/0hQIs8AmuYx4co6jLCi/IrwZdHNFk5dmmo+5geSGQFulhwQJwJ+tj4Xdw1ssbtNlGaFpNa8eYWPCkLob1IhW9RzGWmzE8Zvzs7ggeOJAYg6Cjnio4XTpwoTfHK1Kuw3gRej/my1KjQ5sDXv71A6vzS
+    secure: v1:HHPWAB1nYqDZ1M/y:EjkM9mPZyckS1xVx61sDQoKGLTLq7Tgys6yVfhowC2c/ka3VdphE+bHamiM0DqXm1b7TJBaNJFkAOitv8KZcnzmHFtT5CPQ8HRzFPvK4mxyjJFl+ATojzNVxYfsKr5RovUSFOWtVGqmZB6GbvKLwuuu7p9LV3TJLP1ryhVoyHVcbQ2Xbm/f9ojKeQG1lpyi/
   k8s-resources:paperless-metrics-api-token:
     secure: v1:eG/rrK0rz70sMgFX:YNWL9hlaQZTKTt+eSXyBnC/Ya6tl2ArQ90D9LW2mVcO0LksPyAIqA5X1TfKd+gZjNO9kAkP8T0w=
   k8s-resources:authentikApiToken:
