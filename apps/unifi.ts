@@ -310,8 +310,39 @@ export { namespace as unifiNamespace, unifiDeployment, unifiService };
 //      then `pulumi up`. (Or set the Override Inform Host in the UI to
 //      http://<EXTERNAL-IP>:8080/inform.)
 //
-// 6. Adopt devices:
-//    Network → Devices → Pending Adoption → Adopt.
+// 6. Adopt devices — ⚠️ the UI will NOT offer them, and here is why.
+//
+//    Restoring the backup brings the devices back into the database with
+//    `adopted: true`, but each one still holds the *old* controller's inform
+//    URL and keeps posting to an address that no longer exists. They therefore
+//    show as offline and never appear under Pending Adoption. On the 2026-08
+//    rebuild the old address was `192.168.178.13` — recoverable only from
+//    `pulumi-stack-pre-multi-site.json`, which Phase 13 deletes, so it is
+//    recorded here.
+//
+//    ⚠️ Waiting for L2 discovery does not help either: this pod is not
+//    `hostNetwork`, so the broadcast a device sends to 255.255.255.255:10001
+//    never reaches it. The `10003/UDP` port on the Service only carries
+//    unicast.
+//
+//    The fix is to re-point each device over SSH. Credentials are in the
+//    restored config under Settings → System → Device SSH Authentication
+//    (in mongo: `db.setting.find({key:"mgmt"})`, fields `x_ssh_username` /
+//    `x_ssh_password`):
+//
+//      ssh <ssh-user>@<device-ip>
+//      set-inform http://192.168.178.243:8080/inform
+//
+//    Devices re-adopt themselves within ~30 s, because the restored backup
+//    still holds their auth keys — no manual adoption step is needed. Verify
+//    by `last_seen` being seconds old, NOT by `adopted`, which the restore
+//    already set to true and which therefore proves nothing:
+//
+//      kubectl exec -n unifi deploy/unifi -- bash -lc 'mongo --quiet \
+//        --port 27117 ace --eval "db.device.find({},{ip:1,last_seen:1,inform_url:1}).forEach(printjson)"'
+//
+//    Do all of this only after step 5 pins the advertised address, or they
+//    will be re-pointed twice.
 //
 // Why this differs from the old deployment:
 // - UOS bundles MongoDB/PostgreSQL/RabbitMQ; the shared databases/mongodb.ts
