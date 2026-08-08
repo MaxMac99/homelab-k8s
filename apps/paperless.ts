@@ -108,6 +108,16 @@ const paperlessDatabase = new k8s.apiextensions.CustomResource(
 // For now, we'll document this as a manual step
 
 // NFS Persistent Volume for media storage (on tank pool)
+//
+// ⚠️ `storageClassName: "nfs"` names no real StorageClass, and that is correct.
+// `kubectl get sc` lists only `local-path`. For a *static* bind the class name
+// is just a matching key between PV and PVC — `volumeName` below does the
+// binding and no provisioner is involved. Time Machine does the same under
+// `nfs-storage`. Do not "fix" this by adding an NFS provisioner.
+//
+// ⚠️ This media survives a cluster rebuild: it lives on `tank`, which the
+// Phase 7 rebuild never touched. Do not restore nfs-paperless-media.tar.gz over
+// a live directory — verify against the DB dump's `filename` column first.
 const paperlessMediaPV = new k8s.core.v1.PersistentVolume(
   "paperless-media-pv",
   {
@@ -498,7 +508,31 @@ const paperlessDeployment = new k8s.apps.v1.Deployment(
                     },
                   },
                 },
-                // Enable auto-login via SSO (optional)
+                // ⚠️ These three together can lock you out of a restored
+                // archive while looking like a completely successful login.
+                //
+                // Authentik's OIDC `sub` is installation-scoped — under the
+                // default sub_mode it is sha256("<user id>-<installation
+                // identifier>") — so every `socialaccount_socialaccount` row in
+                // a restored Paperless dump carries a subject from the *old*
+                // Authentik and can never match a rebuilt one. AUTO_SIGNUP then
+                // creates a brand-new user on first SSO login, owning none of
+                // the documents, while DISABLE_REGULAR_LOGIN removes the way
+                // back — and every user in the dump has a Django *unusable*
+                // password, so there is no local superuser to fall back on.
+                // The result is an empty document list, not an error.
+                //
+                // After restoring a dump beside a rebuilt Authentik, read the
+                // new subject out of Authentik and fix the link *before* the
+                // first login:
+                //
+                //   kubectl exec -n authentik deploy/authentik-server -- \
+                //     ak shell -c "from authentik.core.models import User; \
+                //                  print(User.objects.get(username='Max').uid)"
+                //   UPDATE socialaccount_socialaccount SET uid = '<that>'
+                //    WHERE user_id = <paperless user> AND provider = 'authentik';
+                //
+                // See docs/multi-site-migration.md §10.2 in the `setup` repo.
                 {
                   name: "PAPERLESS_SOCIAL_AUTO_SIGNUP",
                   value: "True",
@@ -711,37 +745,46 @@ export {
 //    d. Note the Client ID and Client Secret
 //
 // 4. Set Pulumi config secrets (before deploying):
-//    cd ~/Git/setup/pulumi/k8s
-//
-//    # Generate a random secret key (or reuse existing one)
+//    # Generate a random secret key (or reuse the existing one)
 //    pulumi config set --secret paperless-secret-key "$(openssl rand -hex 32)"
 //
 //    # Set Authentik OAuth credentials from step 3
 //    pulumi config set --secret paperless-authentik-client-id "YOUR_CLIENT_ID"
 //    pulumi config set --secret paperless-authentik-client-secret "YOUR_CLIENT_SECRET"
 //
-// 5. Deploy with: pulumi up
+// 5. ⚠️ RESTORE THE DATABASE BEFORE THE FIRST DEPLOY. Paperless migrates an
+//    empty database on first start, and the dump then collides with the schema
+//    it created. The CNPG `Database` CR above creates an empty database; load
+//    into that, stripping the dump's own CREATE DATABASE preamble:
 //
-// 6. Restore data from backup:
-//    a. Restore PostgreSQL database:
-//       kubectl cp paperless-backup.sql paperless/paperless-xxx:/tmp/
-//       kubectl exec -it -n paperless paperless-xxx -- bash
-//       psql -h postgres-rw.database.svc.cluster.local -U paperless -d paperless < /tmp/paperless-backup.sql
+//      gzip -dc pg-paperless.sql.gz \
+//        | sed '1,/^\\connect paperless$/d' \
+//        | kubectl exec -i -n database postgres-1 -c postgres -- \
+//            psql -U postgres -d paperless -v ON_ERROR_STOP=1
 //
-//    b. Restore data directory:
-//       kubectl cp data/ paperless/paperless-xxx:/usr/src/paperless/data/
+//    Do NOT load pg-globals.sql.gz — CNPG owns the roles and their passwords.
 //
-//    c. Restore media directory (to NFS on maxdata):
-//       # On maxdata host:
-//       rsync -av media/ /tank/k8s/nfs/paperless-media/
-//       # Fix permissions:
-//       sudo chown -R 1000:1000 /tank/k8s/nfs/paperless-media/
+// 6. Fix the SSO link before the first login (see the block by
+//    PAPERLESS_SOCIAL_AUTO_SIGNUP above — this is the step that silently
+//    strands the archive if skipped).
 //
-// 7. Set up DNS:
-//    Point dms.mvissing.de to ionos public IP (A and AAAA records)
+// 7. Deploy: pulumi up --exclude '**unifi**'      (never --target)
 //
-// 8. Access Paperless at: https://dms.mvissing.de
-//    Login with Authentik SSO
+// 8. Rebuild the search index and classifier — the `data` PVC is empty on a
+//    rebuild, so search returns nothing until this runs. The 149 M
+//    localpath-paperless-data.tar.gz is NOT worth restoring; this is faster.
+//
+//      kubectl exec -n paperless deploy/paperless -c paperless -- document_index reindex
+//      kubectl exec -n paperless deploy/paperless -c paperless -- document_create_classifier
+//
+// 9. Verify by effect, not by pod status:
+//      kubectl get pvc -n paperless      # paperless-media must be Bound
+//      kubectl exec ... -- curl -s localhost:9999/metrics | grep paperless_documents
+//      curl https://dms.mvissing.de/     # without -k; the cert must be real
+//
+// 10. DNS: dms.mvissing.de resolves to the site ingress VIP via AdGuard's
+//     split-horizon rewrite, NOT to the ionos public IP — the public edge is
+//     default-closed and answers 404.
 //
 // Architecture:
 // - Paperless-ngx: Main web application (Django)
@@ -752,4 +795,4 @@ export {
 // - Storage:
 //   * data: Local fast storage (search index, ML models) - 20Gi
 //   * consume: Local fast storage (incoming docs queue) - 10Gi
-//   * media: NFS on tank pool (bulk document archive) - 500Gi
+//   * media: NFS on tank pool (bulk document archive) - 300Gi
