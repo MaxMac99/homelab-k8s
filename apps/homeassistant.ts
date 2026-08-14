@@ -6,7 +6,11 @@
 import * as k8s from "@pulumi/kubernetes";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
-import { onNode, BRINK_SERVER } from "../infrastructure/sites";
+import {
+  onNode,
+  BRINK_SERVER,
+  publicIngressClass,
+} from "../infrastructure/sites";
 
 // Import shared service connection info
 import {
@@ -377,6 +381,30 @@ const homeassistantService = new k8s.core.v1.Service("homeassistant-service", {
   },
 });
 
+// The host rules, shared by the internal and public Ingresses below so the two
+// cannot drift apart.
+const homeassistantIngressRules = [
+  {
+    host: "home.mvissing.de",
+    http: {
+      paths: [
+        {
+          path: "/",
+          pathType: "Prefix" as const,
+          backend: {
+            service: {
+              name: homeassistantService.metadata.name,
+              port: {
+                number: 80,
+              },
+            },
+          },
+        },
+      ],
+    },
+  },
+];
+
 // Ingress for Home Assistant
 const homeassistantIngress = new k8s.networking.v1.Ingress(
   "homeassistant-ingress",
@@ -420,27 +448,64 @@ const homeassistantIngress = new k8s.networking.v1.Ingress(
     },
     spec: {
       ingressClassName: "traefik",
-      rules: [
+      rules: homeassistantIngressRules,
+      tls: [
         {
-          host: "home.mvissing.de",
-          http: {
-            paths: [
-              {
-                path: "/",
-                pathType: "Prefix",
-                backend: {
-                  service: {
-                    name: homeassistantService.metadata.name,
-                    port: {
-                      number: 80,
-                    },
-                  },
-                },
-              },
-            ],
-          },
+          secretName: "homeassistant-tls",
+          hosts: ["home.mvissing.de"],
         },
       ],
+    },
+  },
+);
+
+// Public Ingress for Home Assistant — the same route, served by the
+// internet-facing Traefik on ionos instead of the site-local one.
+//
+// A second Ingress rather than a class change on the one above: split-horizon
+// DNS points *.mvissing.de at the site's own ingress VIP from inside either
+// home, so LAN clients keep reaching Home Assistant over the LAN and only
+// genuinely external clients traverse ionos. Both name the same TLS Secret.
+//
+// ⚠️ **No forward-auth in front of this**, and that is a decision rather than an
+// omission. Home Assistant's own login is the public front door. Putting
+// Authentik's outpost in front would protect the browser UI but break the
+// companion app, `/api/webhook/*` and Cast, all of which authenticate with
+// bearer tokens rather than a browser session cookie. The mitigations that
+// remain are therefore Home Assistant's own: MFA on every account, and the
+// `ip_ban` settings under Settings > System > Network. ⚠️ As of writing
+// `login_attempts_threshold` is -1 there, which means failed logins are counted
+// but *never* result in a ban — accepted deliberately, but it is the one knob
+// to reach for first if this address starts attracting attention.
+//
+// ⚠️ Requests arrive here from `traefik-public`, which runs hostNetwork on
+// ionos and so reaches Home Assistant as 100.64.0.1. That is already inside the
+// `trusted_proxies` list recorded in the setup notes below (100.64.0.0/24), so
+// no Home Assistant-side change is needed — which is fortunate, because per
+// those notes the setting is UI-only and YAML for it is silently ignored.
+//
+// The three annotations the internal Ingress carries and this one must not —
+// the cert-manager issuer, the homepage tiles, and the HTTP→HTTPS redirect —
+// are explained on the equivalent Authentik Ingress in auth/authentik.ts.
+const homeassistantPublicIngress = new k8s.networking.v1.Ingress(
+  "homeassistant-public-ingress",
+  {
+    metadata: {
+      name: "homeassistant-public",
+      namespace: namespace.metadata.name,
+      annotations: {
+        // ⚠️ Required for a second reason here, on top of the one above:
+        // `traefik-public` runs with no Service and with `publishedService`
+        // disabled (infrastructure/traefik-public.ts), so it never writes an
+        // address into `status.loadBalancer` — which is precisely what Pulumi
+        // waits for. Without this the deploy blocks forever.
+        "pulumi.com/skipAwait": "true",
+        "traefik.ingress.kubernetes.io/router.entrypoints": "websecure",
+      },
+    },
+    spec: {
+      ingressClassName: publicIngressClass,
+      rules: homeassistantIngressRules,
       tls: [
         {
           secretName: "homeassistant-tls",
@@ -456,6 +521,7 @@ export {
   homeassistantDeployment,
   homeassistantService,
   homeassistantIngress,
+  homeassistantPublicIngress,
 };
 
 // Setup Instructions:

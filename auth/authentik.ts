@@ -6,7 +6,11 @@ import * as k8s from "@pulumi/kubernetes";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
-import { onNode, BRINK_SERVER } from "../infrastructure/sites";
+import {
+  onNode,
+  BRINK_SERVER,
+  publicIngressClass,
+} from "../infrastructure/sites";
 
 // Import shared service connection info
 import {
@@ -426,6 +430,45 @@ const authentikService = new k8s.core.v1.Service("authentik-service", {
   },
 });
 
+// The host rules, shared by the internal and public Ingresses below so that the
+// two cannot drift apart — in particular the outpost path must keep winning
+// over `/` in both of them.
+const authentikIngressRules = [
+  {
+    host: "auth.mvissing.de",
+    http: {
+      paths: [
+        // Route outpost paths to outpost service (must come first for priority)
+        {
+          path: "/outpost.goauthentik.io",
+          pathType: "Prefix" as const,
+          backend: {
+            service: {
+              name: "authentik-outpost", // Reference by name to avoid circular dependency
+              port: {
+                number: 9000,
+              },
+            },
+          },
+        },
+        // Route all other paths to main Authentik server
+        {
+          path: "/",
+          pathType: "Prefix" as const,
+          backend: {
+            service: {
+              name: authentikService.metadata.name,
+              port: {
+                number: 80,
+              },
+            },
+          },
+        },
+      ],
+    },
+  },
+];
+
 // Ingress for Authentik (using external Traefik on ionos edge node)
 // Routes both main Authentik UI and outpost callback paths
 const authentikIngress = new k8s.networking.v1.Ingress("authentik-ingress", {
@@ -456,41 +499,7 @@ const authentikIngress = new k8s.networking.v1.Ingress("authentik-ingress", {
   },
   spec: {
     ingressClassName: "traefik", // Changed from traefik-external - now using port forwarding on ionos
-    rules: [
-      {
-        host: "auth.mvissing.de",
-        http: {
-          paths: [
-            // Route outpost paths to outpost service (must come first for priority)
-            {
-              path: "/outpost.goauthentik.io",
-              pathType: "Prefix",
-              backend: {
-                service: {
-                  name: "authentik-outpost", // Reference by name to avoid circular dependency
-                  port: {
-                    number: 9000,
-                  },
-                },
-              },
-            },
-            // Route all other paths to main Authentik server
-            {
-              path: "/",
-              pathType: "Prefix",
-              backend: {
-                service: {
-                  name: authentikService.metadata.name,
-                  port: {
-                    number: 80,
-                  },
-                },
-              },
-            },
-          ],
-        },
-      },
-    ],
+    rules: authentikIngressRules,
     tls: [
       {
         secretName: "authentik-tls",
@@ -500,12 +509,65 @@ const authentikIngress = new k8s.networking.v1.Ingress("authentik-ingress", {
   },
 });
 
+// Public Ingress for Authentik — the same routes, served by the internet-facing
+// Traefik on ionos instead of the site-local one.
+//
+// A second Ingress rather than a class change on the one above: split-horizon
+// DNS points *.mvissing.de at the site's own ingress VIP from inside either
+// home, so LAN clients keep reaching Authentik over the LAN and only genuinely
+// external clients traverse ionos. Both Ingresses name the same TLS Secret.
+//
+// ⚠️ Three things this deliberately does *not* copy from the Ingress above:
+//
+//   - `cert-manager.io/cluster-issuer`. That annotation drives ingress-shim,
+//     which would create a *second* Certificate for auth.mvissing.de contending
+//     with the first over the same `authentik-tls` Secret. The internal Ingress
+//     owns issuance; this one only consumes the result.
+//   - the `gethomepage.dev/*` annotations, which would put a duplicate tile on
+//     the dashboard.
+//   - the HTTP→HTTPS redirect, and that omission is load-bearing. The public
+//     Traefik's `web` entrypoint on :80 is what serves cert-manager's HTTP-01
+//     solver Ingresses for *every* certificate in the estate. Redirecting :80
+//     to :443 here would bounce ACME challenges and stop renewal estate-wide
+//     about 30 days later, long after the change that caused it. Plain-HTTP
+//     callers get a 404 instead, which is the cheap half of that trade.
+const authentikPublicIngress = new k8s.networking.v1.Ingress(
+  "authentik-public-ingress",
+  {
+    metadata: {
+      name: "authentik-public",
+      namespace: namespace.metadata.name,
+      annotations: {
+        // ⚠️ Required here even though the internal Ingress does without it.
+        // `traefik-public` runs with no Service and with `publishedService`
+        // disabled (infrastructure/traefik-public.ts), so it never writes an
+        // address into `status.loadBalancer` — and an address appearing there
+        // is precisely what Pulumi waits for. Without this the deploy blocks
+        // forever, on a resource that is only a declaration.
+        "pulumi.com/skipAwait": "true",
+        "traefik.ingress.kubernetes.io/router.entrypoints": "websecure",
+      },
+    },
+    spec: {
+      ingressClassName: publicIngressClass,
+      rules: authentikIngressRules,
+      tls: [
+        {
+          secretName: "authentik-tls",
+          hosts: ["auth.mvissing.de"],
+        },
+      ],
+    },
+  },
+);
+
 export {
   namespace as authentikNamespace,
   authentikServer,
   authentikWorker,
   authentikService,
   authentikIngress,
+  authentikPublicIngress,
 };
 
 // Setup instructions:
