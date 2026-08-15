@@ -12,6 +12,7 @@ import "./ntfy"; // Push notification service
 import "./grafana-database"; // Grafana PostgreSQL database
 import "./grafana"; // Visualization and dashboards (requires all data sources)
 import "./unpoller"; // UniFi metrics exporter for Prometheus
+import "./deadmans-switch"; // External heartbeat to healthchecks.io
 
 // Re-export for external use if needed
 export * from "./namespace";
@@ -22,6 +23,7 @@ export * from "./tempo";
 export * from "./ntfy";
 export * from "./grafana";
 export * from "./unpoller";
+export * from "./deadmans-switch";
 
 // Monitoring Stack Overview:
 //
