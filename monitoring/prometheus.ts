@@ -324,6 +324,54 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
               },
             ],
           },
+          {
+            // Phase 12 (setup repo docs/multi-site-migration.md): "today ZED,
+            // smartd and the hourly zfs-health-check all only write to the
+            // journal". Rather than build a host-level notifier per host,
+            // these query the zfs-prometheus-exporter jobs above
+            // (maxdata-zfs, brink-server-zfs — both already scraped) through
+            // this same Alertmanager -> ntfy pipeline. `zpool_state` and the
+            // `vdev_*_errors_total` counters are one-hot/counter metrics the
+            // exporter already ships; nothing new was deployed to the hosts
+            // for this.
+            name: "zfs",
+            rules: [
+              {
+                // zpool_state is one-hot across every possible state per
+                // pool, so state="online" reading 0 means the pool is
+                // currently in some other state (degraded, faulted, ...).
+                alert: "ZfsPoolNotOnline",
+                expr: 'zpool_state{state="online"} == 0',
+                for: "5m",
+                labels: { severity: "critical" },
+                annotations: {
+                  summary:
+                    "ZFS pool {{ $labels.pool }} on {{ $labels.host }} is not ONLINE",
+                  description:
+                    "Run `zpool status {{ $labels.pool }}` on {{ $labels.host }} to see which vdev is affected.",
+                },
+              },
+              {
+                // Catches errors redundancy has already absorbed, before the
+                // pool itself shows anything wrong — the precursor signal
+                // ZfsPoolNotOnline above cannot see by design.
+                //
+                // `for: 10m` rather than firing immediately: a single exporter
+                // restart can make PromQL's counter-reset handling read as a
+                // spurious `increase` on an otherwise-idle vdev.
+                alert: "ZfsVdevErrors",
+                expr: "increase(vdev_read_errors_total[1h]) > 0 or increase(vdev_write_errors_total[1h]) > 0 or increase(vdev_checksum_errors_total[1h]) > 0",
+                for: "10m",
+                labels: { severity: "warning" },
+                annotations: {
+                  summary:
+                    "ZFS vdev {{ $labels.vdev }} in pool {{ $labels.pool }} on {{ $labels.host }} logged new read/write/checksum errors",
+                  description:
+                    "The pool may still read ONLINE if redundancy absorbed it so far. Run `zpool status -v {{ $labels.pool }}` on {{ $labels.host }} before it does not.",
+                },
+              },
+            ],
+          },
         ],
       },
       "prometheus.yml": {
