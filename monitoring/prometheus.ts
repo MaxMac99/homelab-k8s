@@ -426,6 +426,66 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
             ],
             scrape_interval: "60s",
           },
+          // brink-server and winkel-pi ZFS/smartctl exporters (setup repo,
+          // hosts/nixos/{brink-server,winkel-pi}/monitoring.nix, Phase 12).
+          //
+          // ⚠️ Targets are each host's *overlay* address (100.64.0.x), not its
+          // LAN IP like maxdata above. maxdata's scrape works at its LAN IP
+          // only because the Prometheus pod is itself pinned to maxdata
+          // (nodeSelector above) — same-node traffic, trivially reachable.
+          // brink-server and winkel-pi are different nodes, and maxdata does
+          // not accept their subnet routes (D3/overlay-client.nix: only
+          // subnet routers accept routes), so their LAN IPs are unreachable
+          // from here. The overlay address is always reachable regardless —
+          // that's the mesh's own point-to-point routing, not a subnet route
+          // — which is also why the exporters are firewalled to the overlay
+          // interface only on the NixOS side.
+          {
+            job_name: "brink-server-zfs",
+            static_configs: [
+              {
+                targets: ["100.64.0.2:9134"],
+                labels: {
+                  instance: "brink-server",
+                  host: "brink-server",
+                  role: "storage",
+                  environment: "homelab",
+                  exporter: "zfs",
+                },
+              },
+            ],
+            scrape_interval: "30s",
+          },
+          {
+            job_name: "brink-server-smartctl",
+            static_configs: [
+              {
+                targets: ["100.64.0.2:9116"],
+                labels: {
+                  instance: "brink-server",
+                  host: "brink-server",
+                  role: "storage",
+                  environment: "homelab",
+                },
+              },
+            ],
+            scrape_interval: "60s",
+          },
+          {
+            job_name: "winkel-pi-smartctl",
+            static_configs: [
+              {
+                targets: ["100.64.0.3:9116"],
+                labels: {
+                  instance: "winkel-pi",
+                  host: "winkel-pi",
+                  role: "storage",
+                  environment: "homelab",
+                },
+              },
+            ],
+            scrape_interval: "60s",
+          },
         ],
       },
     },
