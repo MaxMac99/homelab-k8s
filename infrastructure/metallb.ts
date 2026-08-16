@@ -28,6 +28,13 @@ const metallb = new k8s.helm.v3.Release("metallb", {
         metricsPort: 7473,
       },
     },
+    // D5 uses L2 mode only — no BGP anywhere in this estate. The chart
+    // defaults frrk8s.enabled to true regardless, which brings 13 CRDs and a
+    // five-container DaemonSet on every node for a backend nothing uses.
+    // Explicit false so a chart bump can't silently reintroduce it.
+    frrk8s: {
+      enabled: false,
+    },
   },
 });
 
