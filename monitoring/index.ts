@@ -13,6 +13,7 @@ import "./grafana-database"; // Grafana PostgreSQL database
 import "./grafana"; // Visualization and dashboards (requires all data sources)
 import "./unpoller"; // UniFi metrics exporter for Prometheus
 import "./deadmans-switch"; // External heartbeat to healthchecks.io
+import "./blackbox"; // Cross-site ICMP probes (latency, packet loss)
 
 // Re-export for external use if needed
 export * from "./namespace";
@@ -24,6 +25,7 @@ export * from "./ntfy";
 export * from "./grafana";
 export * from "./unpoller";
 export * from "./deadmans-switch";
+export * from "./blackbox";
 
 // Monitoring Stack Overview:
 //

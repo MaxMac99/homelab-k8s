@@ -8,6 +8,7 @@ import * as pulumi from "@pulumi/pulumi";
 import { namespaceName } from "./namespace";
 import { onNode, HOSTNAME_LABEL, MAXDATA } from "../infrastructure/sites";
 import { ntfyAlertTopic, ntfyAlertCredentials } from "./ntfy";
+import { blackboxServiceUrl } from "./blackbox";
 
 // Get Home Assistant Prometheus token from config
 const config = new pulumi.Config();
@@ -533,6 +534,59 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
               },
             ],
             scrape_interval: "60s",
+          },
+          // Cross-site ICMP probes (monitoring/blackbox.ts). blackbox-exporter
+          // itself is pinned to maxdata, so these measure latency/loss *from*
+          // Winkel — winkel-pi is same-LAN (control measurement, not
+          // cross-site), brink-server and ionos are the genuine WAN legs.
+          // Standard blackbox_exporter relabeling: the real target becomes
+          // `__param_target`, and `instance` is set from it before
+          // `__address__` is overwritten with the exporter's own address.
+          {
+            job_name: "blackbox-icmp",
+            metrics_path: "/probe",
+            params: { module: ["icmp"] },
+            static_configs: [
+              {
+                targets: ["100.64.0.2"],
+                labels: {
+                  target_host: "brink-server",
+                  site: "brink",
+                  cross_site: "true",
+                },
+              },
+              {
+                targets: ["100.64.0.1"],
+                labels: {
+                  target_host: "ionos",
+                  site: "public",
+                  cross_site: "true",
+                },
+              },
+              {
+                targets: ["100.64.0.3"],
+                labels: {
+                  target_host: "winkel-pi",
+                  site: "winkel",
+                  cross_site: "false",
+                },
+              },
+            ],
+            relabel_configs: [
+              {
+                source_labels: ["__address__"],
+                target_label: "__param_target",
+              },
+              {
+                source_labels: ["__param_target"],
+                target_label: "instance",
+              },
+              {
+                target_label: "__address__",
+                replacement: blackboxServiceUrl,
+              },
+            ],
+            scrape_interval: "30s",
           },
         ],
       },

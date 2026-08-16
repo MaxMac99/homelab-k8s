@@ -271,6 +271,12 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
           revision: 2,
           datasource: "Loki",
         },
+        // Cross-site ICMP probes (monitoring/blackbox.ts, Phase 12)
+        "blackbox-exporter": {
+          gnetId: 7587, // Prometheus Blackbox Exporter Overview
+          revision: 3,
+          datasource: "Prometheus",
+        },
       },
     },
 
