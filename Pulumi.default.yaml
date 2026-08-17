@@ -1,36 +1,31 @@
-encryptionsalt: v1:6M7SmjRdv/0=:v1:lahUjUqjC328s3Zp:z1KtWCzKwZLouENrLg3XGPijbj7IMQ==
 config:
   k8s-resources:maxPassword:
-    secure: v1:3O7D7U3xVfZASEwv:DZdXEjgJyYY/gmYLBQVrbsv8XUh/pUsrAAIPeQ==
+    secure: AAABAEQp6/XpxDspR7O0AbGvYDybYSuJs//iCC024bzG8AYgj832IEYX7NQ=
   k8s-resources:michaelPassword:
-    secure: v1:zly/CjRipwG1+G4N:WT/ccSwE5g6WOvrTIbWTHnjNBoDviwOs/amoRQ==
+    secure: AAABAOpvup27/zxa8DGtS8EC0zJZ88VHZwWNRBtx1hKIzhkVodBmGNasenA=
   k8s-resources:annaPassword:
-    secure: v1:V1aJeCGXnKCYJoak:j2ZUAHYZXf8oTqAWFjw3M26ublcn15o0r0KGlg==
+    secure: AAABAP4/3FoK+tI34i09n8fX8SNHGFRtfYoJsgDF7HP561NXOB1i1tDmSm4=
   k8s-resources:authentikOutpostToken:
-    secure: v1:LVsNJLpg3iHRO92/:ayzEnfIdHiHW+MIgU8ppB/FxrFXTlBZny+VnvcUr1EjlBdDFR/EUGdGsSePsfeVShdFYTOgNSkqwAyR7J7Tw9/5sQPTLILR6n3JUug==
+    secure: AAABANuXMityy9XDpnbF6VUEmbYlFA3vvLuJL3HmaWsV9/5SH7484v9b34AQwiJA9PGzWuehoEH3EYnmVXwDZpBqQUUAbnIvs7U0bytL65WpBbhf8kGWYXtDYfg=
   k8s-resources:grafana-oauth-client-id:
-    secure: v1:/+TeUTK0BY+HpCdS:IkELHgzQ66b7vwUz0pxbdlY3YuQOCrvbMj8TI/XWcGq6ypD6ng0x+TnqrlFLfue2+SUK2Xth370=
+    secure: AAABAMs7UhjA9DVRcIoxcI419cHtP4rGEZy1gcaD9MY1wTB8ZAN+//fVbewL6v/w94OGLoZlvHLueqzhOYDyg6UEKv8uxPpg
   k8s-resources:grafana-oauth-client-secret:
-    secure: v1:TkVwFLT/6OoSWsOB:PFFQKR3aVigI71ICUJuC2k75kbzKLTx8jPTKJ5DD87rJkrvVl/YZwX9v1qVziXYo3ykvE3St7B7HBvTv3tN8uPI2RQm3Ajs6gdGYRIaO/wfgxATXZmoi8YGt4GPADqI9kDLmNfDnd0f3Wq5kV8klfOCUrlXBpnSeWlQeJ/qhHENTrZHx7SQ5FAbFDffWE938
+    secure: AAABAPVSIRblbEQfV8P5sqpM1lZeufxoPRBEIdliNxNfpM2BYFMbo7rz36fAtx4ur63CKxevI5LXkCJrL2/YGwMpDxaB/hLqX/BkPuuZi5bHg7Y5fki2DTY1cOd0u9a6oN/6kzNr9Yf/CGF+b4DOsfP+85fMGlIpnK4zw0UmMlvK407psiNB5q7C12CPUzMVvybH5BVZ3m5LtLjrTRNwAg==
   k8s-resources:paperless-secret-key:
-    secure: v1:OcJAiK6K95xRDsRa:EUMdSXcZe+rqx3qT9uDZOv5nBGk2NcssY1XgTbzXatC/cbUFHPpHLlU=
+    secure: AAABAPE/xzRrdmA6kHdBUax6+9nFOA5GRKEJPFtsw+ss+WojimsVe9mCOWu3QlXsCV8K+901QGat
   k8s-resources:paperless-authentik-client-id:
-    secure: v1:HzcrAzemQjg23QCk:KXM5pYpFkRYftiXb5v4Z2sKf9kLsicxcMP0SkkonSZ6jNlE5mkQGyIP0xZ9HTvxO/lg+58p1OVQ=
+    secure: AAABADOLt/7p+QvMf+1UcP4FBiJbBbMt+2z6NPkWwFtX8+AgSWMYkWW5jO+w1JNN35p4d/Ht5E7ku8DqIQZdjk+e8Iw3EVbo
   k8s-resources:paperless-authentik-client-secret:
-    secure: v1:HHPWAB1nYqDZ1M/y:EjkM9mPZyckS1xVx61sDQoKGLTLq7Tgys6yVfhowC2c/ka3VdphE+bHamiM0DqXm1b7TJBaNJFkAOitv8KZcnzmHFtT5CPQ8HRzFPvK4mxyjJFl+ATojzNVxYfsKr5RovUSFOWtVGqmZB6GbvKLwuuu7p9LV3TJLP1ryhVoyHVcbQ2Xbm/f9ojKeQG1lpyi/
+    secure: AAABAFKIv6sQYh6GM9QO74o6nFZfcrEUOpugTYwJDYtikHS5vmaytM8A05CwUvZxRGtlI6qd6/kBwJACF2io17jBZByeG8eEmb0KvbBSxWNF5mq2K1fmidDyTvhBp3PFnvfD8OE2dmmPc+PI5/UlfAHeEcDpLYdnuqmq1wk/hdF3VLD2PFksBmNZZDQ8aFo31gIiHBOVrTZquSbWuFt+Ag==
   k8s-resources:paperless-metrics-api-token:
-    secure: v1:eG/rrK0rz70sMgFX:YNWL9hlaQZTKTt+eSXyBnC/Ya6tl2ArQ90D9LW2mVcO0LksPyAIqA5X1TfKd+gZjNO9kAkP8T0w=
+    secure: AAABAMfpCKi7SejoPaEHDs4N0o2+1TYO7s4zd49Mt8fKdSj01+UgPfN2Q0j43kZaviEATXP0HxIbW67U8crb0kYm42BByCaS
   k8s-resources:authentikApiToken:
-    secure: v1:D4h5pMvam0hKRGhr:cMonrYxkfpnYCS1TqzYIqu+r9EWP4pVqV4OtkUs/vqV0C6mSXS5uva985iPdgVaOES04o0/JTju6WuC+7GtuVigliYio4C5qsyjnFg==
-  k8s-resources:proxmox-api-user:
-    secure: v1:pQFwT8WHQTVYDFj+:hyz8m1t/CxeBkLbSfV/lyJ6Pqb4zX1eJrqyNRfRURgmP
-  k8s-resources:proxmox-api-token:
-    secure: v1:qwCWJ4mECIPtHohe:t+tebyLDCgttkV0XwbLy3IxHTL7mdt9cxS5B2t1voUXzB9u7L1MifoZQqOVsVALYISrC3Q==
+    secure: AAABAGS1mRd+gsRHgscAfwdoZrqAZnZokCXSOW3BGz2hSft7/p/iOuxLnyREfuFPaXIpwFPCGizl+puJ6l9gvY/Dq6fn6wFiuNwnNFU7u3yAeqW+yZIfhTHNi58=
   k8s-resources:unpoller-password:
-    secure: v1:JpH3SN5+f+yJjs9o:FAsrueH4ArNMRCOrcyUu+qX/DnTETYPiIHM2GnZ4xsiITeM=
+    secure: AAABAMI+Wyzw4bM9YtQzInFwPkjix0gnhUFC6l/0LisL2lqsNlQXs4nRb7Q8R5lWwwIe
   k8s-resources:homeassistant-prometheus-token:
-    secure: v1:UmF29CSTZkL2smAX:uDaRANSa+754TARg72TX+WcCmiWwbheFiqStzApjeuOmlVgB9DXa0Pha/VZ9AtzNi39y4e6OZJn+KVotWTZe+m2SSGmqrynBOdhvbkRPMnBmpDO/H/1xXRTErlILSu0YitzGTUirWPndpzc6ENPDJ3Uylaabn5a3iTbGNfhMuSNMA8KTMLcsQV+tZfkyxEPOoukV0oXvhEr62qj2JGWFs7+u40vgBMEZPpVOknigK6kTGtK2ssSuYw3y2PlnoLSIm+Sy1j3KGw==
+    secure: AAABAIl6sXs/lXm8jYZ+J7x8d2GvX4qXwWqyaCef9S2Z/RnKT2+MG0ucwi07meNGNw+HMM8efI/13jNLNGfOHkDL/2D9QNEGAvggwwsgnKhPpjNX1hL6agb2VKe2m9cii4ON6pDgmuO6z/c/1XVV067Bxjn2wfO6t6eI597O2ds1s1h3xxrDkpekBQbK1kMG4lz0muyuYNcRB4CeZ5Su8beI8w3wqYd1mflWvX4Wu5G0jEInHshtHlLl/6k8PqF0JWIm1UNoKj73wA9ZARW+vFL8WdFzmGQ=
   k8s-resources:githubPat:
-    secure: v1:Ap9sfBd4rm95XVPD:WNMJHH1TB6FY6rCWHtogjfmXUXvulzhn7F7dQ4e4jWsKupGU/zjsJU1U6K5nRIeGi+TW1JPjBUA=
+    secure: AAABAHkiar7BxB0zi3x9ueiWnEsghrqRYFTUpARqPTayOfCKN13oCjsdBdEwKg2tAzB2PASxwD2dTg4yw0kRlS2yqqmajVGZ
   k8s-resources:deadmans-switch-ping-url:
-    secure: v1:o90of+54G0jyZBmD:Igr7JFvlAr0wW+Vex5soD0GYRisotmFIERV6sgA5M2DZ3iLkGLhpf3Rm2uUYpGnEKdq9E2rxYcUSwSqCdagbVlTrZt7rfpwR
+    secure: AAABABNRfIe5U30avKc5kS8GtCP9y7kyHrfI/QMgNURAfjW/dAtvvWPiCr8N+B3m3q1xpn87g/jnH9IeQoOjTboZWpp+ap/QEpX8gl0PnzZFwsCulm8hRA==

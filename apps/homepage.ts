@@ -11,8 +11,6 @@ import { adminPassword as grafanaAdminPassword } from "../monitoring/grafana";
 const config = new pulumi.Config();
 const authentikApiToken = config.requireSecret("authentikApiToken");
 const paperlessApiToken = config.requireSecret("paperless-metrics-api-token");
-const proxmoxUser = config.requireSecret("proxmox-api-user"); // Format: user@pam!tokenid
-const proxmoxToken = config.requireSecret("proxmox-api-token"); // API token secret
 
 // Create namespace for Homepage
 const homepageNamespace = new k8s.core.v1.Namespace("homepage", {
@@ -26,7 +24,6 @@ const homepageNamespace = new k8s.core.v1.Namespace("homepage", {
 //            User must have permissions: "Can view User" and "Can view Event"
 // Grafana: Uses auto-generated admin password from monitoring/grafana.ts
 // Paperless: Uses the same metrics API token from paperless-metrics-api-token config
-// Proxmox: Create API token in Datacenter -> Permissions -> API Tokens
 const homepageSecrets = new k8s.core.v1.Secret("homepage-secrets", {
   metadata: {
     name: "homepage-secrets",
@@ -37,8 +34,6 @@ const homepageSecrets = new k8s.core.v1.Secret("homepage-secrets", {
     HOMEPAGE_VAR_AUTHENTIK_TOKEN: authentikApiToken,
     HOMEPAGE_VAR_GRAFANA_PASSWORD: grafanaAdminPassword,
     HOMEPAGE_VAR_PAPERLESS_TOKEN: paperlessApiToken,
-    HOMEPAGE_VAR_PROXMOX_USER: proxmoxUser,
-    HOMEPAGE_VAR_PROXMOX_TOKEN: proxmoxToken,
   },
 });
 
@@ -183,26 +178,6 @@ const homepage = new k8s.helm.v3.Chart(
                     url: "http://192.168.178.1",
                     fields: ["connectionStatus", "maxDown", "maxUp"],
                   },
-                },
-              },
-              {
-                Proxmox: {
-                  icon: "proxmox",
-                  href: "https://192.168.178.2:8006",
-                  description: "Hypervisor",
-                  widget: {
-                    type: "proxmox",
-                    url: "https://192.168.178.2:8006",
-                    username: "{{HOMEPAGE_VAR_PROXMOX_USER}}",
-                    password: "{{HOMEPAGE_VAR_PROXMOX_TOKEN}}",
-                  },
-                },
-              },
-              {
-                Cockpit: {
-                  icon: "cockpit",
-                  href: "https://192.168.178.2:9090",
-                  description: "Server Management",
                 },
               },
             ],
