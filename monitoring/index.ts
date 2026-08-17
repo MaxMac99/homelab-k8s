@@ -38,10 +38,9 @@ export * from "./blackbox";
 //   - Alloy: Log collection agent (DaemonSet on all nodes)
 //   - Tempo: Distributed tracing backend (30d retention, 50Gi)
 //   - Grafana: Unified visualization with Authentik OAuth
-//   - Diun: Container image update notifier (checks every 6h)
-//   - Nova: Helm chart update checker (CronJob every 6h)
 //
-// Public endpoints (via traefik-external with Let's Encrypt):
+// Ingress endpoints (internal Traefik, LAN/mesh only — not published to the
+// internet; see CLAUDE.md on traefik-public being default-closed):
 //   - https://grafana.mvissing.de - Main dashboard UI
 //   - https://prometheus.mvissing.de - Prometheus UI (for advanced queries)
 //
@@ -56,11 +55,11 @@ export * from "./blackbox";
 //   - Prometheus: 100Gi (metrics, 1 year retention)
 //   - Loki: 100Gi (logs, 1 year retention)
 //   - Tempo: 50Gi (traces, 30 days retention)
-//   - Grafana: 2Gi (plugins only - dashboards/config in PostgreSQL)
+//   - Grafana: 10Gi (plugins only - dashboards/config in PostgreSQL)
 //   - AlertManager: 5Gi
 //   - PostgreSQL: Shared database (Grafana data stored here)
 //
-// Total storage required: ~257Gi
+// Total storage required: ~265Gi
 //
 // Setup checklist:
 // [ ] Create Authentik OAuth2 provider for Grafana
