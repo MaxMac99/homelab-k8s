@@ -73,10 +73,11 @@ actually broken.
 > single-site one. The three Proxmox x86_64 VMs described here previously
 > (`k3s-node1/2/3`) **no longer exist** — they were microVMs on `maxdata` and
 > were destroyed. See `docs/multi-site-migration.md` in the **`setup`** repo
-> (branch `multi-site`) for the full plan. Phases 0–9 are done and **Phase 10
-> (workloads and bootstrap) is the current work — mostly this repo**. ionos's
-> nginx now owns both `:80` and `:443`, splitting by `Host` and SNI, with
-> Headscale moved to `127.0.0.1:8444`.
+> (branch `multi-site`) for the full plan and decision log. Phases 0–12 and 14
+> are done; **Phase 13 (cleanup) is the only phase not yet started** — mostly
+> `setup`-side (stale docs, dead storage, retiring the old FritzBox WireGuard
+> tunnel). ionos's nginx owns both `:80` and `:443`, splitting by `Host` and
+> SNI, with Headscale moved to `127.0.0.1:8444`.
 >
 > ⚠️ **Nothing is published to the internet, and that is a decision rather than
 > a gap.** `traefik-public` is default-closed, so every public name completes
