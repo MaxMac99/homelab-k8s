@@ -1,183 +1,88 @@
 # Kubernetes Resources via Pulumi
 
-This directory contains Pulumi definitions for Kubernetes resources running on the K3S cluster.
+Pulumi (TypeScript) definitions for everything running on the k3s cluster:
+databases, auth, ingress, monitoring, and user-facing apps. Each application
+is a standalone `.ts` file; `index.ts` is the Pulumi entrypoint.
+
+The cluster itself — k3s, the mesh overlay, sshd, sops, ZFS/NFS/Samba, and DNS
+— is owned by the **`setup`** repo (NixOS, branch `multi-site`). The rule is:
+_NixOS provides only what must exist before the cluster exists; everything
+else is Pulumi._ See `docs/multi-site-migration.md` there for the full
+migration history and decision log.
 
 ## Architecture
 
-```
-Raspberry Pi (pi-network) - NixOS + dnsmasq + K3S agent
-├── dnsmasq (systemd)
-│   ├── DHCP server (port 67)
-│   └── DNS forwarder (port 53) → forwards to 127.0.0.1:5353
-│
-└── K3S agent
-    └── AdGuard pod (hostPort 5353)
-        └── DNS filtering + ad blocking
+Four nodes across three L3 domains and two physical sites, joined by a
+WireGuard mesh overlay (Headscale on ionos, Tailscale clients):
 
-K3S VMs (k3s-node1/2/3) - Proxmox VMs
-├── k3s-node1 (control plane)
-├── k3s-node2 (worker)
-└── k3s-node3 (worker)
-```
+| Node           | Site (`topology.kubernetes.io/zone`) | Arch      | k3s role      | Notes                                               |
+| -------------- | ------------------------------------ | --------- | ------------- | --------------------------------------------------- |
+| `ionos`        | `public`                             | amd64     | server (etcd) | Public VPS. Tainted `edge=true:NoSchedule`          |
+| `brink-server` | `brink`                              | amd64     | server (etcd) | Own apartment. Also the site's DNS + subnet router  |
+| `maxdata`      | `winkel`                             | amd64     | server (etcd) | Parents' house. Bare-metal ZFS, NFS, Samba          |
+| `winkel-pi`    | `winkel`                             | **arm64** | agent         | Raspberry Pi 4. Also the site's DNS + subnet router |
 
-## Files
+Both homes are behind CGNAT/DS-Lite, so the overlay is the only path between
+sites. `local-path` storage is genuinely node-local — every stateful workload
+pins to a node (`infrastructure/sites.ts`), not just a site. MetalLB runs two
+address pools, one per site, in L2 mode with `autoAssign: false`.
 
-- `adguard.ts` - AdGuard Home deployment (runs on Pi with hostPort)
-- Other K8s resources go here
+`traefik-public` on ionos is **default-closed**: nothing is published to the
+internet by accident, and which names get published at all is a deliberate,
+ongoing decision rather than a config gap.
+
+See `CLAUDE.md` for the detailed architecture notes, known traps, and coupling
+points with the `setup` repo.
+
+## File organization
+
+- `infrastructure/` — core cluster services (MetalLB, Traefik ×2, cert-manager, CoreDNS, Reflector, local-path)
+- `databases/` — shared PostgreSQL (CloudNativePG) and Redis
+- `auth/` — Authentik and its outpost
+- `apps/` — user-facing applications (Paperless, Homepage, UniFi, Home Assistant, Mosquitto, Music Assistant, Matter, Time Machine)
+- `monitoring/` — Prometheus, Grafana, Loki, Tempo, Alloy, ntfy, unpoller, blackbox probes, dead-man's switch
+- `index.ts` — orchestrator that imports every module via directory barrel files
+- `Pulumi.default.yaml` — stack config, secrets encrypted under Pulumi Cloud's per-stack managed key
 
 ## Prerequisites
 
-Before deploying:
-
-1. **Create NFS directory on Proxmox:**
-
-   ```bash
-   ssh max@192.168.178.97
-   sudo zfs create tank/k8s/adguard
-   ```
-
-2. **Ensure Pi is in K3S cluster:**
-
-   ```bash
-   kubectl get nodes
-   # Should show pi-k3s
-   ```
-
-3. **Configure Pulumi:**
-   ```bash
-   cd /etc/nixos/pulumi/k8s
-   pulumi stack init prod
-   pulumi config set kubernetes:kubeconfig ~/.kube/config
-   ```
+```bash
+yarn install
+pulumi login          # Pulumi Cloud; ~/.pulumi/credentials.json holds the session
+```
 
 ## Deployment
 
 ```bash
-cd /etc/nixos/pulumi/k8s
-
-# Preview changes
+# Preview infrastructure changes (dry run)
 pulumi preview
 
-# Deploy
+# Deploy all resources
 pulumi up
 
-# Check AdGuard pod
-kubectl get pods -n network-services
-kubectl logs -n network-services -l app=adguard -f
+# Deploy while some apps are down for data restores
+pulumi up --exclude '**timemachine**' --exclude '**unifi**' \
+          --exclude '**paperless**' --exclude '**unpoller**' \
+          --exclude '**tika**' --exclude '**gotenberg**'
 
-# Access AdGuard UI
-# Local: http://192.168.178.10:3000
-# External: https://adguard.yourdomain.com (after DNS/Traefik setup)
+# Tear down all resources
+pulumi down
+
+# Lint / format
+npx eslint .
+npx prettier --check .
 ```
 
-## Testing DNS Flow
+There are no tests — validation happens via `pulumi preview` before deploying.
 
-```bash
-# From Pi (local)
-dig @127.0.0.1 -p 5353 google.com  # Direct to AdGuard
-dig @127.0.0.1 google.com          # Via dnsmasq → AdGuard
+⚠️ **Never use `--target` on this stack — use `--exclude`.** With client-side
+Helm chart rendering, targeting tears the provider connection down mid-render
+and surfaces as `Duplicate resource URN` on an unrelated object. See
+`CLAUDE.md` for the full explanation.
 
-# From client device
-dig @192.168.178.10 google.com     # Client → dnsmasq → AdGuard
+## Storage
 
-# Test ad blocking
-dig @192.168.178.10 doubleclick.net  # Should be blocked
-```
-
-## Architecture Notes
-
-### Why hostPort?
-
-AdGuard uses `hostPort: 5353` which binds the pod directly to the Pi's port 5353 on localhost. This allows:
-
-- **Efficient local forwarding**: dnsmasq forwards to `127.0.0.1:5353` with no network overhead
-- **No NodePort complexity**: Direct access via localhost
-- **Pod pinned to Pi**: Must run on Pi node (intentional design)
-
-### DNS Flow
-
-```
-Client device (192.168.178.X)
-  ↓ DNS query
-Pi:53 (dnsmasq)
-  ↓ Forwards to 127.0.0.1:5353
-Pi:5353 (AdGuard pod via hostPort)
-  ↓ Filters ads, queries upstream
-Internet DNS (1.1.1.1, 8.8.8.8)
-  ↓ Response
-AdGuard → dnsmasq → Client
-```
-
-### Multi-Architecture Cluster
-
-The cluster has both ARM64 (Pi) and x86_64 (VMs) nodes. Workloads need to specify architecture:
-
-```typescript
-// For ARM-only (like AdGuard on Pi)
-nodeSelector: {
-  "kubernetes.io/hostname": "pi-k3s"
-}
-
-// For x86-only
-nodeSelector: {
-  "kubernetes.io/arch": "amd64"
-}
-
-// For multi-arch (most containers)
-// No nodeSelector needed
-```
-
-## Troubleshooting
-
-### AdGuard pod not starting
-
-```bash
-# Check pod status
-kubectl describe pod -n network-services -l app=adguard
-
-# Common issues:
-# 1. NFS mount failed → Check /tank/k8s/adguard exists on Proxmox
-# 2. Port conflict → Port 5353 already in use
-# 3. Node not ready → Check Pi node: kubectl get nodes
-```
-
-### DNS not working
-
-```bash
-# Check dnsmasq on Pi
-ssh max@192.168.178.10
-sudo systemctl status dnsmasq
-sudo journalctl -u dnsmasq -f
-
-# Check if AdGuard is responding
-dig @127.0.0.1 -p 5353 google.com
-
-# Check from client
-dig @192.168.178.10 google.com
-```
-
-### Can't access AdGuard UI
-
-```bash
-# Local access (from Pi)
-curl http://localhost:3000
-
-# External access (from network)
-curl http://192.168.178.10:3000
-
-# Via Traefik (requires ingress setup)
-curl https://adguard.yourdomain.com
-```
-
-## Updates
-
-Update AdGuard image:
-
-```bash
-# Edit adguard.ts, change image tag
-# Then redeploy
-pulumi up
-
-# Or force pod recreation
-kubectl rollout restart deployment/adguard -n network-services
-```
+`local-path` for databases and node-local app state; NFS (served by
+`maxdata`) for bulk data like Paperless media and Time Machine. Neither is
+cross-site replicated — see `CLAUDE.md` for why that's a deliberate choice,
+not an oversight.
