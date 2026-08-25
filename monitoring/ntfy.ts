@@ -109,6 +109,12 @@ const ntfyAlertPassword = new random.RandomPassword(
 // rather than inlined — the alertmanager subchart renders its config into a
 // plain ConfigMap, so an inline password would be readable by anything with
 // ConfigMap access in this namespace.
+// Also consumed by Grafana's unified alerting (`monitoring/grafana.ts`), which
+// needs the value rather than a file: the Grafana chart's `envRenderSecret`
+// renders it into a Secret of its own, so it still never reaches a ConfigMap.
+export const ntfyAlertUsername = ntfyAlertUser;
+export const ntfyAlertPasswordValue = ntfyAlertPassword.result;
+
 export const ntfyAlertCredentials = new k8s.core.v1.Secret(
   "ntfy-alertmanager-credentials",
   {
