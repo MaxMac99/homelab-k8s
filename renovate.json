@@ -14,6 +14,15 @@
   "platformAutomerge": true,
   "packageRules": [
     {
+      "description": "Keep both Postgres clusters on the same major.minor. postgres-winkel runs the tensorchord VectorChord operand image and postgres runs the community one; docs/immich-migration.md 3.1 requires they match, and pg_dump is forward-compatible only.",
+      "matchDatasources": ["docker"],
+      "groupName": "postgres operand images",
+      "matchPackageNames": [
+        "ghcr.io/cloudnative-pg/postgresql",
+        "ghcr.io/tensorchord/cloudnative-vectorchord"
+      ]
+    },
+    {
       "description": "Auto-merge patch updates",
       "matchUpdateTypes": ["patch"],
       "automerge": true

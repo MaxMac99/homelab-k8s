@@ -10,9 +10,9 @@ import * as random from "@pulumi/random";
 
 // Import shared service connection info
 import {
-  postgresqlHost,
   postgresqlNamespace,
-  postgresqlClusterName,
+  postgresWinkelHost,
+  postgresWinkelClusterName,
 } from "../databases/postgresql";
 import { redisHost } from "../databases/redis";
 import { onNode, winkelSite, MAXDATA } from "../infrastructure/sites";
@@ -83,29 +83,33 @@ const metricsTokenSecret = new k8s.core.v1.Secret("paperless-metrics-token", {
   },
 });
 
-// Declaratively create Paperless database using CloudNativePG
+// Declaratively manage the Paperless database on the Winkel cluster.
+//
+// ⚠️ Named `paperless-winkel-db`, not `paperless-db`: `Database.spec.cluster`
+// is immutable ("cluster reference is immutable after creation"), so the move
+// to another cluster is a new object plus removal of the old one rather than an
+// edit. The database itself arrives via `postgres-winkel`'s bootstrap import;
+// this adopts it. The old CR going away does not drop the Brink copy — its
+// reclaim policy is `retain`, deliberately, so a rollback exists.
 const paperlessDatabase = new k8s.apiextensions.CustomResource(
-  "paperless-database",
+  "paperless-database-winkel",
   {
     apiVersion: "postgresql.cnpg.io/v1",
     kind: "Database",
     metadata: {
-      name: "paperless-db",
+      name: "paperless-winkel-db",
       namespace: postgresqlNamespace,
     },
     spec: {
       name: "paperless",
       owner: "paperless",
       cluster: {
-        name: postgresqlClusterName,
+        name: postgresWinkelClusterName,
       },
+      databaseReclaimPolicy: "retain",
     },
   },
 );
-
-// Update PostgreSQL cluster to add paperless role
-// Note: This should be added to postgresql.ts managed.roles array
-// For now, we'll document this as a manual step
 
 // NFS Persistent Volume for media storage (on tank pool)
 //
@@ -401,7 +405,7 @@ const paperlessDeployment = new k8s.apps.v1.Deployment(
                 // Database configuration
                 {
                   name: "PAPERLESS_DBHOST",
-                  value: postgresqlHost,
+                  value: postgresWinkelHost,
                 },
                 {
                   name: "PAPERLESS_DBNAME",

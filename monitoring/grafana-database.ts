@@ -4,30 +4,43 @@
 
 import * as k8s from "@pulumi/kubernetes";
 import {
-  postgresqlHost,
   postgresqlNamespace,
-  postgresqlClusterName,
+  postgresWinkelHost,
+  postgresWinkelClusterName,
   grafanaDbPassword,
 } from "../databases/postgresql";
 import { namespaceName } from "./namespace";
 
-// Declaratively create Grafana database using CloudNativePG
-// Uses the 'grafana' user created via declarative role management
+// Declaratively manage the Grafana database on the Winkel cluster.
+//
+// ⚠️ The Kubernetes object is named `grafana-winkel-db`, not `grafana-db`, and
+// that is forced rather than stylistic: `Database.spec.cluster` carries a CEL
+// validation of `self == oldSelf` ("cluster reference is immutable after
+// creation"). Repointing the existing `grafana-db` at another cluster is
+// rejected by the API server, so the move is a new object plus removal of the
+// old one, not an edit.
+//
+// ⚠️ The database itself is created by `postgres-winkel`'s bootstrap import,
+// not by this CR — this adopts it and keeps it declaratively managed. The old
+// `grafana-db` CR disappearing does *not* drop the database on the Brink
+// cluster: its reclaim policy is `retain`, which is what leaves a rollback copy
+// in place until Phase B's dumps are proven.
 const grafanaDatabase = new k8s.apiextensions.CustomResource(
-  "grafana-database",
+  "grafana-database-winkel",
   {
     apiVersion: "postgresql.cnpg.io/v1",
     kind: "Database",
     metadata: {
-      name: "grafana-db",
+      name: "grafana-winkel-db",
       namespace: postgresqlNamespace,
     },
     spec: {
       name: "grafana",
       owner: "grafana", // Use per-app user from declarative role management
       cluster: {
-        name: postgresqlClusterName,
+        name: postgresWinkelClusterName,
       },
+      databaseReclaimPolicy: "retain",
     },
   },
 );
@@ -47,7 +60,7 @@ const postgresSecret = new k8s.core.v1.Secret("postgres-grafana-secret", {
 });
 
 // Export database connection details for Grafana
-export const grafanaDatabaseHost = postgresqlHost;
+export const grafanaDatabaseHost = postgresWinkelHost;
 export const grafanaDatabaseName = "grafana";
 export const grafanaDatabaseUser = "grafana";
 export const grafanaDatabaseSecretName = postgresSecret.metadata.name;
@@ -55,7 +68,7 @@ export const grafanaDatabaseSecretName = postgresSecret.metadata.name;
 export { grafanaDatabase, postgresSecret };
 
 // PostgreSQL connection info for Grafana:
-//   Host: postgres-rw.database.svc.cluster.local
+//   Host: postgres-winkel-rw.database.svc.cluster.local
 //   Port: 5432
 //   Database: grafana
 //   Username: grafana (from secret postgres-grafana)
