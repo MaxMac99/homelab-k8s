@@ -121,7 +121,18 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
       ],
     },
 
-    // AlertManager - for handling alerts (optional, can be disabled initially)
+    // AlertManager.
+    //
+    // ⚠️ **Kept deliberately after Phase C, not left behind.** The plan asked
+    // whether it should stay once the rules moved to Grafana; it stays, but its
+    // job is now exactly one rule — see `alerting-watchdog` in serverFiles
+    // below. Grafana's alerting cannot watch Grafana, so something without a
+    // dependency on Grafana's database has to.
+    //
+    // ⚠️ An Alertmanager with nothing routed to it would be the same trap as
+    // the `default-receiver` and the dead `pushgateway` key: healthy-looking
+    // and doing nothing. If the watchdog rule above is ever removed, remove
+    // this too rather than leaving it running empty.
     alertmanager: {
       enabled: true,
       // ⚠️ `persistence`, not `persistentVolume`. Alertmanager is a *subchart*
@@ -281,107 +292,51 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
       // another month, then everything expires at once, long after whatever
       // caused it. That is precisely the shape of failure a monitoring stack
       // is for, and the one it could not previously report.
+      // Alert rules.
+      //
+      // ⚠️ **Almost everything that used to live here now lives in Grafana**
+      // (`monitoring/grafana.ts`, Phase C). Certificates, public ingress and
+      // ZFS were ported there so the estate has one alerting system rather
+      // than two. Do not add application alerts here; add them to Grafana.
+      //
+      // What remains is the one rule that *cannot* live in Grafana, for a
+      // reason worth stating plainly:
+      //
+      //   Grafana's unified alerting keeps its rules, its evaluation state and
+      //   its notification history in Grafana's own database — which is now
+      //   `postgres-winkel` on maxdata. So Grafana cannot alert on Grafana
+      //   being down, and it cannot reliably alert on its own database being
+      //   down either. Left alone, that is circular: `PostgresBackupStale`, the
+      //   alert about the databases, is hosted by something that needs a
+      //   database to run.
+      //
+      // Prometheus and Alertmanager have no such dependency — they hold rules
+      // in a ConfigMap and state on local disk. Keeping this single rule here
+      // means the two systems watch each other.
+      //
+      // ⚠️ This is *not* redundancy against losing maxdata. Prometheus,
+      // Alertmanager, Grafana and ntfy all run there, so a maxdata outage
+      // silences all of it. `monitoring/deadmans-switch.ts` is what covers
+      // that case, deliberately unpinned and reporting to a third party.
       "alerting_rules.yml": {
         groups: [
           {
-            name: "certificates",
+            name: "alerting-watchdog",
             rules: [
               {
-                // cert-manager renews at 30 days remaining by default. Below
-                // 21 days means renewal has already been failing for over a
-                // week, which is unambiguous — but still leaves three weeks to
-                // act, so this is urgent without being an emergency.
-                alert: "CertificateExpiringSoon",
-                expr: "(certmanager_certificate_expiration_timestamp_seconds - time()) / 86400 < 21",
-                for: "1h",
-                labels: { severity: "critical" },
-                annotations: {
-                  summary:
-                    'Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in {{ $value | printf "%.0f" }} days',
-                  description:
-                    "Renewal should have happened at 30 days and has not. Check the public ingress path on ionos: nginx on :80 and the traefik-public pod must be reachable from the internet for HTTP-01 to validate.",
-                },
-              },
-              {
-                // Catches a failing issuance long before expiry matters —
-                // including a brand-new certificate that never issued at all.
-                alert: "CertificateNotReady",
-                expr: 'certmanager_certificate_ready_status{condition="False"} == 1',
-                for: "1h",
-                labels: { severity: "warning" },
-                annotations: {
-                  summary:
-                    "Certificate {{ $labels.namespace }}/{{ $labels.name }} has not been ready for an hour",
-                  description:
-                    "Check `kubectl describe certificate` and any Order/Challenge in that namespace.",
-                },
-              },
-            ],
-          },
-          {
-            name: "public-ingress",
-            rules: [
-              {
-                // The ACME path has no other alarm on it. ionos is tainted and
-                // holds exactly one replica, so zero available means no
-                // certificate in the estate can issue or renew.
-                alert: "PublicIngressDown",
-                expr: 'kube_deployment_status_replicas_available{deployment="traefik-public"} == 0',
-                for: "15m",
-                labels: { severity: "critical" },
-                annotations: {
-                  summary:
-                    "The public Traefik on ionos has no available replica",
-                  description:
-                    "ACME HTTP-01 challenges cannot be served. Certificates will not renew, and nothing else will report this until they start expiring in ~30 days.",
-                },
-              },
-            ],
-          },
-          {
-            // Phase 12 (setup repo docs/multi-site-migration.md): "today ZED,
-            // smartd and the hourly zfs-health-check all only write to the
-            // journal". Rather than build a host-level notifier per host,
-            // these query the zfs-prometheus-exporter jobs above
-            // (maxdata-zfs, brink-server-zfs — both already scraped) through
-            // this same Alertmanager -> ntfy pipeline. `zpool_state` and the
-            // `vdev_*_errors_total` counters are one-hot/counter metrics the
-            // exporter already ships; nothing new was deployed to the hosts
-            // for this.
-            name: "zfs",
-            rules: [
-              {
-                // zpool_state is one-hot across every possible state per
-                // pool, so state="online" reading 0 means the pool is
-                // currently in some other state (degraded, faulted, ...).
-                alert: "ZfsPoolNotOnline",
-                expr: 'zpool_state{state="online"} == 0',
-                for: "5m",
-                labels: { severity: "critical" },
-                annotations: {
-                  summary:
-                    "ZFS pool {{ $labels.pool }} on {{ $labels.host }} is not ONLINE",
-                  description:
-                    "Run `zpool status {{ $labels.pool }}` on {{ $labels.host }} to see which vdev is affected.",
-                },
-              },
-              {
-                // Catches errors redundancy has already absorbed, before the
-                // pool itself shows anything wrong — the precursor signal
-                // ZfsPoolNotOnline above cannot see by design.
-                //
-                // `for: 10m` rather than firing immediately: a single exporter
-                // restart can make PromQL's counter-reset handling read as a
-                // spurious `increase` on an otherwise-idle vdev.
-                alert: "ZfsVdevErrors",
-                expr: "increase(vdev_read_errors_total[1h]) > 0 or increase(vdev_write_errors_total[1h]) > 0 or increase(vdev_checksum_errors_total[1h]) > 0",
+                // 10m rather than something tighter: Grafana legitimately
+                // restarts on any config change, and this must not page for a
+                // rollout. Long enough to ignore a rollout, short enough that a
+                // silent alerting stack is caught the same day.
+                alert: "GrafanaAlertingDown",
+                expr: 'kube_deployment_status_replicas_available{deployment="grafana"} == 0',
                 for: "10m",
-                labels: { severity: "warning" },
+                labels: { severity: "critical" },
                 annotations: {
                   summary:
-                    "ZFS vdev {{ $labels.vdev }} in pool {{ $labels.pool }} on {{ $labels.host }} logged new read/write/checksum errors",
+                    "Grafana has no available replica — unified alerting is not evaluating",
                   description:
-                    "The pool may still read ONLINE if redundancy absorbed it so far. Run `zpool status -v {{ $labels.pool }}` on {{ $labels.host }} before it does not.",
+                    "Every alert in the estate except this one is evaluated by Grafana, so while this fires nothing else can report anything. Grafana depends on postgres-winkel; check that cluster first, then `kubectl -n monitoring logs deploy/grafana`.",
                 },
               },
             ],

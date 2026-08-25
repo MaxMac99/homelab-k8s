@@ -156,25 +156,6 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
         opts.ignoreChanges = opts.ignoreChanges || [];
         opts.ignoreChanges.push("rules");
       }
-
-      // ⚠️ pulumi-kubernetes treats a change to a ConfigMap's `data` as
-      // requiring *replacement*, not an update — it is how it forces consumers
-      // to roll. Chart-rendered objects have fixed names from the template, so
-      // they cannot be auto-suffixed the way Pulumi-authored ones are, and the
-      // default create-before-delete then collides with the live object:
-      //
-      //   create replacement ... creation failed: configmaps "grafana" already exists
-      //
-      // This is the same trap CLAUDE.md records for local-path's ConfigMap,
-      // which is auto-named precisely to dodge it. Here the name belongs to the
-      // chart, so the fix is the other direction: delete first.
-      //
-      // Safe for this object specifically — it holds `grafana.ini`, rendered
-      // wholly from the values above, and the Deployment rolls immediately
-      // after. Nothing reads it between the delete and the create.
-      if (obj.kind === "ConfigMap") {
-        opts.deleteBeforeReplace = true;
-      }
     },
   ],
   values: {

@@ -1,7 +1,7 @@
 # Immich migration plan
 
-Status: **Phases A and B complete, deployed and verified 2026-08-24.** Next up
-is Phase C (alerting). Written 2026-08-22, amended the same day after the PG18
+Status: **Phases A, B and C complete, deployed and verified 2026-08-25.** Next
+up is Phase D (`apps/immich.ts`). Written 2026-08-22, amended the same day after the PG18
 VectorChord finding collapsed the plan from three Postgres clusters to two
 (§3.1). Written 2026-08-22, amended 2026-08-22 after
 the PG18 VectorChord finding collapsed the plan from three Postgres clusters to
@@ -409,29 +409,71 @@ plausibly 5–20 GB. Re-check dump duration once populated.
 
 ### Phase C — Alerting moves to Grafana
 
-Per decision: **Grafana unified alerting, delivering to ntfy**, and the existing
-Prometheus rules migrate there rather than two systems coexisting.
+✅ **Done 2026-08-25.** Grafana unified alerting delivers to ntfy; the estate has
+one alerting system rather than two.
 
-1. **Inventory first.** Enumerate every `alert:` rule currently in
-   `monitoring/prometheus.ts` — this was not captured during planning, so do not
-   work from memory. Note `CertificateExpiringSoon` is called out in `CLAUDE.md`
-   as load-bearing (it is what catches ACME renewal breaking ~30 days after the
-   change that caused it).
-2. **Provision Grafana alerting.** ⚠️ Grafana currently has **no provisioned
-   alerting, contact points or notification policies** — this is new
-   configuration in `monitoring/grafana.ts`, not a one-line change. ntfy is
-   already deployed (`monitoring/ntfy.ts`, on maxdata) and is the existing
-   Alertmanager sink; reuse that topic.
-3. **Port the rules**, verify each fires, then remove them from Prometheus.
-   Alertmanager's role shrinks — decide whether it stays.
-4. **New alert: backup age.** The Phase B CronJob pushes a completion timestamp
-   to the existing Pushgateway; Grafana alerts if any database's last successful
-   dump is >36 h old.
+**C1 — inventory.** Five rules existed, all in `monitoring/prometheus.ts`:
+`CertificateExpiringSoon`, `CertificateNotReady`, `PublicIngressDown`,
+`ZfsPoolNotOnline`, `ZfsVdevErrors`.
 
-⚠️ Grafana runs on maxdata and alerts on maxdata's own health. A maxdata outage
-silences the alerting that would report it. The `deadmans-switch` CronJob
-(`monitoring/deadmans-switch.ts`, deliberately unpinned) is the existing
-mitigation — make sure the move does not orphan it.
+**C2 — provisioned.** `monitoring/grafana.ts` now provisions `contactpoints.yaml`,
+`policies.yaml` and `rules.yaml`. Four traps, each of which cost a failed render
+or a crash loop:
+
+- The chart pipes the whole `alerting` tree through Helm's `tpl`, so a literal
+  `{{ $labels.namespace }}` is evaluated as a _Helm_ template and the render
+  dies with `undefined variable "$labels"`. `escapeHelm()` wraps them.
+- Provisioning files take a bare `$NTFY_PASSWORD`; `$__env{...}` is
+  **grafana.ini's** syntax and is not interchangeable. The wrong one sends the
+  literal string and fails 401 at delivery time only.
+- `envRenderSecret`, not `env` — the chart renders `env` into a plain ConfigMap.
+- ntfy's `grafana` template is a **different built-in** from the `alertmanager`
+  one; payload shapes differ and mixing them fails outright.
+- ⚠️ The Prometheus datasource now pins `uid: prometheus`. Rules reference a
+  datasource by uid, and an unpinned one gets a name-derived hash. **Changing a
+  provisioned datasource's uid crash-loops Grafana** with
+  `Datasource provisioning error: data source not found` until the old
+  datasource is deleted — a one-time migration, not needed on a fresh cluster.
+
+**C3 — Prometheus rules removed, and Alertmanager _stays_**, closing that open
+item. Its job is now exactly one rule, `GrafanaAlertingDown`:
+
+> Grafana's unified alerting keeps rules, evaluation state and notification
+> history in Grafana's own database — `postgres-winkel` on maxdata. So Grafana
+> cannot alert on Grafana being down, nor reliably on its own database being
+> down. Left alone that is circular: `PostgresBackupStale`, the alert _about_ the
+> databases, would be hosted by something that needs a database to run.
+> Prometheus and Alertmanager have no such dependency.
+
+⚠️ **This is not redundancy against losing maxdata** — Prometheus, Alertmanager,
+Grafana and ntfy all run there. `monitoring/deadmans-switch.ts` covers that case
+and is deliberately unpinned.
+
+**C4 — `PostgresBackupStale`.** Reads the timestamp `databases/backup.ts` pushes
+to the Pushgateway from a container that only runs if the dump succeeded. Alerts
+if any database's last successful dump is >36 h old.
+
+⚠️ **It alerts on _no data_, unlike every other rule.** For the ported rules an
+absent series means the thing is not deployed; here it means no backup has ever
+succeeded, or the Pushgateway lost state. A missing backup must never be
+indistinguishable from a healthy one — that is the exact silence the broken
+replica hid behind for three days.
+
+⚠️ **The Pushgateway was not actually enabled by config.** `prometheus.ts` said
+`pushgateway: { enabled: false }`, but the subchart is keyed
+`prometheus-pushgateway`; Helm ignored the unknown key and it ran on its own
+default for 12 days. Same trap already documented for `prometheus-node-exporter`.
+It is now explicitly `enabled: true`, because this alert depends on it.
+
+**Verification.** All six Grafana rules report `health: ok` against live data, and
+a temporary always-firing probe rule delivered through the _stored_ contact point
+— ntfy logged `Received message` from Grafana's pod IP as user `alertmanager`.
+The probe was then deleted.
+
+⚠️ **Not verified: that each ported rule fires on its real condition.** That would
+mean expiring a certificate, taking the public ingress down and degrading a ZFS
+pool. What was checked is that each evaluates without error against real data and
+that the delivery path works.
 
 ### Phase D — `apps/immich.ts`
 
@@ -573,11 +615,13 @@ Phase B.
 
 - ~~**Superuser vs not** for Immich's database role (Phase A1).~~ **Closed
   2026-08-22: no superuser**, via declarative `Database.extensions`. See Phase A1.
-- **Whether Alertmanager stays** once the rules move to Grafana (Phase C3).
+- ~~**Whether Alertmanager stays** once the rules move to Grafana (Phase C3).~~
+  **Closed 2026-08-25: it stays**, running exactly one rule — the watchdog on
+  Grafana itself. See Phase C3.
 - ~~**A PG18 vchord extension image** in CNPG image-volume format.~~ **Closed
   2026-08-22: found, and better than expected.** Both a PG18 image-volume
   extension (`vchord-scratch:pg18-v1.1.1`) _and_ a full PG18.4 operand image
   (`cloudnative-vectorchord:18.4-1.1.1`) now exist. The estate is two clusters,
   not three. See §3.1.
-- The **Prometheus alert inventory** was never captured; Phase C1 must do it
-  from the source rather than from memory.
+- ~~The **Prometheus alert inventory** was never captured.~~ **Closed
+  2026-08-25**, captured from source in C1: five rules, all listed above.
