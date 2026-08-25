@@ -7,6 +7,8 @@
 
 import "./postgresql";
 import "./redis";
+import "./backup";
 
 export * from "./postgresql";
 export * from "./redis";
+export * from "./backup";
