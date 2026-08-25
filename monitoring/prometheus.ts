@@ -206,9 +206,22 @@ const prometheus = new k8s.helm.v3.Chart("prometheus", {
       },
     },
 
-    // Pushgateway - for short-lived jobs (optional, disable if not needed)
-    pushgateway: {
-      enabled: false,
+    // Pushgateway - for short-lived jobs.
+    //
+    // ⚠️ The subchart is keyed `prometheus-pushgateway`, not `pushgateway` —
+    // the same trap as `prometheus-node-exporter` below. This block previously
+    // read `pushgateway: { enabled: false }`, which is an unknown key: Helm
+    // silently ignored it and the subchart ran on its own default the whole
+    // time. The config said the Pushgateway was off while it was serving
+    // traffic, which is the worst of both.
+    //
+    // It is now genuinely wanted rather than merely tolerated:
+    // `databases/backup.ts` pushes a completion timestamp here after every
+    // nightly dump, and the backup-age alert reads it. Turning this off breaks
+    // that alert *silently* — a missing series looks the same as a series that
+    // has not fired.
+    "prometheus-pushgateway": {
+      enabled: true,
     },
 
     // Node Exporter - collects node-level metrics
