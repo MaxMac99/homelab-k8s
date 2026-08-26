@@ -114,6 +114,22 @@ const ntfyAlertPassword = new random.RandomPassword(
   {
     length: 40,
     special: false,
+    // Rotation handle. Changing any value here regenerates the password —
+    // that is the whole mechanism, since Pulumi has no `taint` and this repo
+    // does not use `--target`.
+    //
+    // ⚠️ Rotating is not just a `pulumi up`. The new value reaches both Secrets
+    // immediately and Grafana picks it up on its next start, but **ntfy itself
+    // only applies `ntfy user change-pass` when its init container re-runs**,
+    // which a Secret change alone does not trigger. Restart the ntfy Deployment
+    // as part of the rotation, or Grafana holds a credential the server has
+    // never heard of and every publish 401s with nothing else looking wrong.
+    keepers: {
+      // 2026-08-25: the previous value had been written in plaintext to ntfy's
+      // own trace-level logs (see log-level above), which Alloy had already
+      // shipped to Loki.
+      rotated: "2026-08-25-trace-log-leak",
+    },
   },
 );
 
@@ -121,11 +137,43 @@ const ntfyAlertPassword = new random.RandomPassword(
 // rather than inlined — the alertmanager subchart renders its config into a
 // plain ConfigMap, so an inline password would be readable by anything with
 // ConfigMap access in this namespace.
-// Also consumed by Grafana's unified alerting (`monitoring/grafana.ts`), which
-// needs the value rather than a file: the Grafana chart's `envRenderSecret`
-// renders it into a Secret of its own, so it still never reaches a ConfigMap.
 export const ntfyAlertUsername = ntfyAlertUser;
-export const ntfyAlertPasswordValue = ntfyAlertPassword.result;
+
+/**
+ * The same credential, shaped for Grafana's unified alerting.
+ *
+ * ⚠️ A Secret of its own, referenced by *name*, rather than the value passed
+ * into the Grafana chart's values. That is not stylistic — it is what keeps the
+ * credential rotatable.
+ *
+ * `k8s.helm.v3.Chart` renders client-side at preview time, and a chart whose
+ * values contain an *unknown* cannot be rendered: Pulumi reports
+ * `[Can't preview] all chart values must be known ahead of time` and plans to
+ * **delete every resource in the chart**. Passing this password by value did
+ * exactly that — regenerating it made the value unknown, and a routine rotation
+ * previewed as deleting Grafana's Deployment, Service, Ingress and RBAC.
+ *
+ * A name is a constant, so it is always known and the chart always renders.
+ *
+ * ⚠️ The key is the *env var name* — `envFromSecrets` maps every key in this
+ * Secret to an environment variable, so it must hold this one key and nothing
+ * else. Adding `username` here would export a stray `username` variable into
+ * the Grafana container.
+ */
+export const GRAFANA_NTFY_SECRET_NAME = "grafana-ntfy";
+
+export const grafanaNtfyCredentials = new k8s.core.v1.Secret(
+  "grafana-ntfy-credentials",
+  {
+    metadata: {
+      name: GRAFANA_NTFY_SECRET_NAME,
+      namespace: namespaceName,
+    },
+    stringData: {
+      NTFY_PASSWORD: ntfyAlertPassword.result,
+    },
+  },
+);
 
 export const ntfyAlertCredentials = new k8s.core.v1.Secret(
   "ntfy-alertmanager-credentials",

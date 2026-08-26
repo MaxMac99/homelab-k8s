@@ -15,7 +15,7 @@ import { tempoQueryUrl } from "./tempo";
 import {
   ntfyAlertTopic,
   ntfyAlertUsername,
-  ntfyAlertPasswordValue,
+  GRAFANA_NTFY_SECRET_NAME,
 } from "./ntfy";
 import {
   grafanaDatabaseHost,
@@ -177,12 +177,21 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
     // Environment variables for database connection
     envFromSecret: grafanaDatabaseSecretName,
 
-    // ⚠️ `envRenderSecret`, not `env`. The chart renders `env` into a plain
-    // ConfigMap; this key renders into a Secret. The ntfy publishing credential
-    // is referenced as `$NTFY_PASSWORD` by the contact point below.
-    envRenderSecret: {
-      NTFY_PASSWORD: ntfyAlertPasswordValue,
-    },
+    // The ntfy publishing credential, referenced as `$NTFY_PASSWORD` by the
+    // contact point below.
+    //
+    // ⚠️ By *name*, via a Secret built in `./ntfy`, rather than by value via
+    // `envRenderSecret`. The chart renders client-side at preview time, so a
+    // values tree containing an unknown cannot be rendered at all — Pulumi
+    // reports `[Can't preview] all chart values must be known ahead of time`
+    // and plans to **delete every resource in this chart**. Passing the
+    // password by value did precisely that: rotating it previewed as deleting
+    // Grafana's Deployment, Service, Ingress and RBAC. A name is constant, so
+    // the chart always renders.
+    //
+    // ⚠️ `env` is not an option either — the chart renders that into a plain
+    // ConfigMap.
+    envFromSecrets: [{ name: GRAFANA_NTFY_SECRET_NAME }],
 
     // Additional environment variables
     env: {
