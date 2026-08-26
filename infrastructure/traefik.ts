@@ -114,6 +114,26 @@ const traefik = new k8s.helm.v3.Chart(
               "app.kubernetes.io/instance": "traefik-traefik",
             },
           },
+          // ⚠️ **Without this, no change to this chart can ever roll out.**
+          // The selector above matches every Traefik pod regardless of
+          // revision, so during a RollingUpdate the two *old* pods already
+          // occupy Brink and Winkel — and the surge pod would make one zone
+          // hold 2 against ionos's 0, a skew of 2. `DoNotSchedule` then leaves
+          // it Pending forever while the old ReplicaSet stays up, so the
+          // deploy reports success, the pods keep serving, and the new values
+          // are silently never applied.
+          //
+          // Observed 2026-08-26: the `readTimeout` change below previewed and
+          // applied cleanly, `traefik-565d9fd4b8-jv8z9` sat Pending with
+          // `didn't match pod topology spread constraints`, and both live pods
+          // were still running the old configuration.
+          //
+          // `matchLabelKeys` scopes the spread calculation to pods sharing the
+          // incoming pod's `pod-template-hash`, so a rollout is measured
+          // against its own revision only. The steady-state guarantee is
+          // unchanged: once the new ReplicaSet holds both replicas they must
+          // still sit in different zones.
+          matchLabelKeys: ["pod-template-hash"],
         },
       ],
       // Logs configuration - JSON format for Loki/Grafana
@@ -142,6 +162,31 @@ const traefik = new k8s.helm.v3.Chart(
         insecure: true, // Allow internal access on port 9000 for Homepage widget
       },
       // Configure entry points
+      // ⚠️ **Without this, Traefik can never roll.** The chart defaults to
+      // `maxSurge: 1, maxUnavailable: 0`, which needs a *third* pod to exist
+      // briefly — and the `DoNotSchedule` topology spread below caps each zone
+      // at one, so that third pod is unschedulable and sits Pending forever.
+      //
+      // ⚠️ The failure is silent in the worst way: the Deployment spec updates,
+      // `pulumi up` reports success, and the **old pods keep serving the old
+      // configuration indefinitely**. Any Traefik change made before this was
+      // fixed may therefore never have taken effect. Found 2026-08-26 while
+      // raising `readTimeout` below — the new pod had been Pending for ten
+      // minutes and the running pods were still on the previous ReplicaSet.
+      //
+      // Replacing in place instead means one site briefly has no Traefik pod,
+      // and with `externalTrafficPolicy: Local` that site's VIP stops being
+      // announced for those seconds. That is a real if short outage — but it is
+      // the honest cost of one replica per site, and strictly better than a
+      // rollout that cannot happen at all.
+      updateStrategy: {
+        type: "RollingUpdate",
+        rollingUpdate: {
+          maxUnavailable: 1,
+          maxSurge: 0,
+        },
+      },
+
       ports: {
         web: {
           port: 80,
@@ -165,6 +210,32 @@ const traefik = new k8s.helm.v3.Chart(
           expose: {
             default: true,
             brink: true,
+          },
+          // ⚠️ Traefik's default `readTimeout` is **60 s**, and it covers
+          // "reading the entire request, *including the body*" — so it is not a
+          // header timeout, it is a cap on how long any upload may take.
+          // Anything slower than ~100 MB/min is killed mid-stream and the
+          // client sees a 504, or a 499 once it gives up.
+          //
+          // That is not hypothetical: importing 2015 into Immich failed on
+          // every GoPro clip over ~400 MB with `Gateway Timeout`, while the
+          // JPEGs beside them succeeded. It also crashed the uploader outright,
+          // because undici throws `ReadableStream is already closed` when the
+          // proxy hangs up mid-body.
+          //
+          // ⚠️ Photo and video uploads make this a normal path, not an edge
+          // case — a phone sending a 4K clip over a slow uplink hits the same
+          // wall. One hour is generous enough for a multi-GB file on a bad
+          // connection while still being finite, so a wedged connection is
+          // eventually reaped.
+          //
+          // `idleTimeout` is left at its 180 s default: it governs idle
+          // keep-alive connections *between* requests, not a body being
+          // actively streamed, so it was never part of this failure.
+          transport: {
+            respondingTimeouts: {
+              readTimeout: "1h",
+            },
           },
         },
         // Traefik dashboard/API port.
