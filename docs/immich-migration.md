@@ -1,6 +1,8 @@
 # Immich migration plan
 
-Status: **Phases A–F complete, deployed and verified 2026-08-26.** Immich runs at
+Status: **Phases A–G complete, deployed and verified 2026-08-26.** Next is
+Phase H, the full import — whose runbook must use `-A "<event>"` per folder, not
+`-a`. Immich runs at
 `photos.mvissing.de` with an empty library, storage template and transcode policy
 locked in, and Authentik OIDC wired up. ⚠️ **Remaining before any import: Max
 must log in once via Authentik to create the admin account** (`isInitialized` is
@@ -652,35 +654,60 @@ which is now a `pulumi up` rather than a UI toggle.
 
 ### Phase G — Pilot import
 
-Import **one year only** (e.g. `2015/`). Measure upload throughput, thumbnail
-rate, ML embedding rate, transcode rate. Extrapolate before committing.
+✅ **Done 2026-08-26.** `2015/` imported: 69 GB, 1,593 files on disk, **1,574
+assets** — a complete reconciliation, nothing missing. The 19-file gap is 10
+`.DS_Store`, 7 `.aae` (both auto-skipped by the CLI, which filters against the
+server's supported media types) and **2 macOS AppleDouble sidecars** (`._*`,
+magic `00051607`) that are not images at all. All 9 event albums created with
+correct counts.
 
-This step is not optional. Total is **~170k assets** across all three sources
-with CPU-only ML; whether the full pass is 2 days or 3 weeks on maxdata is
-genuinely unknown, and finding out here is far cheaper than finding out halfway
-through.
+**Measured rates:**
 
-**Phase 0 — ✅ done 2026-08-26.** Recursive snapshots taken on maxdata:
+|                   |                                                |
+| ----------------- | ---------------------------------------------: |
+| Upload            |              69 GB in 65.4 min → **17.6 MB/s** |
+| ML (faces + CLIP) | 1,494 assets in 65.1 min → **22.9 assets/min** |
 
-```
-tank/daten-familie@pre-immich-import-2026-08-26   0B  refer 1.46T
-tank/data@pre-immich-import-2026-08-26            0B  refer 1.69T
-```
+ML finished four seconds after upload did — it kept exact pace and was never the
+bottleneck on this set.
 
-Instant and near-zero space, as expected, and they make every later local
-operation reversible. Nothing before Phase G touches photo data.
+⚠️ **That parity does not survive scaling, and the answer to this phase's
+question is ~5 days.** The 2015 set averages 44 MB/asset (video-heavy); the full
+estate averages ~12 MB/asset. Upload gets ~3.7× faster per asset, ML does not:
 
-⚠️ **Sanoid will not prune these.** Its autoprune only recognises its own
-`autosnap_*_{hourly,daily,monthly}` naming — the same property that let syncoid's
-markers accumulate unpruned in Phase 11. That is what we want here, but it also
-means **nothing removes them automatically**: Phase K step 3 has to.
+- Upload — 2.1 TiB at 17.6 MB/s ≈ **35 hours**
+- ML — 170,000 ÷ 22.9/min ≈ **5.2 days**
 
-⚠️ **Deleting `backup_old_drive` in Phase K will not free space while these
-snapshots exist.** `tank/data` is 1.69 TiB and the snapshot pins every block of
-it, so the ~1.7 TiB reclaim only lands once the snapshot is destroyed. That is
-why Phase K destroys them _last_ rather than first — but it does mean the free
-space does not appear at step 2, which is easy to misread as the delete having
-failed.
+So the full import is **ML-bound**, not upload-bound. Faster uploads will not
+move it; only ML concurrency would.
+
+⚠️ **The plan's disk budget is 10–20× too pessimistic.** Derivatives came to
+403 MB thumbs + 297 MB encoded-video = **1.0% of originals**, not the 10–20%
+budgeted. For 2.1 TiB that is ~21 GB, not 200–400 GB, so peak `tank` usage lands
+far below the projected 5.5–6 TiB.
+
+⚠️ **`--album` is wrong for this tree; use `-A` per event folder.** The CLI names
+albums `path.basename(path.dirname(filepath))` — the _immediate_ parent — and
+**938 of 942 event folders are nested**, so `-a` would have produced thousands of
+albums called `HERO4 Black` and `150702` and lost the curation entirely. The
+working form is a loop over event folders passing `--album-name "$ev"`.
+
+**Storage template verified on real data**: `/data/library/admin/2015/IAA/09-20/
+NIKON D300/DSC_9545.jpg`. Umlauts survive (`Pröbstingsee Bilderrahmen`), 0 assets
+needed the `Other` album fallback, 84 used `Unknown` for a missing camera model.
+⚠️ The year segment comes from each photo's EXIF, not the source folder, so a New
+Year trip legitimately splits across `2015/` and `2016/`.
+
+⚠️ **Data quality, not a bug: 843 of 1,574 assets (54%) file under `01-01`.**
+They all carry a real EXIF `dateTimeOriginal` of 2015-01-01 with incrementing
+times — a GoPro whose clock reset when its battery died. The source folder says
+`150702`. The template is faithfully reflecting the camera; fixing it means bulk
+date-editing in Immich, and it does not affect album curation.
+
+**Three infrastructure faults surfaced here**, all fixed and all of which would
+have been far more expensive at 170k assets — which is exactly what this phase
+was for. See the Traefik `readTimeout` and rollout-deadlock commits, and the
+workers-pod `IMMICH_CONFIG_FILE` commit.
 
 ### Phase H — Full import
 
