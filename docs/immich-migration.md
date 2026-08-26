@@ -1,10 +1,11 @@
 # Immich migration plan
 
-Status: **Phases A–D and F complete, deployed and verified 2026-08-26.** Immich
-is running at `photos.mvissing.de` with an empty library, the storage template
-and transcode policy locked in. Remaining before any import: **Phase E**
-(Authentik OIDC) and the account creation at the end of Phase F. Then Phase 0's
-ZFS snapshots and the Phase G pilot. Written 2026-08-22, amended the same day after the PG18
+Status: **Phases A–F complete, deployed and verified 2026-08-26.** Immich runs at
+`photos.mvissing.de` with an empty library, storage template and transcode policy
+locked in, and Authentik OIDC wired up. ⚠️ **Remaining before any import: Max
+must log in once via Authentik to create the admin account** (`isInitialized` is
+still false, and the first login becomes owner). Then Phase 0's ZFS snapshots and
+the Phase G pilot. Written 2026-08-22, amended the same day after the PG18
 VectorChord finding collapsed the plan from three Postgres clusters to two
 (§3.1). Written 2026-08-22, amended 2026-08-22 after
 the PG18 VectorChord finding collapsed the plan from three Postgres clusters to
@@ -530,19 +531,49 @@ as the Helm release timing out with pods Pending.
 
 ### Phase E — Authentik OIDC
 
-- OAuth2/OpenID provider + application. Issuer
-  `https://auth.mvissing.de/application/o/immich/`.
-- Redirect URIs: the web login and user-settings paths **plus**
-  `app.immich:///oauth-callback` for mobile.
-- **`immich-users` group + application policy binding** — not in the group,
-  can't reach the app, never gets created. That is the "default false" switch;
-  adding someone to the group provisions them.
-- **`immich_role` property mapping** returning `admin` for Max, `user`
-  otherwise.
-- ⚠️ **Claims are applied at user creation only and never re-synced.** Getting
-  Max's role wrong on first login means fixing it in the Immich UI afterwards.
-- ⚠️ **Keep local password login enabled** until OIDC is verified end to end.
-- Optional: `immich_quota` claim for per-person storage limits.
+✅ **Done 2026-08-26**, created through Authentik's REST API and wired into
+`apps/immich.ts`.
+
+| Object          | Value                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------- |
+| OAuth2 provider | `Immich` (pk 7), confidential, `sub_mode: hashed_user_id`, `issuer_mode: per_provider` |
+| Application     | slug `immich`, launch `https://photos.mvissing.de`                                     |
+| Group           | `immich-users` (Max is the only member)                                                |
+| Policy binding  | `immich-users` → the application                                                       |
+| Scope mapping   | `immich_role` — `admin` for members of `admins`, else `user`                           |
+
+Flows and signing key copied from the existing Grafana/Paperless providers so all
+four match. Redirect URIs: `/auth/login`, `/user-settings`, and
+`app.immich:///oauth-callback` for mobile.
+
+⚠️ **`immich_role` is a custom scope and had to be requested explicitly.** The
+default scope list is `openid email profile`; without adding it the claim is
+simply absent and everyone silently becomes a regular user. Verified through the
+application's discovery document, which lists `immich_role` in
+`scopes_supported`, and from inside the Immich pod — which reaches
+`https://auth.mvissing.de/application/o/immich/` and gets the right issuer back.
+
+⚠️ **The provider is not captured by this repo.** This estate has no Authentik
+blueprints; Grafana and Paperless work the same way. Only the client credentials
+live in the stack config, so an Authentik rebuild means recreating all of this by
+hand.
+
+⚠️ The config now renders to a **Secret**, not the chart's default ConfigMap
+(`configurationKind: "Secret"`) — the OIDC client secret is part of it.
+
+⚠️ **Local password login stays enabled**, deliberately, until an OIDC login has
+actually been observed to work.
+
+⚠️ **Found on the way:** the `authentikApiToken` in the stack config had not
+existed in Authentik's database since the 2026-08-07 rebuild — Authentik held
+exactly one token, the outpost's. **Homepage's Authentik widget had therefore
+been silently dead for ~19 days**, showing nothing rather than erroring.
+Replacing the token fixed both that and this phase.
+
+**Outstanding, and it is a browser action:** Immich reports
+`isInitialized: false`, meaning no account exists yet. ⚠️ **The first user to log
+in becomes the owner/admin**, so Max must log in via Authentik _before_ anyone
+else is added to `immich-users`.
 
 ### Phase F — Configure before importing a single file
 

@@ -9,9 +9,24 @@
 // solvers.
 
 import * as k8s from "@pulumi/kubernetes";
+import * as pulumi from "@pulumi/pulumi";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import { onNode, MAXDATA } from "../infrastructure/sites";
 import { postgresWinkelHost, immichDatabase } from "../databases/postgresql";
+
+const config = new pulumi.Config();
+
+/**
+ * Authentik OIDC credentials for the `immich` application.
+ *
+ * ⚠️ Created through Authentik's API, not declared here — this repo has no
+ * Authentik blueprints, and Grafana and Paperless work the same way: the
+ * provider lives in Authentik, only the resulting credentials live in the
+ * stack's encrypted config. That means the provider itself is **not** captured
+ * by this repo and would have to be rebuilt by hand after an Authentik rebuild.
+ */
+const oauthClientId = config.requireSecret("immich-oauth-client-id");
+const oauthClientSecret = config.requireSecret("immich-oauth-client-secret");
 
 const namespace = new k8s.core.v1.Namespace("immich", {
   metadata: { name: "immich" },
@@ -232,6 +247,12 @@ const immich = new k8s.helm.v3.Release(
           library: { existingClaim: libraryPVC.metadata.name },
         },
 
+        // ⚠️ `Secret`, not the chart's default `ConfigMap`. The OIDC client
+        // secret below is part of this configuration, and the default would
+        // render the whole thing — credential included — into a plain ConfigMap
+        // readable by anything with ConfigMap access in this namespace.
+        configurationKind: "Secret",
+
         // -------------------------------------------------------------------
         // Phase F — settled *before* a single file is imported.
         //
@@ -301,6 +322,48 @@ const immich = new k8s.helm.v3.Release(
             // `Transcode Video / All` once nothing competes with it — and that
             // is a `pulumi up` here, not a UI toggle.
             transcode: "disabled",
+          },
+
+          // -----------------------------------------------------------------
+          // Phase E — OIDC via Authentik.
+          //
+          // ⚠️ **Provisioning is default-off, and the switch is the
+          // `immich-users` group**, not anything in this file. The Authentik
+          // application has a policy binding to that group, so a user who is
+          // not a member cannot reach the app and is therefore never created in
+          // Immich. Adding someone to the group provisions them on first login.
+          //
+          // ⚠️ `immich_role` is a *custom scope*, so it has to be requested
+          // explicitly — the default scope list is `openid email profile` and
+          // the claim would simply be absent, silently making everyone a
+          // regular user. Verified: Authentik's discovery document for this
+          // application lists `immich_role` in `scopes_supported`.
+          //
+          // ⚠️ Claims are applied **at user creation only and never
+          // re-synced**. Getting Max's role wrong on first login means fixing
+          // it in the Immich UI afterwards, not by editing this.
+          // -----------------------------------------------------------------
+          oauth: {
+            enabled: true,
+            issuerUrl: "https://auth.mvissing.de/application/o/immich/",
+            clientId: oauthClientId,
+            clientSecret: oauthClientSecret,
+            scope: "openid email profile immich_role",
+            roleClaim: "immich_role",
+            storageLabelClaim: "preferred_username",
+            buttonText: "Login with Authentik",
+            autoRegister: true,
+            // Deliberately false: the local login form stays reachable, which
+            // is the escape hatch if OIDC breaks.
+            autoLaunch: false,
+          },
+
+          // ⚠️ Local password login stays enabled until OIDC is verified end to
+          // end. Disabling it before a successful Authentik login has been
+          // observed would lock everyone out of a fresh instance with no admin
+          // account — including the account that would fix it.
+          passwordLogin: {
+            enabled: true,
           },
         },
       },

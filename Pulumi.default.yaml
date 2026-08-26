@@ -20,7 +20,7 @@ config:
   k8s-resources:paperless-metrics-api-token:
     secure: AAABAMfpCKi7SejoPaEHDs4N0o2+1TYO7s4zd49Mt8fKdSj01+UgPfN2Q0j43kZaviEATXP0HxIbW67U8crb0kYm42BByCaS
   k8s-resources:authentikApiToken:
-    secure: AAABAGS1mRd+gsRHgscAfwdoZrqAZnZokCXSOW3BGz2hSft7/p/iOuxLnyREfuFPaXIpwFPCGizl+puJ6l9gvY/Dq6fn6wFiuNwnNFU7u3yAeqW+yZIfhTHNi58=
+    secure: AAABAKF863fI6WquUAKeUi3eNLViO6OR2OUgiwDBDmXTlie28K3SGN7WFzJBgpZAt5yVuI4OmtopFHjyL5hDWTIReRxgABRWMudAnt+8+71di6z++ATX2pJp4d4=
   k8s-resources:unpoller-password:
     secure: AAABAMI+Wyzw4bM9YtQzInFwPkjix0gnhUFC6l/0LisL2lqsNlQXs4nRb7Q8R5lWwwIe
   k8s-resources:homeassistant-prometheus-token:
@@ -29,3 +29,7 @@ config:
     secure: AAABAHkiar7BxB0zi3x9ueiWnEsghrqRYFTUpARqPTayOfCKN13oCjsdBdEwKg2tAzB2PASxwD2dTg4yw0kRlS2yqqmajVGZ
   k8s-resources:deadmans-switch-ping-url:
     secure: AAABABNRfIe5U30avKc5kS8GtCP9y7kyHrfI/QMgNURAfjW/dAtvvWPiCr8N+B3m3q1xpn87g/jnH9IeQoOjTboZWpp+ap/QEpX8gl0PnzZFwsCulm8hRA==
+  k8s-resources:immich-oauth-client-id:
+    secure: AAABAJVh7W7br3zZr/baDdr/QVssMDDYdFcn1Sa0MeojPPd5l1fHOZsu9Br23aa2ZsZbXrxOc1rVpM/A21VIXEZ0CmwtcqL/
+  k8s-resources:immich-oauth-client-secret:
+    secure: AAABAJvvQR3eHBEsm2S++py0cyDM+YilSpXobDHIv866x5uxbpp5bRM3SixTNq7GSuh4YIkGIC7PoIX9WS13+fYSjvbWDzueM1wG3gxjkjWcbI39bBIGDLMF44GlkzpgxviTwThyiuRdRLrkePEoXSJaxh7qibGXLnfHHs0brZ/8bngLQZdKCT3PE/poLzod4pMiWBvcYsjJNJGPBmrrKQ==
