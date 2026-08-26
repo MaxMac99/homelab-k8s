@@ -87,10 +87,19 @@ irreversibly**. This was accepted deliberately — "just the originals".
 
 ### Space
 
-`tank` has **7.18 TiB free**. Deduped working set ~2.1 TiB of originals, plus
-thumbnails and transcodes (Immich's docs say budget 10–20% of library size),
-while the ~3.1 TiB of sources still exists. Peak ≈ 5.5–6 TiB. It fits, but the
-transcode policy is what keeps it from getting tight — see Phase F.
+`tank` has **7.18 TiB free**. Deduped working set ~2.1 TiB of originals, while
+the ~3.1 TiB of sources still exists.
+
+⚠️ **The derivative budget here was wrong by an order of magnitude.** This said
+"thumbnails and transcodes, Immich's docs say 10–20% of library size", giving a
+peak of 5.5–6 TiB. Measured on the Phase G pilot: **1.0%** — 403 MB of
+thumbnails and 297 MB of encoded video for 69 GB of originals. Extrapolated,
+that is ~21 GB across the library rather than 200–400 GB, and peak usage lands
+near **5.2 TiB**, comfortably clear.
+
+⚠️ The transcode policy still matters, but for **time**, not space — it is the
+difference between a five-day import and a multi-week one (Phase G). Space was
+never the binding constraint it looked like.
 
 ### Hetzner is not a usable backup, and not an import source
 
@@ -713,19 +722,94 @@ workers-pod `IMMICH_CONFIG_FILE` commit.
 Order matters: the first import of a given file wins, and hash dedupe silently
 drops later identical copies. So the curated tree goes first.
 
-1. `/tank/daten-familie/Bilder` — `--album` per event folder
+1. `/tank/daten-familie/Bilder` — 1.4 TiB, minus the 69 GB already imported
 2. `/tank/data/backup_old_drive`, **excluding the two bundles** — ~839 GiB
-   auto-skipped, ~622 GiB lands as new
+   auto-skipped by hash, ~622 GiB lands as new
 3. The two `Masters/` trees — 14,538 files, 108 GiB
 
-Exclude `.DS_Store`, `.aae`, `.scr` throughout. **Run the CLI on maxdata** so it
-reads locally rather than over NFS. `--dry-run` first on each.
+**Budget ~5 days**, ML-bound (Phase G). Run it under `tmux`; an SSH drop
+otherwise kills the loop.
+
+⚠️ **Use `-A "<event>"`, never `-a`.** The CLI names albums
+`path.basename(path.dirname(filepath))` — the _immediate_ parent — and 938 of
+942 event folders are nested, so `-a` yields thousands of albums called
+`HERO4 Black` and `150702` and loses the curation entirely. For step 1 the tree
+is `Year/Event/...`, so the loop is two deep:
+
+```bash
+cd /tank/daten-familie/Bilder
+for y in */; do
+  for d in "$y"*/; do
+    ev="$(basename "$d")"
+    immich upload --recursive --album-name "$ev" "$d"
+  done
+done
+```
+
+⚠️ **Event names repeat across years** (`Wolkenstein` appears in 2015 and 2016).
+`--album-name` matches an existing album by name, so those merge into one album
+spanning years. Decide before running: prefix with the year (`"$ev ($(basename
+"$y"))"`) if they should stay separate.
+
+⚠️ **Step 2's tree is not the same shape** and its loop cannot be copied from
+step 1 — `backup_old_drive` has `" Kopie"` suffixes scattered through it and the
+two bundle directories to exclude. Inspect its top two levels and write the loop
+against what is actually there.
+
+**Exclusions are mostly automatic.** The CLI filters against the server's
+supported media types, so `.DS_Store`, `.aae`, `.scr` and macOS AppleDouble
+sidecars (`._*`) are skipped without being named. An `--ignore` pattern is
+harmless belt-and-braces; `--ignore '**/{.DS_Store,*.scr}'` parses correctly.
+⚠️ `.psd` **is** supported and will import as a real asset.
+
+**Where to point the CLI.** `immich login https://photos.mvissing.de/api <KEY>`
+works, but every byte then crosses maxdata → Winkel Traefik (**on winkel-pi, a
+Raspberry Pi 4**) → back to maxdata, measured at 17.6 MB/s. For a multi-TiB run
+prefer the ClusterIP, which removes both the proxy and the Pi:
+
+```bash
+immich login http://10.43.3.193:2283/api <KEY>
+```
+
+⚠️ It is only faster, not necessary — the Traefik path no longer _fails_, now
+that `readTimeout` is 1h (it was 60s, and killed every upload over ~100 MB).
+
+**Verify each step before committing to it:** `--dry-run` first, and check the
+count against `find <dir> -type f | wc -l` minus the skipped classes above. On
+the pilot that reconciled exactly, which is the only reason we knew nothing was
+silently dropped.
+
+**While it runs**, watch that the storage template is actually being applied —
+this is the failure that cost the pilot a full re-run:
+
+```bash
+kubectl exec -n database postgres-winkel-1 -c postgres -- psql -d immich -tAc \
+  "select count(*) filter (where \"originalPath\" like '/data/upload/%') from asset"
+```
+
+⚠️ **Anything other than a small, falling number means assets are landing under
+UUID names again.** Stop and fix before continuing, rather than migrating 2 TB
+afterwards.
 
 ### Phase I — Dedupe review
 
 Wait for ML jobs to drain, then work the duplicates utility. Byte-identical
 duplicates never appear here — they were rejected at upload. This queue is only
 the visually-similar ones.
+
+**"Drained" is checkable rather than a guess** — the per-stage columns are on
+`asset_job_status`:
+
+```sql
+select (select count(*) from asset where "deletedAt" is null)              as total,
+       (select count(*) from asset_job_status where "facesRecognizedAt"    is not null) as faces,
+       (select count(*) from asset_job_status where "duplicatesDetectedAt" is not null) as dupes,
+       (select count(*) from smart_search)                                  as embeddings;
+```
+
+⚠️ **Videos lag images by a long way.** At the end of the pilot every one of the
+1,370 images was processed while 80 of 204 videos were still queued, with no
+errors — normal, but it means "images are done" is not "the queue is empty".
 
 ### Phase J — Reconciliation gate
 
@@ -736,6 +820,35 @@ duplicate. Anything unaccounted for gets investigated, not assumed.
 **Nothing is deleted until this passes.** `backup_old_drive` is the only
 surviving copy of some of this material.
 
+⚠️ **Four classes of file are legitimately absent and must be subtracted before
+the numbers can mean anything.** The pilot's raw count was 1,593 files against
+1,574 assets, and every one of the 19 was expected:
+
+| Class             | In pilot | Why absent                                                                                      |
+| ----------------- | -------: | ----------------------------------------------------------------------------------------------- |
+| `.DS_Store`       |       10 | not a supported media type                                                                      |
+| `.aae`            |        7 | Apple edit sidecar, not media                                                                   |
+| `._*` AppleDouble |        2 | macOS resource forks — magic `00051607`, **not images at all** despite `.jpg`/`.psd` extensions |
+| `.scr`            |   0 here | not media                                                                                       |
+
+⚠️ **The AppleDouble ones are the trap.** They carry real media extensions, so a
+naive extension-based count treats them as missing photos. Match on the `._`
+prefix or the file magic, not the extension.
+
+A filename-level check is enough to _find_ a discrepancy and was what proved the
+pilot complete:
+
+```bash
+psql -d immich -tAc 'select "originalFileName" from asset where "deletedAt" is null' | sort > /tmp/uploaded
+find <src> -type f ! -name '.DS_Store' ! -iname '*.aae' ! -name '._*' -printf '%f\n' | sort > /tmp/source
+comm -23 /tmp/source /tmp/uploaded
+```
+
+⚠️ But filenames are **not** sufficient as the gate. Duplicate basenames across
+folders collide, and the point of this phase is proving content is present.
+Checksums are the real test — Immich stores one per asset, and the CLI already
+hashes locally, so compare those.
+
 ### Phase K — Reclaim and offsite
 
 1. Hetzner offsite working and **verified by a test restore** — for the Immich
@@ -744,25 +857,53 @@ surviving copy of some of this material.
    survives.
 2. Then delete `backup_old_drive`.
 3. Destroy the Phase 0 snapshots **last**.
-4. Optionally re-run `Transcode Video / All` now that nothing competes with it.
+4. Re-run `Transcode Video / All` now that nothing competes with it — this is a
+   `pulumi up` on `ffmpeg.transcode` in `apps/immich.ts`, not a UI toggle, since
+   the configuration is file-managed.
 
 ⚠️ 2 TB to a Hetzner **Storage Box** is SFTP/WebDAV — a different product from
 Hetzner Object Storage, so CNPG's native S3 backup does not apply. rclone, as
 Phase B.
 
----
+⚠️ **Step 2 will appear not to work.** The Phase 0 snapshot pins every block of
+`tank/data`, so deleting `backup_old_drive` frees nothing until step 3 destroys
+it. That is why the order is what it is — but the missing ~1.7 TiB reads exactly
+like a failed delete.
+
+⚠️ **The space this phase reclaims is smaller than the plan assumed, and the
+peak it was protecting against never arrives.** Measured on the pilot,
+derivatives are **1.0%** of originals (403 MB thumbs + 297 MB encoded-video for
+69 GB), not the 10–20% budgeted in §1 — roughly 21 GB across the whole library
+rather than 200–400 GB. Peak `tank` usage therefore lands far below the
+projected 5.5–6 TiB, and the transcode policy is much less load-bearing for
+_space_ than it is for _time_.
 
 ## 5. Open items
 
 - ~~**Superuser vs not** for Immich's database role (Phase A1).~~ **Closed
-  2026-08-22: no superuser**, via declarative `Database.extensions`. See Phase A1.
-- ~~**Whether Alertmanager stays** once the rules move to Grafana (Phase C3).~~
-  **Closed 2026-08-25: it stays**, running exactly one rule — the watchdog on
-  Grafana itself. See Phase C3.
-- ~~**A PG18 vchord extension image** in CNPG image-volume format.~~ **Closed
-  2026-08-22: found, and better than expected.** Both a PG18 image-volume
-  extension (`vchord-scratch:pg18-v1.1.1`) _and_ a full PG18.4 operand image
-  (`cloudnative-vectorchord:18.4-1.1.1`) now exist. The estate is two clusters,
-  not three. See §3.1.
-- ~~The **Prometheus alert inventory** was never captured.~~ **Closed
-  2026-08-25**, captured from source in C1: five rules, all listed above.
+  2026-08-22: no superuser**, via declarative `Database.extensions`.
+- ~~**Whether Alertmanager stays** once the rules move to Grafana.~~ **Closed
+  2026-08-25: it stays**, running one rule — the watchdog on Grafana itself.
+- ~~**A PG18 vchord extension image.**~~ **Closed 2026-08-22: found.** Two
+  clusters, not three. See §3.1.
+- ~~The **Prometheus alert inventory**.~~ **Closed 2026-08-25**, captured from
+  source: five rules, all ported.
+
+Still open:
+
+- **Event albums that repeat across years.** `Wolkenstein` exists in 2015 and
+  2016; `--album-name` merges them. Decide before Phase H whether that is wanted
+  or whether album names should carry the year.
+- **~843 pilot assets file under `01-01`** because a GoPro's clock had reset.
+  Real EXIF, not a template fault, and it will recur across the full import
+  wherever that camera was used. Bulk date-editing in Immich is the fix if it
+  matters; album curation is unaffected either way.
+- **All Winkel ingress runs through `winkel-pi`, a Raspberry Pi 4.** Measured at
+  17.6 MB/s for uploads, and it is the path for Immich browsing, Paperless and
+  Grafana too. Not blocking, but the obvious next throughput win.
+- **Home Assistant's history is not backed up.** Its Postgres database holds
+  zero tables — the recorder is on SQLite in a `local-path` volume at Brink, so
+  `databases/backup.ts` does not cover it. Unrelated to Immich, found on the way.
+- **Immich's reported storage is the whole `tank/k8s` dataset**, not Immich's
+  own usage, because the library is a directory inside it rather than a dataset.
+  Cosmetic; `zfs list` gives the real number.
