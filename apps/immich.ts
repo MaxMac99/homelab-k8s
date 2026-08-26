@@ -196,6 +196,27 @@ const sharedEnv = {
   // time*, so leaving this at UTC would file a photo taken at 00:30 CEST under
   // the previous day — for every photo, permanently.
   TZ: "Europe/Berlin",
+  // ⚠️ **The chart sets this only on the `main` controller**, and without it a
+  // container mounts `/config` but never reads it — falling back silently to
+  // the database defaults.
+  //
+  // That is not cosmetic. The workers pod is what runs the background jobs, so
+  // *it* is the one that decides:
+  //
+  //   - whether to apply the storage template. `handleMigrationSingle` opens
+  //     with `if (!config.storageTemplate.enabled) return JobStatus.Skipped` —
+  //     no log, no error, no failed job. All 1,574 pilot assets stayed in
+  //     `upload/` under UUID names while the API pod cheerfully reported
+  //     `storageTemplate.enabled: true`, because the API pod *did* have the
+  //     file.
+  //   - whether to transcode. The default is `required`, not the `disabled`
+  //     set in the configuration below, so the workers re-encoded video we had
+  //     explicitly told Immich to leave alone.
+  //
+  // ⚠️ The path must match the chart's own mount (`/config`, filename from
+  // `configurationKind`). It is repeated here rather than derived because the
+  // chart offers no value to read it back from.
+  IMMICH_CONFIG_FILE: "/config/immich-config.yaml",
   REDIS_HOSTNAME: "immich-valkey",
   IMMICH_MACHINE_LEARNING_URL: "http://immich-machine-learning:3003",
   // ⚠️ `DB_VECTOR_EXTENSION` is deliberately absent. Immich auto-detects and

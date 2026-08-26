@@ -203,9 +203,40 @@ const traefik = new k8s.helm.v3.Chart(
         websecure: {
           port: 443,
           exposedPort: 443,
-          // Enable HTTP/3
+          // ⚠️ **Off, and it is a correctness fix rather than a preference.**
+          // With HTTP/3 on, Authentik's OIDC login is unusable from Safari —
+          // and only from clients that speak QUIC, which is what made it read
+          // as an Authentik or a DNS fault for most of a day.
+          //
+          // Measured from the access logs on 2026-08-26, iPhone Safari against
+          // `auth.mvissing.de`:
+          //
+          //   HTTP/3  flowpage OIDC  200   -> no executor request, ever  (x8)
+          //   HTTP/2  flowpage OIDC  200   -> executor 200 in 806 ms     (x1)
+          //   HTTP/3  flowpage plain 200   -> executor 200 in 805 ms
+          //
+          // The flow page renders, its JS runs and opens the `/ws/client/`
+          // WebSocket — which is HTTP/1.1 and therefore always fine — and then
+          // the `GET /api/v3/flows/executor/…` never leaves the browser. The
+          // spinner has nothing to wait on. The plain login flow is unaffected
+          // because its executor URL is ~60 characters; the OIDC one carries
+          // the entire `/application/o/authorize/` query re-encoded into
+          // `?query=`, well past a kilobyte, and only over h3 does that request
+          // vanish.
+          //
+          // ⚠️ **The intermittency is alt-svc, not load.** Traefik advertises
+          // `alt-svc: h3=":443"; ma=2592000`, so a client is on h2 until it
+          // caches that and on h3 for the next 30 days. Clearing Safari's
+          // website data resets it — which is exactly why auth.mvissing.de
+          // "started working again" mid-debug and then broke once more a few
+          // minutes later, and why curl (h2) and link-preview crawlers
+          // (HTTP/1.1) never reproduced any of it.
+          //
+          // ⚠️ Turning this back on also puts a UDP port back on websecure —
+          // see `single: true` on the brink additionalService above, which
+          // exists for that case and is a harmless no-op while this is false.
           http3: {
-            enabled: true,
+            enabled: false,
           },
           expose: {
             default: true,
