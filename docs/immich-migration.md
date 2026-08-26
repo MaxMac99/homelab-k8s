@@ -746,32 +746,32 @@ for y in */; do
 done
 ```
 
-**Albums are year-prefixed** — `2015 Wolkenstein`, not `Wolkenstein` (decided
-2026-08-26). `--album-name` matches an existing album by _name_, so without the
-prefix `Wolkenstein` in 2015 and 2016 would silently merge into one album, and
-two unrelated events sharing a name could not be separated afterwards without
-re-filing by hand. So the loop is:
+**Albums are named after the event folder alone** — `Wolkenstein`, not
+`2015 Wolkenstein` (decided 2026-08-26, after briefly choosing the opposite).
+
+⚠️ **Same-named events across years therefore merge into one album.**
+`--album-name` matches an existing album by name, so `Wolkenstein` in 2015 and
+2016 land together. That is the intent: a recurring trip reads as one
+collection. The cost is that two _unrelated_ events sharing a name also merge,
+and separating them afterwards means re-filing by hand.
+
+This also means the nine pilot albums need no renaming — they already carry the
+right names.
 
 ```bash
 cd /tank/daten-familie/Bilder
 for y in */; do
-  yr="$(basename "$y")"
   for d in "$y"*/; do
     ev="$(basename "$d")"
-    immich upload --recursive --album-name "$yr $ev" "$d"
+    immich upload --recursive --album-name "$ev" "$d"
   done
 done
 ```
 
-⚠️ **The nine pilot albums must be renamed first.** They were created as `Pool`,
-`IAA`, … before this was decided. Re-running 2015 without renaming produces a
-_second_ set (`2015 Pool`) and leaves every asset filed in both. Rename them in
-the UI, or via `PUT /api/albums/{id}` with `{"albumName": "2015 <name>"}`, before
-starting.
-
-⚠️ An event that genuinely spans New Year still splits across two albums. That
-already happens to the storage template, which files by each photo's own EXIF
-year — `2016/Wolkenstein/` exists in the pilot output for exactly this reason.
+⚠️ Album membership and on-disk layout are allowed to disagree, and do. The
+album follows the _source folder_; the storage template follows each photo's own
+EXIF year, so the pilot produced `2016/Wolkenstein/…` on disk for photos filed
+in an album reached from `2015/`.
 
 ⚠️ **Step 2's tree is not the same shape** and its loop cannot be copied from
 step 1 — `backup_old_drive` has `" Kopie"` suffixes scattered through it and the
