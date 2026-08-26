@@ -746,10 +746,32 @@ for y in */; do
 done
 ```
 
-⚠️ **Event names repeat across years** (`Wolkenstein` appears in 2015 and 2016).
-`--album-name` matches an existing album by name, so those merge into one album
-spanning years. Decide before running: prefix with the year (`"$ev ($(basename
-"$y"))"`) if they should stay separate.
+**Albums are year-prefixed** — `2015 Wolkenstein`, not `Wolkenstein` (decided
+2026-08-26). `--album-name` matches an existing album by _name_, so without the
+prefix `Wolkenstein` in 2015 and 2016 would silently merge into one album, and
+two unrelated events sharing a name could not be separated afterwards without
+re-filing by hand. So the loop is:
+
+```bash
+cd /tank/daten-familie/Bilder
+for y in */; do
+  yr="$(basename "$y")"
+  for d in "$y"*/; do
+    ev="$(basename "$d")"
+    immich upload --recursive --album-name "$yr $ev" "$d"
+  done
+done
+```
+
+⚠️ **The nine pilot albums must be renamed first.** They were created as `Pool`,
+`IAA`, … before this was decided. Re-running 2015 without renaming produces a
+_second_ set (`2015 Pool`) and leaves every asset filed in both. Rename them in
+the UI, or via `PUT /api/albums/{id}` with `{"albumName": "2015 <name>"}`, before
+starting.
+
+⚠️ An event that genuinely spans New Year still splits across two albums. That
+already happens to the storage template, which files by each photo's own EXIF
+year — `2016/Wolkenstein/` exists in the pilot output for exactly this reason.
 
 ⚠️ **Step 2's tree is not the same shape** and its loop cannot be copied from
 step 1 — `backup_old_drive` has `" Kopie"` suffixes scattered through it and the
@@ -891,9 +913,6 @@ _space_ than it is for _time_.
 
 Still open:
 
-- **Event albums that repeat across years.** `Wolkenstein` exists in 2015 and
-  2016; `--album-name` merges them. Decide before Phase H whether that is wanted
-  or whether album names should carry the year.
 - **~843 pilot assets file under `01-01`** because a GoPro's clock had reset.
   Real EXIF, not a template fault, and it will recur across the full import
   wherever that camera was used. Bulk date-editing in Immich is the fix if it
