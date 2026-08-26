@@ -61,6 +61,44 @@ const grafanaAdminPassword = new random.RandomPassword(
 // Install Grafana using Helm chart
 
 /**
+ * Grafana's own credentials, as a Secret rather than chart values.
+ *
+ * ⚠️ Two independent reasons, and the second is the one that bites:
+ *
+ * 1. The chart renders `env` into literal `value:` entries in the Deployment's
+ *    PodSpec. An admin password and an OAuth client secret sitting there are
+ *    readable by anything that can `get deploy` in this namespace.
+ *
+ * 2. **A secret value passed into a `helm.v3.Chart` cannot be rotated.** The
+ *    chart is rendered client-side at preview time, so if any value is unknown
+ *    — which is exactly what a regenerated `RandomPassword` is — the chart
+ *    cannot render and Pulumi plans to *delete every resource in it*. That is
+ *    not theoretical: rotating the ntfy credential previewed as deleting
+ *    Grafana's Deployment, Service, Ingress, ConfigMaps and RBAC, 11 resources
+ *    in total, because that password was passed by value.
+ *
+ * A Secret *name* is a constant, so the chart always renders and the values
+ * behind it can change freely.
+ *
+ * ⚠️ Keys are env var names — `envFromSecrets` maps every key to an environment
+ * variable, so nothing may go in here that is not meant to be one.
+ */
+const GRAFANA_SECRETS_NAME = "grafana-secrets";
+
+const grafanaSecrets = new k8s.core.v1.Secret("grafana-secrets", {
+  metadata: {
+    name: GRAFANA_SECRETS_NAME,
+    namespace: namespaceName,
+  },
+  stringData: {
+    GF_SECURITY_ADMIN_USER: "admin",
+    GF_SECURITY_ADMIN_PASSWORD: grafanaAdminPassword.result,
+    GF_AUTH_GENERIC_OAUTH_CLIENT_ID: authentikClientId,
+    GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: authentikClientSecret,
+  },
+});
+
+/**
  * Datasource uid the alert rules below query. See the note at the datasource.
  */
 const PROMETHEUS_DS_UID = "prometheus";
@@ -189,16 +227,30 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
     // Grafana's Deployment, Service, Ingress and RBAC. A name is constant, so
     // the chart always renders.
     //
-    // ⚠️ `env` is not an option either — the chart renders that into a plain
-    // ConfigMap.
-    envFromSecrets: [{ name: GRAFANA_NTFY_SECRET_NAME }],
+    // ⚠️ `env` is not an option either — the chart renders those as *literal*
+    // `value:` entries in the Deployment's PodSpec, readable by anyone who can
+    // `get deploy` in this namespace. (Checked: they do not reach a ConfigMap,
+    // as an earlier version of this comment claimed. The PodSpec is still the
+    // wrong place for a credential.)
+    envFromSecrets: [
+      { name: GRAFANA_NTFY_SECRET_NAME },
+      { name: GRAFANA_SECRETS_NAME },
+    ],
 
-    // Additional environment variables
-    env: {
-      GF_SECURITY_ADMIN_USER: "admin",
-      GF_SECURITY_ADMIN_PASSWORD: grafanaAdminPassword.result,
-      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: authentikClientId,
-      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: authentikClientSecret,
+    // ⚠️ Admin credentials come through the chart's own `admin.existingSecret`,
+    // not through `envFromSecrets`, and that is load-bearing. With no admin
+    // password in the values the chart *generates one of its own* into a
+    // `grafana` Secret and wires it with `valueFrom` — and an explicit `env`
+    // entry beats anything from `envFrom`, so the generated password would
+    // silently win and `adminPassword` exported below would be wrong.
+    //
+    // Pointing the chart at the same Secret makes the two agree by
+    // construction. The OAuth values have no such chart-native path and come
+    // through `envFromSecrets` above.
+    admin: {
+      existingSecret: GRAFANA_SECRETS_NAME,
+      userKey: "GF_SECURITY_ADMIN_USER",
+      passwordKey: "GF_SECURITY_ADMIN_PASSWORD",
     },
 
     // Resource limits
