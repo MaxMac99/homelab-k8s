@@ -358,17 +358,36 @@ const immich = new k8s.helm.v3.Release(
             storageLabelClaim: "preferred_username",
             buttonText: "Login with Authentik",
             autoRegister: true,
-            // Deliberately false: the local login form stays reachable, which
-            // is the escape hatch if OIDC breaks.
-            autoLaunch: false,
+            // Skip Immich's own login page and go straight to Authentik.
+            //
+            // ⚠️ `/auth/login?autoLaunch=0` still reaches the login screen —
+            // but with `passwordLogin` off below, that screen has nothing to
+            // offer. It is a way past the redirect, not a way in.
+            autoLaunch: true,
           },
 
-          // ⚠️ Local password login stays enabled until OIDC is verified end to
-          // end. Disabling it before a successful Authentik login has been
-          // observed would lock everyone out of a fresh instance with no admin
-          // account — including the account that would fix it.
+          // Authentik is the only way in.
+          //
+          // ⚠️ **Enabled only after an OIDC login was observed working**, not
+          // before. The admin account was originally created through this form
+          // (`oauthId` empty) and has since been linked to Authentik by
+          // matching email — Authentik's `Max` carries the same address, so the
+          // login attached to the existing admin rather than creating a second
+          // user. Turning this off before that link existed would have locked
+          // the only administrator out of the instance.
+          //
+          // ⚠️ **Recovery is a `pulumi up`, not a support ticket.** Because this
+          // configuration is file-managed, flipping this back to `true` and
+          // re-applying restores password login without needing to log in
+          // first. That is the whole escape hatch — there is no in-band one.
+          //
+          // ⚠️ **This couples Immich's availability to Brink.** All three
+          // Authentik pods pin to `onNode(BRINK_SERVER)` while Immich runs at
+          // Winkel, so a Brink outage now means nobody can log in to Immich
+          // even though Immich itself is up and serving. That was already true
+          // for every forward-auth ingress; it is newly true for Immich.
           passwordLogin: {
-            enabled: true,
+            enabled: false,
           },
         },
       },
