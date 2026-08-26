@@ -1,8 +1,10 @@
 # Immich migration plan
 
-Status: **Phases A–D complete, deployed and verified 2026-08-26.** Immich is
-running at `photos.mvissing.de` with an empty library. Next up is Phase E
-(Authentik OIDC), then Phase F — which must land **before any import**. Written 2026-08-22, amended the same day after the PG18
+Status: **Phases A–D and F complete, deployed and verified 2026-08-26.** Immich
+is running at `photos.mvissing.de` with an empty library, the storage template
+and transcode policy locked in. Remaining before any import: **Phase E**
+(Authentik OIDC) and the account creation at the end of Phase F. Then Phase 0's
+ZFS snapshots and the Phase G pilot. Written 2026-08-22, amended the same day after the PG18
 VectorChord finding collapsed the plan from three Postgres clusters to two
 (§3.1). Written 2026-08-22, amended 2026-08-22 after
 the PG18 VectorChord finding collapsed the plan from three Postgres clusters to
@@ -587,7 +589,13 @@ the library stays salvageable without Immich.
 The default policy transcodes anything not already in the target format and
 could run for weeks while producing hundreds of GiB.
 
-Also: create the accounts, and confirm Max is admin.
+⚠️ **Still outstanding:** create the accounts and confirm Max is admin. That is
+UI work and gated on Phase E, and it is the last thing before Phase 0's
+snapshots and the Phase G pilot.
+
+⚠️ `ffmpeg.transcode` is `disabled`, not merely reduced — default is `required`.
+Videos in unsupported codecs will not play in a browser until Phase K flips it,
+which is now a `pulumi up` rather than a UI toggle.
 
 ### Phase G — Pilot import
 

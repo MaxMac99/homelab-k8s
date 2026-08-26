@@ -231,6 +231,78 @@ const immich = new k8s.helm.v3.Release(
         persistence: {
           library: { existingClaim: libraryPVC.metadata.name },
         },
+
+        // -------------------------------------------------------------------
+        // Phase F — settled *before* a single file is imported.
+        //
+        // Changing either of these afterwards means a storage-migration job
+        // over 2 TB of spinning disk, so they are deliberately not left to be
+        // clicked into the admin UI once and forgotten.
+        //
+        // ⚠️ Supplying this sets `IMMICH_CONFIG_FILE`, which makes system
+        // settings **read-only in the UI** — not just the two below, the whole
+        // page. Tuning job concurrency during the import therefore means
+        // editing this block and running `pulumi up`. Concurrency lives in the
+        // same config file, so it stays possible; it is just slower than a
+        // click. Chosen deliberately over the UI on 2026-08-26.
+        //
+        // ⚠️ Verified by rendering: this block is **not** passed through Helm's
+        // `tpl`, so the Handlebars braces below survive intact. That is the
+        // opposite of `alerting` in `monitoring/grafana.ts`, where the same
+        // syntax had to be escaped. Do not "fix" these by escaping them.
+        // -------------------------------------------------------------------
+        configuration: {
+          storageTemplate: {
+            // Off by default, in which case Immich files everything under
+            // random UUIDs.
+            //
+            // ⚠️ The reason this matters is not tidiness. Part of this library
+            // is the only surviving copy of material lost from
+            // `daten-familie`. With UUID filenames, losing Postgres would
+            // leave 2 TB of unidentifiable files; with the template on, the
+            // library stays salvageable without Immich at all.
+            enabled: true,
+            hashVerificationEnabled: true,
+
+            // Requested layout: yyyy/album/MM-dd/model/filename, giving
+            //   2015/Skiurlaub Gerlos/02-14/NIKON D300/DSC_4135.NEF
+            //
+            // ⚠️ **Triple braces throughout.** `{{album}}` HTML-escapes, which
+            // mangles `DRK u. NetGo` and every umlaut in 4,619 event folders.
+            //
+            // ⚠️ The `{{#if}}` fallbacks are not optional. Scans, downloads and
+            // WhatsApp images carry no `model`, and assets in no album have no
+            // `album` — without the guards those become empty path segments.
+            //
+            // ⚠️ A multi-album asset resolves `{{album}}` to the most recently
+            // created one, and resolving a duplicate merges the trashed
+            // asset's albums into the keeper — so a deduped file can move
+            // folder later. Not data loss, but the layout is not perfectly
+            // stable. Filename collisions are safe: a sequence number is
+            // appended, nothing is overwritten.
+            template:
+              "{{y}}/{{#if album}}{{{album}}}{{else}}Other{{/if}}/{{MM}}-{{dd}}/" +
+              "{{#if model}}{{{model}}}{{else}}Unknown{{/if}}/{{{filename}}}",
+          },
+
+          ffmpeg: {
+            // ⚠️ `disabled`, against a default of `required`.
+            //
+            // There is no GPU on any node, so every transcode is CPU-only on
+            // maxdata. `Bilder` alone holds ~4.6k videos at 917 GiB, plus
+            // 10.5k MOV in the backup tree; `required` would re-encode
+            // everything not already h264/aac/mov and could run for weeks
+            // while producing hundreds of GiB, competing with the very import
+            // it is blocking.
+            //
+            // ⚠️ Videos in unsupported codecs will not play in the browser
+            // until this changes. That is the accepted trade for Phases G–J:
+            // get the files in and catalogued first. Phase K re-runs
+            // `Transcode Video / All` once nothing competes with it — and that
+            // is a `pulumi up` here, not a UI toggle.
+            transcode: "disabled",
+          },
+        },
       },
 
       valkey: {
