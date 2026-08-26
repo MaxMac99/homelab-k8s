@@ -111,11 +111,22 @@ const PROMETHEUS_DS_UID = "prometheus";
  * two-stage shape — run the PromQL instantly (refId A), then threshold it
  * server-side (refId B) — so the ported rules below read like the originals.
  *
- * ⚠️ `> 0` on stage B is doing real work. The PromQL expressions here already
- * encode their own comparison (`... < 21`, `== 0`), so Prometheus returns a
- * series only when the condition holds; the threshold then just asks "did
- * anything come back". Writing the comparison in *both* places would invert
- * some of these.
+ * ⚠️ Two ways to express the condition, and the choice is **not** free — it
+ * decides what "no series" means, which decides whether `noDataState` is safe.
+ *
+ *   - **Comparison inside the PromQL** (`... < 21`, `== 0`) with `threshold: 0`.
+ *     PromQL's comparison operators *filter*, so the query returns a series only
+ *     while the condition holds and stage B just asks "did anything come back".
+ *     ⚠️ This makes healthy indistinguishable from missing — both are empty —
+ *     so it is only usable with `noDataState: "OK"`.
+ *   - **Comparison in the threshold**, with the PromQL returning a bare value.
+ *     The query always returns a series, so empty means the metric is genuinely
+ *     absent. This is the only form that works with `noDataState: "Alerting"`.
+ *
+ * ⚠️ Mixing them inverts the rule. `PostgresBackupStale` shipped as
+ * `... / 3600 > 36` *and* `noDataState: Alerting`: healthy backups produced no
+ * series, Grafana read that as NoData, and the alert fired continuously
+ * **because the backups were working**. Caught 2026-08-26, ~12 h after deploy.
  */
 /**
  * Protect Grafana's own `{{ ... }}` from Helm.
@@ -138,6 +149,12 @@ const promAlert = (r: {
   expr: string;
   for: string;
   severity: "critical" | "warning";
+  /**
+   * Value stage B compares against, `gt`. Defaults to 0, which is correct when
+   * the PromQL already filters. Set it — and drop the comparison from the
+   * PromQL — whenever `noDataState` is `Alerting`. See the note above.
+   */
+  threshold?: number;
   summary: string;
   description: string;
   /**
@@ -175,7 +192,7 @@ const promAlert = (r: {
         refId: "B",
         type: "threshold",
         expression: "A",
-        conditions: [{ evaluator: { type: "gt", params: [0] } }],
+        conditions: [{ evaluator: { type: "gt", params: [r.threshold ?? 0] } }],
       },
     },
   ],
@@ -563,7 +580,11 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
               promAlert({
                 uid: "postgres-backup-stale",
                 title: "PostgresBackupStale",
-                expr: "(time() - postgres_backup_last_success_timestamp_seconds) / 3600 > 36",
+                // ⚠️ No `> 36` here — the comparison lives in `threshold`
+                // below, so this query always returns a series and "no series"
+                // can only mean the metric is absent. See promAlert's note.
+                expr: "(time() - postgres_backup_last_success_timestamp_seconds) / 3600",
+                threshold: 36,
                 for: "10m",
                 severity: "critical",
                 // ⚠️ `Alerting`, unlike every rule above. For those, no series
