@@ -1,7 +1,8 @@
 # Immich migration plan
 
-Status: **Phases A, B and C complete, deployed and verified 2026-08-25.** Next
-up is Phase D (`apps/immich.ts`). Written 2026-08-22, amended the same day after the PG18
+Status: **Phases A–D complete, deployed and verified 2026-08-26.** Immich is
+running at `photos.mvissing.de` with an empty library. Next up is Phase E
+(Authentik OIDC), then Phase F — which must land **before any import**. Written 2026-08-22, amended the same day after the PG18
 VectorChord finding collapsed the plan from three Postgres clusters to two
 (§3.1). Written 2026-08-22, amended 2026-08-22 after
 the PG18 VectorChord finding collapsed the plan from three Postgres clusters to
@@ -477,29 +478,53 @@ that the delivery path works.
 
 ### Phase D — `apps/immich.ts`
 
-- Helm `Release` from `oci://ghcr.io/immich-app/immich-charts/immich` **0.12.0**
-  (appVersion `v2.6.3`). ⚠️ The old HTTP repo at
-  `immich-app.github.io/immich-charts` is **dead**; OCI only. The
-  `infrastructure/github-runner.ts` OCI pattern applies.
-- ⚠️ **The chart does not track Immich releases** — `image.tag` must be set
-  explicitly, and needs its own Renovate regex entry separate from the chart
-  version.
-- `DB_URL` → `postgres-winkel-rw.database.svc.cluster.local`, VectorChord (no
-  `DB_VECTOR_EXTENSION` override — that variable forces pgvector if set)
-- Chart-managed Redis. Unlike Authentik's, nothing else depends on it.
-- **Library PVC must be pre-created** and referenced via
-  `persistence.library.existingClaim` — static NFS PV on `tank`, following
-  `apps/paperless.ts:121-163`. ⚠️ Its `storageClassName` names no real
-  StorageClass; that is correct for a static bind and must not be "fixed".
-- `nodeSelector: winkelSite`. arm64 excludes winkel-pi, so ML lands on maxdata.
-- Split workers via `IMMICH_WORKERS_INCLUDE` / `IMMICH_WORKERS_EXCLUDE` so
-  microservices can scale during import without taking the UI offline.
-- IngressRoute on the **internal** Traefik. Nothing public.
-- ⚠️ Set container **TZ explicitly** — storage template dates render in server
-  local time.
-- ⚠️ Immich uses Alpine images, which hit a **DNS resolution bug on k8s when
-  nodes have a search domain set**. Check `/etc/resolv.conf` on maxdata.
-- Requirements: 6 GB RAM minimum, and `>= x86-64-v2` for the ML container.
+✅ **Done 2026-08-26.** Chart `0.12.0` (appVersion `v2.6.3`) from
+`oci://ghcr.io/immich-app/immich-charts/immich`, four pods on maxdata, TLS
+issued, `photos.mvissing.de` on the **internal** Traefik.
+
+**Verified in the running system**, not inferred: Immich created 62 tables in
+`postgres-winkel`, and `face_index` and `clip_index` are both built on the
+`vchordrq` access method — VectorChord is genuinely doing the vector work, which
+is the entire justification for §3.1.
+
+**Pre-checks passed.** maxdata is a Ryzen 5 3600X reporting `x86-64-v3`, above
+the `x86-64-v2` floor for the ML container. Alpine DNS resolves internal and
+external names from a pod there, so the search-domain bug does not apply.
+
+Corrections to the plan's Phase D wording, all found by rendering the chart:
+
+- The cache is **Valkey, not Redis**, and it is `enabled: false` by default.
+  Immich does not start without it.
+- ⚠️ **The chart's shared `controllers.main` block does not reach a controller
+  with any other name.** `server.controllers.workers` inherits nothing — not the
+  image, not the database, not Redis. The image gap fails the render loudly; the
+  env gap would have been silent, producing a worker that cannot reach Postgres.
+  Both server controllers therefore carry the full env.
+- The worker split via a second controller **is** supported and is safe: the
+  `immich-server` Service selects on `controller: main` **and** `name: server`,
+  so API traffic never reaches the workers pod.
+- Database is wired with `DB_HOSTNAME`/`DB_USERNAME`/`DB_PASSWORD` rather than
+  `DB_URL`. ⚠️ `DB_URL` would embed the password literally in chart values, and
+  a secret value inside a `helm.v3` chart cannot be rotated — see Phase C.
+- ML model cache and the Valkey queue are real PVCs rather than the chart's
+  default `emptyDir`, as the chart's own comments recommend. Losing the job
+  queue part-way through a multi-day import is not a small thing.
+
+⚠️ **The first deploy put every pod on brink-server.** The reasoning that the
+volumes would force placement was wrong twice over: the library is NFS _served
+by_ maxdata, so photo I/O crossed the WireGuard overlay at WAN latency; and
+`local-path`'s `nodePathMap` lists brink-server too, so the ML cache and Valkey
+queue were provisioned there. **local-path stamps nodeAffinity onto a PV at
+first bind, so the wrong node on the first schedule is permanent** — the fix
+required deleting both PVCs, not just rescheduling. Now pinned with a top-level
+`defaultPodOptions.nodeSelector` (verified to reach all four Deployments).
+
+⚠️ It must be a **node** pin, not `winkelSite`: winkel-pi is arm64 and Immich
+publishes no arm64 machine-learning image.
+
+⚠️ **`pulumi refresh` was needed** after deleting those PVCs with `kubectl` —
+Pulumi still believed they existed and would not recreate them, which surfaced
+as the Helm release timing out with pods Pending.
 
 ### Phase E — Authentik OIDC
 
@@ -521,6 +546,17 @@ that the delivery path works.
 
 Changing any of these later means a storage-migration job over 2 TB of spinning
 disk.
+
+✅ **The chart can do this declaratively.** `immich.configuration` is
+`immich-config.json` as YAML, so the storage template and transcode policy can
+live in `apps/immich.ts` rather than being clicked through the UI. That was not
+known when this plan was written and is worth taking — it makes the template
+reviewable and reproducible. Note it makes the UI's config read-only.
+
+⚠️ The Handlebars braces below would be evaluated by Helm's `tpl` if passed
+through chart values — the same trap that broke Grafana's alerting provisioning
+in Phase C. Escape them, or use a separate ConfigMap plus
+`immich.existingConfiguration`.
 
 **Storage template** — requested layout `yyyy/album/MM-dd/model/filename`:
 

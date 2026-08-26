@@ -14,6 +14,7 @@ import "./homeassistant";
 import "./musicassistant";
 import "./mosquitto";
 import "./timemachine";
+import "./immich";
 
 export * from "./paperless";
 export * from "./homepage";
@@ -22,3 +23,4 @@ export * from "./homeassistant";
 export * from "./musicassistant";
 export * from "./mosquitto";
 export * from "./timemachine";
+export * from "./immich";
