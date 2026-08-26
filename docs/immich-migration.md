@@ -481,9 +481,17 @@ that the delivery path works.
 
 ### Phase D — `apps/immich.ts`
 
-✅ **Done 2026-08-26.** Chart `0.12.0` (appVersion `v2.6.3`) from
-`oci://ghcr.io/immich-app/immich-charts/immich`, four pods on maxdata, TLS
-issued, `photos.mvissing.de` on the **internal** Traefik.
+✅ **Done 2026-08-26.** Chart `0.13.1` with image `v3.1.0`, four pods on maxdata,
+TLS issued, `photos.mvissing.de` on the **internal** Traefik.
+
+⚠️ **Deployed on `v2.6.3` first and upgraded the same day.** The plan named chart
+0.12.0 / appVersion `v2.6.3` and that was taken at face value; by then Immich was
+on `v3.1.0` — a whole major version ahead. **The plan's pinned versions were
+stale and nothing in the process caught it.** Upgrading cost nothing because the
+library was still empty; after an import it would have been a far larger job.
+Immich's own migrations took the database from 66 to 88 revisions cleanly, and
+`v3.0.0`'s headline breaking change — dropping `pgvecto.rs` — does not apply
+here, because this estate is on VectorChord.
 
 **Verified in the running system**, not inferred: Immich created 62 tables in
 `postgres-winkel`, and `face_index` and `clip_index` are both built on the
@@ -569,6 +577,20 @@ existed in Authentik's database since the 2026-08-07 rebuild — Authentik held
 exactly one token, the outpost's. **Homepage's Authentik widget had therefore
 been silently dead for ~19 days**, showing nothing rather than erroring.
 Replacing the token fixed both that and this phase.
+
+⚠️ **The provider was created unusable, and the error said nothing useful.**
+Creating an OAuth2 provider through Authentik's API without an explicit
+`grant_types` leaves it **empty**, so `response_type=code` is not permitted and
+every login fails with `invalid_request` / _"The request is otherwise
+malformed"_ — which names neither grant types nor the provider. Immich reports
+it only as `AuthorizationResponseError: authorization response from the server
+is an error`. Diagnosed by diffing the provider against the working Grafana one,
+where the field was populated. Now set to
+`["authorization_code", "refresh_token"]` — deliberately narrower than Grafana's,
+which carries `implicit`, `password` and `client_credentials` it does not need.
+
+⚠️ **The UI sets this field for you; the API does not.** Any future provider
+created this way needs it specified.
 
 **Outstanding, and it is a browser action:** Immich reports
 `isInitialized: false`, meaning no account exists yet. ⚠️ **The first user to log

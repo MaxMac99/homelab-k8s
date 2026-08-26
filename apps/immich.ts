@@ -38,13 +38,18 @@ const HOSTNAME = "photos.mvissing.de";
 /**
  * The Immich release, pinned separately from the chart.
  *
- * ⚠️ **The chart does not track Immich releases.** Chart 0.12.0 happens to
- * default to v2.6.3 today, but the two version streams move independently, so
- * relying on the chart default means silently sitting on whatever Immich
- * version the chart last happened to pin. Renovate picks this up through the
- * existing `image:`-style regex because of the `repository`/`tag` pair below.
+ * ⚠️ **The chart does not track Immich releases, and the gap is real rather
+ * than theoretical.** Chart 0.13.1 defaults to `v3.0.0` while Immich is on
+ * `v3.1.0`; chart 0.12.0 defaulted to `v2.6.3`, a whole major version behind.
+ * Taking the chart default means silently running whatever Immich version the
+ * chart last happened to pin.
+ *
+ * ⚠️ Verified against the registry rather than assumed: `:release` and
+ * `v3.1.0` resolve to the same digest, and `v3.1.1`/`v3.2.0` do not exist.
+ * Renovate picks this up through the existing `image:`-style regex because of
+ * the `repository`/`tag` pair below.
  */
-const IMMICH_VERSION = "v2.6.3";
+const IMMICH_VERSION = "v3.1.0";
 
 // ---------------------------------------------------------------------------
 // Library storage — NFS on `tank`, the spinning pool.
@@ -204,7 +209,7 @@ const immich = new k8s.helm.v3.Release(
   "immich",
   {
     chart: "oci://ghcr.io/immich-app/immich-charts/immich",
-    version: "0.12.0",
+    version: "0.13.1",
     namespace: namespace.metadata.name,
     // ⚠️ Pinned rather than auto-named. The chart derives `immich-server`,
     // `immich-valkey` and `immich-machine-learning` from the release name, and
