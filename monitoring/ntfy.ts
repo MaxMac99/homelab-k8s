@@ -59,7 +59,19 @@ visitor-message-daily-limit: 0
 web-root: app
 
 # Logging
-log-level: trace
+#
+# WARNING: 'info', not 'trace'. At trace level ntfy logs the full HTTP request
+# including the Authorization: Basic <base64> header of every publish -- the
+# alertmanager topic credential, in recoverable form. Alloy ships this
+# namespace's pod logs to Loki, so it did not stay in the pod either.
+#
+# Trace was presumably set while debugging the publish failures recorded above,
+# where it was genuinely useful. It is not something to leave on.
+#
+# WARNING: logs already written still contain the credential. Rotating it means
+# tainting the ntfy-alertmanager-password RandomPassword and letting Grafana and
+# the init container below pick the new value up.
+log-level: info
 log-format: json
 
 # Behind a proxy
