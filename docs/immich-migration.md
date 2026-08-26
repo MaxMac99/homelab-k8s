@@ -660,9 +660,27 @@ with CPU-only ML; whether the full pass is 2 days or 3 weeks on maxdata is
 genuinely unknown, and finding out here is far cheaper than finding out halfway
 through.
 
-**Phase 0 — take ZFS snapshots of `tank/daten-familie` and `tank/data` before
-this phase.** Instant, near-zero space, and it makes every later local operation
-reversible. Nothing before Phase G touches photo data.
+**Phase 0 — ✅ done 2026-08-26.** Recursive snapshots taken on maxdata:
+
+```
+tank/daten-familie@pre-immich-import-2026-08-26   0B  refer 1.46T
+tank/data@pre-immich-import-2026-08-26            0B  refer 1.69T
+```
+
+Instant and near-zero space, as expected, and they make every later local
+operation reversible. Nothing before Phase G touches photo data.
+
+⚠️ **Sanoid will not prune these.** Its autoprune only recognises its own
+`autosnap_*_{hourly,daily,monthly}` naming — the same property that let syncoid's
+markers accumulate unpruned in Phase 11. That is what we want here, but it also
+means **nothing removes them automatically**: Phase K step 3 has to.
+
+⚠️ **Deleting `backup_old_drive` in Phase K will not free space while these
+snapshots exist.** `tank/data` is 1.69 TiB and the snapshot pins every block of
+it, so the ~1.7 TiB reclaim only lands once the snapshot is destroyed. That is
+why Phase K destroys them _last_ rather than first — but it does mean the free
+space does not appear at step 2, which is easy to misread as the delete having
+failed.
 
 ### Phase H — Full import
 
