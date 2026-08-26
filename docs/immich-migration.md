@@ -1,17 +1,16 @@
 # Immich migration plan
 
-Status: **Phases A–G complete, deployed and verified 2026-08-26.** Next is
-Phase H, the full import — whose runbook must use `-A "<event>"` per folder, not
-`-a`. Immich runs at
-`photos.mvissing.de` with an empty library, storage template and transcode policy
-locked in, and Authentik OIDC wired up. ⚠️ **Remaining before any import: Max
-must log in once via Authentik to create the admin account** (`isInitialized` is
-still false, and the first login becomes owner). Then Phase 0's ZFS snapshots and
-the Phase G pilot. Written 2026-08-22, amended the same day after the PG18
-VectorChord finding collapsed the plan from three Postgres clusters to two
-(§3.1). Written 2026-08-22, amended 2026-08-22 after
-the PG18 VectorChord finding collapsed the plan from three Postgres clusters to
-two (§3.1).
+Status: **Phases A–G complete, deployed and verified 2026-08-26.** Immich runs at
+`photos.mvissing.de` with Authentik as the only login, the storage template and
+transcode policy locked in, and the 2015 pilot imported — 1,574 assets, 69 GB,
+fully reconciled and filed under the template.
+
+Next is **Phase H**, the full import. ⚠️ Its runbook must loop with
+`-A "<event>"` per event folder, **not** `-a` — see Phase G for why.
+
+Written 2026-08-22; amended the same day after the PG18 VectorChord finding
+collapsed the plan from three Postgres clusters to two (§3.1), and repeatedly
+since as phases landed.
 
 Goal, in the user's words: import all images into Immich, get rid of the
 duplicates, and empty out the backup directory by moving everything to its right
