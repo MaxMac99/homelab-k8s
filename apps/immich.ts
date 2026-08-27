@@ -425,6 +425,27 @@ const immich = new k8s.helm.v3.Release(
         },
       },
 
+      /**
+       * Memory bounds for the Immich containers.
+       *
+       * ⚠️ **These were absent, and maxdata paid for it.** Phase D shipped with no
+       * `resources` at all, so nothing bounded Immich's upload buffering. During the
+       * Phase H import the kernel OOM-killer took the server twice —
+       * `SystemOOM, victim process: immich-api` — and the CLI's only symptom was
+       * `ReadableStream is already closed`, a client-side undici error that names
+       * neither memory nor the server.
+       *
+       * ⚠️ **k8s cannot see ZFS ARC, and that is what makes this node deceptive.**
+       * maxdata has 32 GB; ARC is capped at 8 GB *outside* the kubelet's accounting,
+       * so k8s believes it has ~31 GB allocatable when ~23 GB is real. The node
+       * reported `KubeletHasSufficientMemory` throughout, because from its point of
+       * view that was true. Pod limits on this host are already ~97% committed before
+       * Immich is counted.
+       *
+       * So these are deliberately modest. They are ceilings that make Immich fail
+       * *itself* rather than take the node — and the node hosts Postgres, Paperless,
+       * Grafana, Loki and the rest.
+       */
       server: {
         enabled: true,
         controllers: {
@@ -437,6 +458,12 @@ const immich = new k8s.helm.v3.Release(
             containers: {
               main: {
                 env: { ...sharedEnv, IMMICH_WORKERS_INCLUDE: "api" },
+                // The API pod buffers inbound uploads, so this is the one the
+                // OOM-killer actually hit.
+                resources: {
+                  requests: { memory: "1Gi", cpu: "200m" },
+                  limits: { memory: "4Gi", cpu: "4" },
+                },
               },
             },
           },
@@ -460,6 +487,12 @@ const immich = new k8s.helm.v3.Release(
                   ...sharedEnv,
                   IMMICH_WORKERS_INCLUDE: "microservices",
                 },
+                // Thumbnailing and metadata extraction on large video; the
+                // heaviest of the three in steady state.
+                resources: {
+                  requests: { memory: "2Gi", cpu: "500m" },
+                  limits: { memory: "6Gi", cpu: "6" },
+                },
               },
             },
           },
@@ -475,6 +508,12 @@ const immich = new k8s.helm.v3.Release(
                 image: {
                   repository: "ghcr.io/immich-app/immich-machine-learning",
                   tag: IMMICH_VERSION,
+                },
+                // CLIP plus the face model, CPU-only. Restarted 8 times during
+                // the same OOM episode.
+                resources: {
+                  requests: { memory: "2Gi", cpu: "500m" },
+                  limits: { memory: "4Gi", cpu: "6" },
                 },
               },
             },
