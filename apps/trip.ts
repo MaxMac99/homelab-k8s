@@ -424,12 +424,14 @@ export {
 //       that binding is the authorization; without it every authenticated
 //       estate user gets in.
 //
-// 4. DNS:
-//    - Public (IONOS): A trip.mvissing.de → 212.132.82.102 (the ionos nginx
-//      splits :443 by SNI into traefik-public; :80 must stay untouched — the
-//      ACME solver path for every certificate in the estate runs through it).
-//    - Split-horizon (`setup` repo, modules/system/site-dns.nix): AdGuard
-//      rewrite at both sites, brink → 192.168.1.240, winkel → 192.168.178.240.
+// 4. DNS — nothing to add, verified 2026-08-31:
+//    - Public zone: IONOS wildcard answers trip.mvissing.de with
+//      212.132.82.102 (same as auth.mvissing.de) — dig @1.1.1.1.
+//    - Split-horizon: AdGuard's rewrite is *.mvissing.de → the site's own
+//      ingress VIP (setup repo, modules/system/site-dns.nix), not per-name
+//      entries, so this name is covered at both sites already.
+//    - Verify after deploy: dig @192.168.1.2 / @192.168.178.3 trip.mvissing.de
+//      → the site VIP; public resolver → 212.132.82.102.
 //
 // 5. pulumi up (via PR → merge → CI), then verify:
 //    - curl https://trip.mvissing.de/ → 302 to Authentik (never 200)
