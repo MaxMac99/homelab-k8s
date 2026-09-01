@@ -9,7 +9,7 @@ import { lb, onNode, MAXDATA } from "../infrastructure/sites";
 // Install Loki using Helm chart (single binary mode for simplicity)
 const loki = new k8s.helm.v3.Chart("loki", {
   chart: "loki",
-  version: "7.2.0",
+  version: "7.3.0",
   namespace: namespaceName,
   fetchOpts: {
     repo: "https://grafana.github.io/helm-charts",
