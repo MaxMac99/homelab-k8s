@@ -4,14 +4,15 @@
 // importing ~2 TB of photos is Phases G–J and happens through the CLI on
 // maxdata, not from here.
 //
-// ⚠️ Nothing public. This is on the internal Traefik, like every other app in
-// this repo. `traefik-public` on ionos is default-closed and serves only ACME
-// solvers.
+// ⚠️ **This one *is* public**, unlike most of this repo. There are two
+// Ingresses below: the internal one on the site-local Traefik, and a second on
+// `traefik-public` at ionos. See the note on `immichPublicIngress` for what
+// that does and does not protect.
 
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
-import { onNode, MAXDATA } from "../infrastructure/sites";
+import { onNode, MAXDATA, publicIngressClass } from "../infrastructure/sites";
 import { postgresWinkelHost, immichDatabase } from "../databases/postgresql";
 
 const config = new pulumi.Config();
@@ -32,7 +33,15 @@ const namespace = new k8s.core.v1.Namespace("immich", {
   metadata: { name: "immich" },
 });
 
-/** The hostname Immich answers on, inside the LAN only. */
+/**
+ * The hostname Immich answers on — on the LAN *and* from the internet.
+ *
+ * ⚠️ Split-horizon DNS makes one name mean two paths. Inside either home the
+ * site AdGuard rewrites this to that site's `ingressVIP`, so LAN clients reach
+ * the internal Traefik directly. Everywhere else it resolves to ionos
+ * (`photos` is a CNAME to `mvissing.de` → 212.132.82.102) and arrives through
+ * `traefik-public`. Both paths terminate the same `immich-tls` certificate.
+ */
 const HOSTNAME = "photos.mvissing.de";
 
 /**
@@ -321,12 +330,40 @@ const immich = new k8s.helm.v3.Release(
             // WhatsApp images carry no `model`, and assets in no album have no
             // `album` — without the guards those become empty path segments.
             //
-            // ⚠️ A multi-album asset resolves `{{album}}` to the most recently
-            // created one, and resolving a duplicate merges the trashed
-            // asset's albums into the keeper — so a deduped file can move
-            // folder later. Not data loss, but the layout is not perfectly
-            // stable. Filename collisions are safe: a sequence number is
-            // appended, nothing is overwritten.
+            // ⚠️ **A multi-album asset resolves `{{album}}` to the most
+            // recently *created* album, and that is a standing hazard rather
+            // than a curiosity.** Read from source on 2026-08-27:
+            // `AlbumRepository.getByAssetId` (album.repository.js:75-89) joins
+            // `album_user` for the asset's owner and closes with
+            // `.orderBy('album.createdAt', 'desc')`; the storage template then
+            // takes `albums?.[0]` (storage-template.service.js:245).
+            //
+            // A newly created album is by definition the newest, so **adding a
+            // pre-existing asset to a new album re-files that asset on disk** —
+            // `2015/Skiurlaub Gerlos/02-14/NIKON D300/DSC_4135.NEF` becomes
+            // `2015/<new album>/02-14/NIKON D300/DSC_4135.NEF`. Do that to a
+            // shared "family" album and the on-disk event structure, which is
+            // the entire reason this template exists, collapses into one folder.
+            //
+            // ⚠️ **It is latent, not immediate, which is what makes it
+            // dangerous.** The only automatic trigger is
+            // `onAssetMetadataExtracted` (storage-template.service.js:105), so
+            // the move does not happen when the album is edited — it happens
+            // the next time anyone runs **Storage Migration / All**. Phase K
+            // plans a bulk job re-run. Check this note before queueing one.
+            //
+            // ⚠️ **Sharing an existing album is safe and is not the same
+            // operation.** It adds an `album_user` row; it does not change
+            // which albums an asset belongs to, so `{{album}}` is untouched and
+            // nothing moves. The query filters on `album_user.userId = <asset
+            // owner>`, so adding *other* users to your albums cannot perturb
+            // your own assets' paths either. Share albums freely; do not move
+            // old assets into new albums.
+            //
+            // Resolving a duplicate merges the trashed asset's albums into the
+            // keeper, so a deduped file can move folder by the same mechanism.
+            // Filename collisions are safe: a sequence number is appended,
+            // nothing is overwritten.
             template:
               "{{y}}/{{#if album}}{{{album}}}{{else}}Other{{/if}}/{{MM}}-{{dd}}/" +
               "{{#if model}}{{{model}}}{{else}}Unknown{{/if}}/{{{filename}}}",
@@ -348,6 +385,28 @@ const immich = new k8s.helm.v3.Release(
             // `Transcode Video / All` once nothing competes with it — and that
             // is a `pulumi up` here, not a UI toggle.
             transcode: "disabled",
+          },
+
+          image: {
+            // ⚠️ Off by default, and the symptom is misleading: RAW files show
+            // a correct grid thumbnail and then a *blank* detail view.
+            //
+            // The viewer needs something a browser can decode. For a JPEG that
+            // is the original; for a NEF it is not, and without a full-size
+            // derivative there is no fallback — `asset_file` held only
+            // `preview`/`thumbnail` rows, so the preview was healthy while the
+            // asset appeared broken. 16,287 NEFs in the library, so this is not
+            // a corner case.
+            //
+            // Cost is roughly 35–50 GiB of derived JPEG and extra work in
+            // `thumbnailGeneration` per RAW asset. Enabled mid-import
+            // deliberately: assets still to come get it inline, which is
+            // cheaper than a full `Generate Thumbnails / All` afterwards.
+            fullsize: {
+              enabled: true,
+              format: "jpeg",
+              quality: 80,
+            },
           },
 
           // -----------------------------------------------------------------
@@ -410,6 +469,51 @@ const immich = new k8s.helm.v3.Release(
           passwordLogin: {
             enabled: false,
           },
+
+          // -------------------------------------------------------------------
+          // ⚠️ **DEFERRED — uncomment once the Phase H import has drained.**
+          //
+          // Not because the setting is risky, but because *any* edit inside
+          // `immich.configuration` is. The chart renders this block into the
+          // `immich-immich-config` Secret and stamps its digest onto both
+          // server pods as `checksum/config`, so changing one character here
+          // rolls `immich-server-main` **and** `immich-server-workers`.
+          //
+          // The Valkey queue is persistent (see `valkeyPVC`), so the job queue
+          // survives that. An in-flight `immich-cli` upload does not: it loses
+          // the connection when the old API pod terminates, and the CLI reports
+          // it as `ReadableStream is already closed` — a client-side undici
+          // error naming neither the pod nor the restart. That is the same
+          // misleading symptom the OOM episode produced.
+          //
+          // Publishing does **not** depend on this. The public Ingress below
+          // works without it; all this changes is the absolute URLs Immich
+          // hands *out*.
+          //
+          // Check before uncommenting:
+          //   kubectl exec -n database postgres-winkel-1 -c postgres -- \
+          //     psql -U postgres -d immich -t -c \
+          //     "select count(*) from asset where \"createdAt\" > now() - interval '15 min'"
+          // -------------------------------------------------------------------
+          // server: {
+          //   // ⚠️ Not cosmetic now that this is published. Immich builds the
+          //   // absolute URLs it hands *out* from this value — public share
+          //   // links, the OAuth redirect it computes for the mobile app, and
+          //   // the links in notification emails. Left empty, it falls back to
+          //   // the `Host` of whichever request happened to create the link, so
+          //   // a share link minted from the LAN would carry the internal URL
+          //   // and be dead for the person it was sent to.
+          //   externalDomain: `https://${HOSTNAME}`,
+          //
+          //   // ⚠️ Immich's default `true`, restated deliberately. It lets a
+          //   // logged-in user see the other accounts on the instance, which is
+          //   // what makes "share this album with…" an autocomplete rather than
+          //   // a game of typing an exact email address. Album sharing here is
+          //   // entirely manual (there are no groups in Immich — no `group`
+          //   // table, no `group` controller, `album_user` is the only sharing
+          //   // relation), so that autocomplete is the whole ergonomics of it.
+          //   publicUsers: true,
+          // },
         },
       },
 
@@ -532,9 +636,30 @@ const immich = new k8s.helm.v3.Release(
   { dependsOn: [immichDatabase, libraryPVC, mlCachePVC, valkeyPVC] },
 );
 
-// ⚠️ Internal Traefik only. `ingressClassName: "traefik"` is the site-local
-// controller; `traefik-public` would publish this to the internet, and this
-// library is family photographs.
+// The host rules, shared by the internal and public Ingresses below so the two
+// cannot drift apart.
+const immichIngressRules = [
+  {
+    host: HOSTNAME,
+    http: {
+      paths: [
+        {
+          path: "/",
+          pathType: "Prefix" as const,
+          backend: {
+            service: {
+              name: "immich-server",
+              port: { number: 2283 },
+            },
+          },
+        },
+      ],
+    },
+  },
+];
+
+// The site-local Ingress. This is the one LAN clients hit, and the one that
+// owns issuance of `immich-tls` via the cert-manager annotation.
 const immichIngress = new k8s.networking.v1.Ingress(
   "immich-ingress",
   {
@@ -554,32 +679,81 @@ const immichIngress = new k8s.networking.v1.Ingress(
     },
     spec: {
       ingressClassName: "traefik",
-      rules: [
-        {
-          host: HOSTNAME,
-          http: {
-            paths: [
-              {
-                path: "/",
-                pathType: "Prefix",
-                backend: {
-                  service: {
-                    name: "immich-server",
-                    port: { number: 2283 },
-                  },
-                },
-              },
-            ],
-          },
-        },
-      ],
+      rules: immichIngressRules,
       tls: [{ secretName: "immich-tls", hosts: [HOSTNAME] }],
     },
   },
   { dependsOn: [immich] },
 );
 
-export { namespace as immichNamespace, immich, immichIngress, libraryPVC };
+// Public Ingress for Immich — the same route, served by the internet-facing
+// Traefik on ionos instead of the site-local one.
+//
+// A second Ingress rather than a class change on the one above: split-horizon
+// DNS points *.mvissing.de at the site's own ingress VIP from inside either
+// home, so LAN clients keep reaching Immich over the LAN at LAN speed and only
+// genuinely external clients traverse ionos. Both name the same TLS Secret.
+//
+// ⚠️ **No forward-auth in front of this**, and that is a decision rather than an
+// omission — the same one taken for Home Assistant, for the same reason.
+// Immich's own login is the front door, and with `passwordLogin.enabled: false`
+// above that login *is* Authentik: there is no second door to bolt shut.
+// Putting the outpost here would protect the browser UI and break the mobile
+// app, public share links and every API client, all of which authenticate with
+// a bearer token rather than a browser session cookie.
+//
+// What actually guards this address is therefore Authentik's own login flow:
+// TOTP from `auth/authentik-blueprints.ts` for anyone enrolled through it, and
+// the reputation policy on `default-authentication-flow`.
+//
+// ⚠️ **The public path is not the LAN path, and it is not the winkel-pi path
+// either.** `traefik-public` runs hostNetwork on ionos and routes straight to
+// the pod IP over the WireGuard overlay, so public uploads bypass the
+// Raspberry Pi that fronts all internal Winkel ingress (measured at 17.6 MB/s
+// — see docs/immich-migration.md §5). They are instead bounded by ionos's
+// uplink and maxdata's, which is a different ceiling, not necessarily a higher
+// one.
+//
+// ⚠️ nginx on ionos reaches this entrypoint by **TCP passthrough on :443**,
+// splitting on SNI — it never parses the HTTP, so there is no
+// `client_max_body_size` in the path and large uploads are not buffered on the
+// VPS. That is why full-size video upload from outside works at all.
+//
+// The three annotations the internal Ingress carries and this one must not —
+// the cert-manager issuer, the homepage tile, and the HTTP→HTTPS redirect —
+// are explained on the equivalent Authentik Ingress in auth/authentik.ts.
+const immichPublicIngress = new k8s.networking.v1.Ingress(
+  "immich-public-ingress",
+  {
+    metadata: {
+      name: "immich-public",
+      namespace: namespace.metadata.name,
+      annotations: {
+        // ⚠️ Required. `traefik-public` runs with no Service and with
+        // `publishedService` disabled (infrastructure/traefik-public.ts), so it
+        // never writes an address into `status.loadBalancer` — and an address
+        // appearing there is precisely what Pulumi waits for. Without this the
+        // deploy blocks forever, on a resource that is only a declaration.
+        "pulumi.com/skipAwait": "true",
+        "traefik.ingress.kubernetes.io/router.entrypoints": "websecure",
+      },
+    },
+    spec: {
+      ingressClassName: publicIngressClass,
+      rules: immichIngressRules,
+      tls: [{ secretName: "immich-tls", hosts: [HOSTNAME] }],
+    },
+  },
+  { dependsOn: [immich] },
+);
+
+export {
+  namespace as immichNamespace,
+  immich,
+  immichIngress,
+  immichPublicIngress,
+  libraryPVC,
+};
 
 // Remaining setup, which is Phases E–F and deliberately not automated here:
 //

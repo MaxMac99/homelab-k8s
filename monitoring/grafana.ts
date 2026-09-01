@@ -212,6 +212,30 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
         opts.ignoreChanges.push("rules");
       }
     },
+    // ⚠️ Without this, *every* edit to `alerting` or `grafana.ini` below fails
+    // the deploy — and it fails on a resource nobody was thinking about.
+    //
+    // pulumi-kubernetes treats any change to a ConfigMap's `.data` as a
+    // replacement, and replacement is create-before-delete. The chart names
+    // this ConfigMap `grafana`, flatly, so the replacement collides with the
+    // object that is still there:
+    //
+    //   creation failed: configmaps "grafana" already exists
+    //
+    // `local-path.ts` dodges the same trap by letting Pulumi auto-name its
+    // ConfigMap; `coredns.ts` cannot, because k3s fixes the name, and it
+    // reaches for `deleteBeforeReplace` exactly as here. A Helm chart's
+    // rendered names are equally not ours to choose.
+    //
+    // The cost is a short window in which Grafana's configuration is absent.
+    // Harmless here: the Deployment rolls on the same change anyway, and
+    // Grafana is not on the forward-auth path — unlike Authentik, losing it
+    // for a moment costs nothing but a dashboard.
+    (obj: any, opts: any) => {
+      if (obj.kind === "ConfigMap" && obj.metadata?.name === "grafana") {
+        opts.deleteBeforeReplace = true;
+      }
+    },
   ],
   values: {
     // Persistent storage for plugins only (dashboards/config now in PostgreSQL)
@@ -558,6 +582,43 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
                   "ZFS vdev {{ $labels.vdev }} in pool {{ $labels.pool }} on {{ $labels.host }} logged new read/write/checksum errors",
                 description:
                   "The pool may still read ONLINE if redundancy absorbed it so far. Run `zpool status -v {{ $labels.pool }}` on {{ $labels.host }} before it does not.",
+              }),
+              // The only thing standing between an unlimited Immich quota and a
+              // full pool.
+              //
+              // Immich's OIDC provisioning creates every family account with no
+              // storage quota (`oauth.defaultStorageQuota` is unset in
+              // apps/immich.ts, deliberately), and `photos.mvissing.de` is now
+              // reachable from the internet — so the number of people who can
+              // write to `tank` is no longer one, and none of them can see how
+              // much room is left.
+              //
+              // ⚠️ 80%, not 90%. ZFS is not a filesystem that degrades
+              // gracefully at the end: allocation shifts from first-fit to
+              // best-fit around 80% and write performance falls off well before
+              // the pool is actually full. On a RAIDZ1 of spinning disks that
+              // is the number that matters, and `tank` also holds Time Machine,
+              // the Postgres dumps and Paperless media.
+              //
+              // ⚠️ The threshold lives here rather than in the PromQL, so the
+              // query always returns a series — see promAlert's note. That
+              // makes "no series" mean the zfs exporter is gone, which is a
+              // different problem and is why `noDataState` stays `OK` rather
+              // than firing this rule for it.
+              promAlert({
+                uid: "zfs-pool-filling-up",
+                title: "ZfsPoolFillingUp",
+                expr: "zpool_capacity_percent",
+                threshold: 80,
+                // Hours, not minutes. A pool does not fill in a hurry and the
+                // action this prompts — deleting snapshots, adding a quota,
+                // buying a disk — is not one anybody takes at 3 a.m.
+                for: "6h",
+                severity: "warning",
+                summary:
+                  "ZFS pool {{ $labels.pool }} on {{ $labels.host }} is over 80% full",
+                description:
+                  "Run `zfs list -o space -s used {{ $labels.pool }}` on {{ $labels.host }} to see who grew. If it is Immich, set a per-user quota in the admin interface — Immich accounts are created without one.",
               }),
             ],
           },

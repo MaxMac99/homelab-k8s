@@ -5,4 +5,5 @@ import "./authentik";
 import "./authentik-outpost";
 
 export * from "./authentik";
+export * from "./authentik-blueprints";
 export * from "./authentik-outpost";

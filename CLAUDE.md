@@ -274,3 +274,20 @@ major.** `ts-node@10.9.2` cannot run `typescript@7`: it fails at startup with
 any of the program runs. The bump landed unattended and surfaced three days
 later looking like a cluster fault, because the only symptom is that `pulumi`
 cannot load the program at all.
+
+## Worktrees (agent isolation)
+
+Parallel/agent work happens in git worktrees, never by switching branches in the main
+checkout. The layout is fixed:
+
+```
+homelab-k8s/                          # main checkout (the daily IDE window)
+└── .work/homelab-k8s-<branch>/       # one worktree per workstream
+```
+
+- Create worktrees with `wt new homelab-k8s <branch>`. Plain `git worktree add` is
+  fine as long as the path and naming match.
+- Never create worktrees outside `.work/`, and never name them `<branch>` alone.
+- direnv auto-allows everything under `~/projects`; nix-direnv provides the
+  environment on first `cd`. No `direnv allow`, no manual setup.
+- List/clean up: `wt list homelab-k8s` / `wt prune homelab-k8s`.
