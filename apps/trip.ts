@@ -297,7 +297,7 @@ const outpostAliasService = new k8s.core.v1.Service("trip-outpost-alias", {
   },
   spec: {
     type: "ExternalName",
-    externalName: `${authentikOutpostService.metadata.name}.authentik.svc.cluster.local`,
+    externalName: pulumi.interpolate`${authentikOutpostService.metadata.name}.authentik.svc.cluster.local`,
     ports: [
       {
         port: 9000,
