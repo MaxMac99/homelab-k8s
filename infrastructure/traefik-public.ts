@@ -36,7 +36,7 @@ const traefikPublic = new k8s.helm.v3.Chart(
   "traefik-public",
   {
     chart: "traefik",
-    version: "41.1.1",
+    version: "41.4.0",
     namespace: traefikNamespace.metadata.name,
     fetchOpts: {
       repo: "https://traefik.github.io/charts",
