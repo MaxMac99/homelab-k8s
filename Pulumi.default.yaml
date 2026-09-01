@@ -33,3 +33,7 @@ config:
     secure: AAABAJVh7W7br3zZr/baDdr/QVssMDDYdFcn1Sa0MeojPPd5l1fHOZsu9Br23aa2ZsZbXrxOc1rVpM/A21VIXEZ0CmwtcqL/
   k8s-resources:immich-oauth-client-secret:
     secure: AAABAJvvQR3eHBEsm2S++py0cyDM+YilSpXobDHIv866x5uxbpp5bRM3SixTNq7GSuh4YIkGIC7PoIX9WS13+fYSjvbWDzueM1wG3gxjkjWcbI39bBIGDLMF44GlkzpgxviTwThyiuRdRLrkePEoXSJaxh7qibGXLnfHHs0brZ/8bngLQZdKCT3PE/poLzod4pMiWBvcYsjJNJGPBmrrKQ==
+  k8s-resources:tripRegistryPullToken:
+    secure: AAABAERwvJ8FDlIYX8zfE9GQx89DTNyRyl5uOZGYiL+Lpu6RdHkUyL9TEP3qNwyVukxja2TYvOHkyKGYOgfWZhkMTsrSsQnL
+  k8s-resources:tripCartoApiKey:
+    secure: AAABAPlxkvDYN4Dp/5uz04tYlv1wntWTIJ2+xh9vwqlNzSGrrKrLGwoGH9ucxmeYwmCyyfY6gTRD91LgoosCBEzPLQ==
