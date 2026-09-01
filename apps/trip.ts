@@ -21,6 +21,11 @@
 // split-horizon DNS serves the site VIPs from inside the homes, public DNS
 // serves ionos from everywhere else. Losing either path must not take the
 // page down — that is the point of a travel app.
+//
+// Authentik mode is **forward auth (single application)**: each edge gets a
+// pair of Ingresses — the app path behind forward auth, and the outpost
+// callback path routed without it (the comment above the Ingress rule sets
+// explains why the bypass is load-bearing).
 
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
@@ -240,6 +245,11 @@ const tripService = new k8s.core.v1.Service("trip-service", {
 // **in-cluster Service**, which works from ionos because ionos is a cluster
 // node. Never the public hostname: that hairpins through a MetalLB VIP and
 // fails with `remote error: tls: internal error` (traefik.ts).
+//
+// It is applied to the app path only. In single-application forward auth the
+// provider's OAuth callback URI is on trip.mvissing.de itself, and the
+// `/outpost.goauthentik.io` path is routed without this middleware — see the
+// Ingress rules below for why that bypass is load-bearing.
 const authentikPublicMiddleware = new k8s.apiextensions.CustomResource(
   "traefik-authentik-public-middleware",
   {
@@ -275,9 +285,49 @@ const authentikPublicMiddleware = new k8s.apiextensions.CustomResource(
   { dependsOn: [traefikNamespace, authentikOutpostService] },
 );
 
-const tripIngressRules = [
+// ExternalName alias for the outpost. The outpost-path Ingresses below live
+// in this namespace, and a standard Ingress backend only resolves Services in
+// its own namespace — `authentik-outpost` lives in `authentik`, and Traefik's
+// cross-namespace service references are not enabled on either edge. This is
+// the same shape authentik's docs recommend for referencing a remote outpost.
+const outpostAliasService = new k8s.core.v1.Service("trip-outpost-alias", {
+  metadata: {
+    name: "trip-outpost",
+    namespace: namespace.metadata.name,
+  },
+  spec: {
+    type: "ExternalName",
+    externalName: `${authentikOutpostService.metadata.name}.authentik.svc.cluster.local`,
+    ports: [
+      {
+        port: 9000,
+        targetPort: 9000,
+        name: "http",
+        protocol: "TCP",
+      },
+    ],
+  },
+});
+
+const tripHost = "trip.mvissing.de";
+
+// Two rule sets per edge, mirrored from authentik's own `traefik_single` e2e
+// config and the docs' "required for single-app setups" route:
+//
+// - `/` — the SPA, behind the forward-auth middleware.
+// - `/outpost.goauthentik.io` — the OAuth callback and sign-out paths, routed
+//   **without** the middleware. In single-application mode the provider pins
+//   its callback URI to https://trip.mvissing.de/outpost.goauthentik.io/...,
+//   and the outpost's Set-Cookie/redirect response must reach the browser
+//   verbatim; relaying the callback through forward auth eats that response
+//   and the login loops forever.
+//
+// Traefik's default rule-length priority makes the longer outpost PathPrefix
+// rule win over `/` — same mechanism as the docs' explicit `priority: 15` —
+// so two Ingresses per edge do not fight over the callback path.
+const tripAppRules = [
   {
-    host: "trip.mvissing.de",
+    host: tripHost,
     http: {
       paths: [
         {
@@ -288,6 +338,28 @@ const tripIngressRules = [
               name: tripService.metadata.name,
               port: {
                 number: 80,
+              },
+            },
+          },
+        },
+      ],
+    },
+  },
+];
+
+const tripOutpostRules = [
+  {
+    host: tripHost,
+    http: {
+      paths: [
+        {
+          path: "/outpost.goauthentik.io",
+          pathType: "Prefix" as const,
+          backend: {
+            service: {
+              name: outpostAliasService.metadata.name,
+              port: {
+                number: 9000,
               },
             },
           },
@@ -326,7 +398,7 @@ const tripIngress = new k8s.networking.v1.Ingress("trip-ingress", {
   },
   spec: {
     ingressClassName: "traefik",
-    rules: tripIngressRules,
+    rules: tripAppRules,
     tls: [
       {
         secretName: "trip-tls",
@@ -335,6 +407,37 @@ const tripIngress = new k8s.networking.v1.Ingress("trip-ingress", {
     ],
   },
 });
+
+// Internal outpost-path Ingress — routes the single-app OAuth callback and
+// sign-out paths to the outpost **without** forward auth (see the comment
+// above the rule sets). Same TLS Secret as the app Ingress so the browser
+// sees one certificate across the whole host.
+const tripOutpostIngress = new k8s.networking.v1.Ingress(
+  "trip-outpost-ingress",
+  {
+    metadata: {
+      name: "trip-outpost",
+      namespace: namespace.metadata.name,
+      annotations: {
+        "pulumi.com/skipAwait": "true",
+        "traefik.ingress.kubernetes.io/router.entrypoints": "websecure",
+
+        "traefik.ingress.kubernetes.io/redirect-entry-point": "websecure",
+        "traefik.ingress.kubernetes.io/redirect-permanent": "true",
+      },
+    },
+    spec: {
+      ingressClassName: "traefik",
+      rules: tripOutpostRules,
+      tls: [
+        {
+          secretName: "trip-tls",
+          hosts: ["trip.mvissing.de"],
+        },
+      ],
+    },
+  },
+);
 
 // Public Ingress — the internet-facing Traefik on ionos.
 //
@@ -373,7 +476,7 @@ const tripPublicIngress = new k8s.networking.v1.Ingress("trip-public-ingress", {
   },
   spec: {
     ingressClassName: publicIngressClass,
-    rules: tripIngressRules,
+    rules: tripAppRules,
     tls: [
       {
         secretName: "trip-tls",
@@ -383,12 +486,47 @@ const tripPublicIngress = new k8s.networking.v1.Ingress("trip-public-ingress", {
   },
 });
 
+// Public outpost-path Ingress — the ionos half of the callback route. Split-
+// horizon DNS means a browser at home lands on the site VIP (internal
+// Traefik) and one elsewhere lands on ionos; the callback can arrive on
+// either edge, so both need the outpost path.
+const tripPublicOutpostIngress = new k8s.networking.v1.Ingress(
+  "trip-public-outpost-ingress",
+  {
+    metadata: {
+      name: "trip-public-outpost",
+      namespace: namespace.metadata.name,
+      annotations: {
+        // Required on the public edge even where the internal Ingress does
+        // without it: traefik-public has no Service and never writes an
+        // address into status.loadBalancer, so Pulumi would await it forever
+        // (see authentikPublicIngress in auth/authentik.ts).
+        "pulumi.com/skipAwait": "true",
+        "traefik.ingress.kubernetes.io/router.entrypoints": "websecure",
+      },
+    },
+    spec: {
+      ingressClassName: publicIngressClass,
+      rules: tripOutpostRules,
+      tls: [
+        {
+          secretName: "trip-tls",
+          hosts: ["trip.mvissing.de"],
+        },
+      ],
+    },
+  },
+);
+
 export {
   namespace as tripNamespace,
   tripDeployment,
   tripService,
   tripIngress,
+  tripOutpostIngress,
   tripPublicIngress,
+  tripPublicOutpostIngress,
+  outpostAliasService,
   authentikPublicMiddleware,
 };
 
@@ -409,20 +547,28 @@ export {
 //    a. Applications → Providers → Create → Proxy Provider
 //       - Name: Trip
 //       - Authorization flow: default-provider-authorization-implicit-consent
-//       - Type: Forward auth (domain level)
-//       - Cookie domain: .mvissing.de (leading dot — one login covers the
-//         whole estate, and the browser holds the session, not this app)
+//       - Type: Forward auth (single application) — deliberately not
+//         domain-level: a per-app provider is what pins the OAuth callback to
+//         trip.mvissing.de itself (routed by trip-outpost-ingress /
+//         trip-public-outpost-ingress above) and what makes per-app rights
+//         enforceable. Authentik requires the external host in this mode.
 //       - External host: https://trip.mvissing.de
-//       (If the existing "Forward Auth - Domain Level" provider already
-//       covers new hosts, bind the Application to it instead.)
+//       (No cookie domain field — the outpost session cookie is host-scoped.
+//       Estate-wide SSO still applies: the authentik login session at
+//       auth.mvissing.de survives across apps, so the first trip visit is a
+//       short redirect chain, then the host-scoped cookie takes over.)
 //    b. Applications → Applications → Create
 //       - Name: Trip, Slug: trip, Provider: from (a)
 //       - Launch URL: https://trip.mvissing.de
-//    c. Applications → Outposts → authentik-outpost → add the Trip
-//       application
-//    d. Bind the family group (or equivalent) to the Application as policy —
-//       that binding is the authorization; without it every authenticated
-//       estate user gets in.
+//    c. Applications → Outposts → k8s-forward-auth → add the Trip
+//       application (that UI name is the one outpost record; the
+//       Pulumi-managed proxy pod is named authentik-outpost in k8s and
+//       connects through it — don't create a second outpost)
+//    d. Bind the family group (or a dedicated Trip group) to the Application
+//       as policy — that binding is the authorization; without it every
+//       authenticated estate user gets in. Users who should hold ONLY trip:
+//       put them in the Trip group and not in the groups bound to other
+//       applications — the outpost re-checks each app's bindings per request.
 //
 // 4. DNS — nothing to add, verified 2026-08-31:
 //    - Public zone: IONOS wildcard answers trip.mvissing.de with
@@ -435,5 +581,7 @@ export {
 //
 // 5. pulumi up (via PR → merge → CI), then verify:
 //    - curl https://trip.mvissing.de/ → 302 to Authentik (never 200)
+//    - curl https://trip.mvissing.de/outpost.goauthentik.io/ping → 200, on
+//      both edges (site VIP and public) — the callback route working
 //    - browser login → trip renders; from LAN the site VIP serves it
 //    - kubectl get pods -n trip (2/2 Ready, spread across zones)

@@ -265,7 +265,9 @@ export { authentikOutpost, authentikOutpostService, outpostSecret };
 //    a. Navigate to: Applications → Outposts
 //    b. Click "Create"
 //    c. Configure:
-//       - Name: "Kubernetes Forward Auth"
+//       - Name: "k8s-forward-auth" (the live outpost record's UI name; the
+//         k8s Deployment/Service this file creates is named authentik-outpost
+//         — same outpost, two names in two places)
 //       - Type: "Proxy"
 //       - Integration: **`----` (none)**
 //
