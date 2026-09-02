@@ -232,7 +232,7 @@ const ntfyDeployment = new k8s.apps.v1.Deployment("ntfy", {
         initContainers: [
           {
             name: "init-users",
-            image: "binwiederhier/ntfy:v2.27.0",
+            image: "binwiederhier/ntfy:v2.28.0",
             command: ["/bin/sh", "-c"],
             args: [
               [
@@ -268,7 +268,7 @@ const ntfyDeployment = new k8s.apps.v1.Deployment("ntfy", {
         containers: [
           {
             name: "ntfy",
-            image: "binwiederhier/ntfy:v2.27.0",
+            image: "binwiederhier/ntfy:v2.28.0",
             args: ["serve"],
             ports: [
               {
