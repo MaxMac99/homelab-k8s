@@ -303,7 +303,7 @@ export const postgresBackupCronJob = new k8s.batch.v1.CronJob(
                   // forward-compatible only — an older pg_dump cannot read a
                   // newer server, which is why this must not lag behind either
                   // cluster's `imageName`.
-                  image: "ghcr.io/cloudnative-pg/postgresql:18.4",
+                  image: "ghcr.io/cloudnative-pg/postgresql:18.6",
                   command: ["/bin/bash", "-c"],
                   args: [dumpScript],
                   volumeMounts: [
