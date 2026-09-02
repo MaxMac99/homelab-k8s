@@ -103,7 +103,7 @@ const unifiDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "unifi-os-server",
-              image: "ghcr.io/chrissnell/unifi-os-server:5.1.21",
+              image: "ghcr.io/chrissnell/unifi-os-server:5.1.37",
               // UOS runs systemd and bundled services as root and needs host
               // cgroup access; privileged is the only reliable mode today.
               securityContext: {
