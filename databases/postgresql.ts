@@ -292,7 +292,7 @@ const postgresCluster = new k8s.apiextensions.CustomResource(
       enableSuperuserAccess: MIGRATION_IMPORT_WINDOW,
 
       // PostgreSQL configuration
-      imageName: "ghcr.io/cloudnative-pg/postgresql:18.4",
+      imageName: "ghcr.io/cloudnative-pg/postgresql:18.6",
 
       // Storage configuration - use fast ZFS pool
       storage: {
