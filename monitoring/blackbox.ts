@@ -49,7 +49,7 @@ const blackboxDeployment = new k8s.apps.v1.Deployment("blackbox-exporter", {
         containers: [
           {
             name: "blackbox-exporter",
-            image: "prom/blackbox-exporter:v0.26.0",
+            image: "prom/blackbox-exporter:v0.28.0",
             args: ["--config.file=/etc/blackbox/blackbox.yml"],
             ports: [{ name: "http", containerPort: 9115 }],
             // The icmp module needs a raw socket. Rather than run the whole
