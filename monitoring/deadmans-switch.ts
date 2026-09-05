@@ -63,7 +63,7 @@ export const deadmansSwitchCronJob = new k8s.batch.v1.CronJob(
               containers: [
                 {
                   name: "ping",
-                  image: "curlimages/curl:8.21.0",
+                  image: "curlimages/curl:8.22.0",
                   command: ["/bin/sh", "-c"],
                   args: ['curl -fsS -m 10 "$(cat /etc/deadmans-switch/url)"'],
                   volumeMounts: [
