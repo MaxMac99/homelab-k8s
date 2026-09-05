@@ -324,7 +324,7 @@ export const postgresBackupCronJob = new k8s.batch.v1.CronJob(
               containers: [
                 {
                   name: "push-metrics",
-                  image: "curlimages/curl:8.21.0",
+                  image: "curlimages/curl:8.22.0",
                   command: ["/bin/sh", "-c"],
                   args: [pushScript],
                   volumeMounts: [
