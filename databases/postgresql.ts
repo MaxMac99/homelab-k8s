@@ -509,7 +509,7 @@ const postgresWinkelCluster = new k8s.apiextensions.CustomResource(
       //
       // The 18.4 must track `postgres` above — see the note on this cluster.
       // Renovate picks this up via the existing `imageName:` regex manager.
-      imageName: "ghcr.io/tensorchord/cloudnative-vectorchord:18.4-1.1.1",
+      imageName: "ghcr.io/tensorchord/cloudnative-vectorchord:18.6-1.1.1",
 
       // Grafana is 14 MB and Paperless 32 MB; effectively all of this is for
       // Immich, whose row count scales with ~170k assets plus face embeddings.
