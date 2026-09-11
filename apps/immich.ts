@@ -239,7 +239,7 @@ const immich = new k8s.helm.v3.Release(
   "immich",
   {
     chart: "oci://ghcr.io/immich-app/immich-charts/immich",
-    version: "0.13.1",
+    version: "0.13.2",
     namespace: namespace.metadata.name,
     // ⚠️ Pinned rather than auto-named. The chart derives `immich-server`,
     // `immich-valkey` and `immich-machine-learning` from the release name, and
