@@ -119,7 +119,7 @@ const redisDeployment = new k8s.apps.v1.Deployment(
             },
             {
               name: "redis-exporter",
-              image: "oliver006/redis_exporter:v1.90.0",
+              image: "oliver006/redis_exporter:v1.91.1",
               ports: [
                 {
                   containerPort: 9121,
