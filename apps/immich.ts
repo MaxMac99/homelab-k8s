@@ -54,11 +54,12 @@ const HOSTNAME = "photos.mvissing.de";
  * chart last happened to pin.
  *
  * ⚠️ Verified against the registry rather than assumed: `:release` and
- * `v3.1.0` resolve to the same digest, and `v3.1.1`/`v3.2.0` do not exist.
- * Renovate picks this up through the existing `image:`-style regex because of
- * the `repository`/`tag` pair below.
+ * `v3.1.0` resolved to the same digest when this pin was set.
+ * Renovate tracks this constant through a dedicated custom manager in
+ * `renovate.json` — the generic `repository`/`tag` regex cannot see it,
+ * because `tag: IMMICH_VERSION` is an identifier, not a quoted literal.
  */
-const IMMICH_VERSION = "v3.1.0";
+const IMMICH_VERSION = "v3.2.0";
 
 // ---------------------------------------------------------------------------
 // Library storage — NFS on `tank`, the spinning pool.

@@ -65,6 +65,16 @@
   "customManagers": [
     {
       "customType": "regex",
+      "description": "Match the pinned Immich release constant (server + ML share it and must stay version-locked)",
+      "managerFilePatterns": ["/\\.ts$/"],
+      "matchStrings": [
+        "IMMICH_VERSION\\s*=\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "depNameTemplate": "ghcr.io/immich-app/immich-server",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
       "description": "Match Docker images in Pulumi TypeScript files",
       "managerFilePatterns": ["/\\.ts$/"],
       "matchStrings": [
