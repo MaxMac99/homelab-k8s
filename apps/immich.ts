@@ -703,8 +703,9 @@ const immichIngress = new k8s.networking.v1.Ingress(
 // a bearer token rather than a browser session cookie.
 //
 // What actually guards this address is therefore Authentik's own login flow:
-// TOTP from `auth/authentik-blueprints.ts` for anyone enrolled through it, and
-// the reputation policy on `default-authentication-flow`.
+// its MFA stage bindings (passkey enforcement lives in the Authentik UI — the
+// enrollment blueprint that used to force TOTP is gone) and the reputation
+// policy on `default-authentication-flow`.
 //
 // ⚠️ **The public path is not the LAN path, and it is not the winkel-pi path
 // either.** `traefik-public` runs hostNetwork on ionos and routes straight to

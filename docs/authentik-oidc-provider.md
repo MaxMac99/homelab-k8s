@@ -2,11 +2,12 @@
 
 Written 2026-08-27, from the five providers that exist on Authentik 2026.5.6.
 
-This estate does **not** declare OIDC providers in code. `auth/authentik-blueprints.ts`
-captures the family enrollment flow and nothing else, deliberately — folding
-providers in means folding their client secrets in, which means that ConfigMap
-has to become a Secret first. Until that happens, every provider is created by
-hand and only the resulting credentials live in `Pulumi.default.yaml`.
+This estate does **not** declare OIDC providers in code, and since 2026-09 it
+has no Authentik blueprints either — the family enrollment blueprint was removed
+(users are created by hand now). Folding providers in would mean folding their
+client secrets in, which means a Secret first. Until that happens, every
+provider is created by hand and only the resulting credentials live in
+`Pulumi.default.yaml`.
 
 The consequence, stated plainly so nobody is surprised by it: **an Authentik
 rebuild loses every provider.** This file is what you rebuild them from.
@@ -77,8 +78,8 @@ Group / User Bindings → Bind existing group** and pick the group.
 
 Immich uses `immich-users`. That binding is the switch: a user who is not a
 member cannot reach the application, so Immich never provisions them — even
-though `autoRegister: true`. `auth/authentik-blueprints.ts` puts family members
-into that group automatically at enrollment.
+though `autoRegister: true`. Add members by hand, Directory → Users → the user →
+**Groups**: the enrollment blueprint that used to do this automatically is gone.
 
 ## Custom scopes and claims
 

@@ -11,12 +11,6 @@ import {
   BRINK_SERVER,
   publicIngressClass,
 } from "../infrastructure/sites";
-import {
-  blueprints,
-  blueprintsChecksum,
-  BLUEPRINTS_MOUNT_PATH,
-} from "./authentik-blueprints";
-
 // Import shared service connection info
 import {
   postgresqlHost,
@@ -205,48 +199,6 @@ const authentikRedisService = new k8s.core.v1.Service("authentik-redis", {
 
 const authentikRedisHost = pulumi.interpolate`${authentikRedisService.metadata.name}.${namespace.metadata.name}.svc.cluster.local`;
 
-// Blueprints — declarative Authentik configuration, mounted into both pods.
-//
-// The content and the reasoning live in ./authentik-blueprints.ts; only the
-// Kubernetes plumbing is here, because that file cannot see this namespace
-// without a circular import.
-//
-// ⚠️ Mounted into the **worker as well as the server**, and the worker is the
-// one that matters — blueprint discovery and application are worker tasks. The
-// server gets it too so the admin interface can show the instance and its
-// status rather than a file it cannot read.
-const authentikBlueprints = new k8s.core.v1.ConfigMap("authentik-blueprints", {
-  metadata: {
-    name: "authentik-blueprints",
-    namespace: namespace.metadata.name,
-  },
-  data: blueprints,
-});
-
-const blueprintsVolume = {
-  name: "blueprints",
-  configMap: { name: authentikBlueprints.metadata.name },
-};
-
-const blueprintsVolumeMount = {
-  name: "blueprints",
-  mountPath: BLUEPRINTS_MOUNT_PATH,
-  readOnly: true,
-};
-
-/**
- * Pod annotation that rolls both Deployments when a blueprint changes.
- *
- * ⚠️ See the note on `blueprintsChecksum`. Without this, editing a blueprint
- * updates a ConfigMap that nothing rereads: the running pods keep the old file
- * mapped until the kubelet refreshes it, and Authentik only rescans at worker
- * start or on its hourly timer. The deploy would report success and the change
- * would appear not to have happened.
- */
-const blueprintsAnnotation = {
-  "blueprints.mvissing.de/checksum": blueprintsChecksum,
-};
-
 // Common environment variables for Authentik
 const authentikEnv = [
   {
@@ -321,7 +273,6 @@ const authentikServer = new k8s.apps.v1.Deployment(
             "prometheus.io/scrape": "true",
             "prometheus.io/port": "9300",
             "prometheus.io/path": "/metrics",
-            ...blueprintsAnnotation,
           },
         },
         spec: {
@@ -362,7 +313,6 @@ const authentikServer = new k8s.apps.v1.Deployment(
                   name: "media",
                   mountPath: "/media",
                 },
-                blueprintsVolumeMount,
               ],
               resources: {
                 requests: {
@@ -383,13 +333,12 @@ const authentikServer = new k8s.apps.v1.Deployment(
                 claimName: authentikMediaPVC.metadata.name,
               },
             },
-            blueprintsVolume,
           ],
         },
       },
     },
   },
-  { dependsOn: [authentikDatabase, authentikBlueprints] },
+  { dependsOn: [authentikDatabase] },
 );
 
 // Authentik Worker Deployment
@@ -412,7 +361,6 @@ const authentikWorker = new k8s.apps.v1.Deployment(
           labels: {
             app: "authentik-worker",
           },
-          annotations: blueprintsAnnotation,
         },
         spec: {
           // Same node as the server above — one local-path media volume.
@@ -428,7 +376,6 @@ const authentikWorker = new k8s.apps.v1.Deployment(
                   name: "media",
                   mountPath: "/media",
                 },
-                blueprintsVolumeMount,
               ],
               resources: {
                 requests: {
@@ -449,13 +396,12 @@ const authentikWorker = new k8s.apps.v1.Deployment(
                 claimName: authentikMediaPVC.metadata.name,
               },
             },
-            blueprintsVolume,
           ],
         },
       },
     },
   },
-  { dependsOn: [authentikDatabase, authentikBlueprints] },
+  { dependsOn: [authentikDatabase] },
 );
 
 // Authentik Service
@@ -616,7 +562,6 @@ const authentikPublicIngress = new k8s.networking.v1.Ingress(
 
 export {
   namespace as authentikNamespace,
-  authentikBlueprints,
   authentikServer,
   authentikWorker,
   authentikService,
