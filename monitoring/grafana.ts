@@ -662,6 +662,111 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
               }),
             ],
           },
+          {
+            orgId: 1,
+            name: "nodes",
+            folder: "Alerts",
+            interval: "1m",
+            // Node-level alerts, added 2026-09-13 after ionos died of memory
+            // exhaustion while the whole estate was watching something else:
+            // it had logged 387 journald "Under memory pressure" events since
+            // Sep 1 and thrashed to death (loopback TLS handshakes timing out,
+            // mount helpers taking 100× their CPU time in wall clock) without
+            // a single OOM kill — the kernel reclaimed just enough for the
+            // killer to never fire, and no rule existed that could notice.
+            //
+            // All four k3s nodes are scraped by the node-exporter DaemonSet;
+            // `instance` is relabelled to the node name (prometheus.ts), so
+            // {{ $labels.instance }} names the host directly.
+            //
+            // ⚠️ These alerts cover a node only while the overlay is up.
+            // ionos's death took the overlay down with it, which is precisely
+            // why they must be paired with per-node heartbeats reporting to a
+            // third party (healthchecks.io) that do not traverse the mesh —
+            // see the setup repo's memory-heartbeat module.
+            rules: [
+              // The one that would have paged today at ~16:54: a node that
+              // stops being scraped. Same failure shape as PublicIngressDown
+              // but at node level — the exporter vanishing is a *different*
+              // problem from the node being gone, and with the overlay as the
+              // only inter-site path, either half is worth a page.
+              //
+              // ⚠️ Two jobs, not one: the three k3s-managed nodes are scraped
+              // by the node-exporter DaemonSet, but maxdata deliberately has
+              // no DaemonSet pod — its native NixOS node_exporter owns :9100
+              // (prometheus.ts, `job_name: "maxdata"`, static because the
+              // Prometheus pod is pinned to maxdata itself). Regexp over both
+              // jobs keeps all four nodes under this rule; `instance` is the
+              // node name in every case.
+              promAlert({
+                uid: "node-exporter-down",
+                title: "NodeExporterDown",
+                expr: 'up{job=~"node-exporter|maxdata"} == 0',
+                for: "10m",
+                severity: "critical",
+                summary:
+                  "Node {{ $labels.instance }} has been unreachable to Prometheus for 10 minutes",
+                description:
+                  "The node-exporter on {{ $labels.instance }} stopped answering. Either the node is down or hung, or the overlay path to it is broken. Since 2026-09-13 this is the alert that fires when the control-plane node dies, because the overlay dies with it and the node's own heartbeat cannot reach ntfy either — the per-node healthchecks.io heartbeats are what catch the node when the overlay is the casualty.",
+              }),
+              // PSI is the direct measurement of the failure mode that killed
+              // ionos: not low memory, but *stalled* memory. MemAvailable can
+              // look acceptable while the kernel spends its time evicting page
+              // cache (that is exactly what journald was complaining about for
+              // 12 days), so the availability ratio alone is too late a
+              // signal. `stalled_seconds` counts seconds where *all* memory
+              // tasks were blocked; rate() over 5 m gives the fraction of time
+              // the node was fully stalled, 0..1.
+              //
+              // Bare-value form with the threshold in stage B: healthy nodes
+              // return ~0, so the series is always present and "no series"
+              // can only mean an exporter too old for PSI — not worth paging.
+              promAlert({
+                uid: "node-memory-stalled",
+                title: "NodeMemoryStalled",
+                expr: "rate(node_pressure_memory_stalled_seconds_total[5m])",
+                threshold: 0.1,
+                for: "10m",
+                severity: "critical",
+                summary:
+                  "Node {{ $labels.instance }} is stalled on memory 10% of the time",
+                description:
+                  "Kernel PSI shows every memory-relevant task blocked >10% of the last 5 minutes. This is the state ionos spent its last hours in before the 2026-09-13 power-cycle. Find the consumer: `ps aux --sort=-rss` on {{ $labels.instance }}; on ionos expect k3s to be it. If it recurs, the 1851 MB / no-swap budget needs revisiting, not just the alert.",
+              }),
+              // Secondary, threshold-form for the same no-data reasoning: an
+              // always-present ratio, so "no series" means the exporter is
+              // gone (covered by NodeExporterDown) rather than the node being
+              // out of memory.
+              promAlert({
+                uid: "node-memory-available-low",
+                title: "NodeMemoryAvailableLow",
+                expr: "1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+                threshold: 0.9,
+                for: "15m",
+                severity: "warning",
+                summary:
+                  "Node {{ $labels.instance }} has under 10% memory available for 15 minutes",
+                description:
+                  "Early heads-up before the stalls begin. `ps aux --sort=-rss` on {{ $labels.instance }}. A node under this condition is one noisy workload away from the thrash NodeMemoryStalled catches.",
+              }),
+              // Kernel actually invoked the OOM killer. Counter resets only on
+              // reboot, so increase() is safe; `for: 0m` is right — the event
+              // already happened. Warning rather than critical because a
+              // caught kill may be absorbed (k3s restarts the pod), while the
+              // *state* of the node is what NodeMemoryStalled covers.
+              promAlert({
+                uid: "node-oom-kill",
+                title: "NodeOOMKill",
+                expr: "increase(node_vmstat_oom_kill[10m]) > 0",
+                for: "0m",
+                severity: "warning",
+                summary:
+                  "Node {{ $labels.instance }} OOM-killed a process in the last 10 minutes",
+                description:
+                  "The kernel memory cgroup or the kernel itself killed a process on {{ $labels.instance }}. Find the victim in the journal: `journalctl -k --since -15m | grep -i oom`. maxdata carried 101 lifetime OOM kills before this alert existed.",
+              }),
+            ],
+          },
         ],
       },
     },
