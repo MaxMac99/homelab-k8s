@@ -765,6 +765,26 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
                 description:
                   "The kernel memory cgroup or the kernel itself killed a process on {{ $labels.instance }}. Find the victim in the journal: `journalctl -k --since -15m | grep -i oom`. maxdata carried 101 lifetime OOM kills before this alert existed.",
               }),
+              // unpoller exports this counter every time a controller fetch
+              // fails. It earned its place the hard way: the poller failed to
+              // authenticate from 2026-09-05 (UOS Server migration never
+              // migrated its user), tripped UOS's login-attempt limit into a
+              // self-sustaining 429 lockout, and exported zero controller
+              // data for 10 days — while the Deployment read 1/1 Running,
+              // because a poller's /metrics endpoint stays alive and serves
+              // only self-metrics while its fetches fail. This alert is what
+              // makes that shape visible.
+              promAlert({
+                uid: "unpoller-refresh-failing",
+                title: "UnpollerRefreshFailing",
+                expr: "increase(unpoller_prometheus_refresh_failures_total[30m]) > 0",
+                for: "0m",
+                severity: "warning",
+                summary:
+                  "unpoller failed {{ $values.A }} controller refreshes in 30 minutes",
+                description:
+                  "The poller cannot fetch from the UniFi controller — unifi dashboards are silently going stale. Check `kubectl logs -n monitoring deploy/unpoller` for the failure shape: 429 means the controller's login-attempt limit (scale the poller to 0 and let it cool); 403 means the credentials/API key are rejected. Note the Deployment stays 1/1 while this fires — the /metrics endpoint lives even when every controller fetch fails.",
+              }),
             ],
           },
         ],

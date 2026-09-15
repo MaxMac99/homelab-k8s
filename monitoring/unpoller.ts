@@ -12,18 +12,27 @@ const config = new pulumi.Config();
 // :8443). Override via the `unpoller-url` config if you front it differently.
 const unifiUrl =
   config.get("unpoller-url") || "https://unifi.unifi.svc.cluster.local";
-const unifiUser = config.get("unpoller-user") || "unpoller";
-const unifiPassword = config.requireSecret("unpoller-password");
+// ⚠️ API key, not user/pass — found 2026-09-15. The UOS Server migration
+// (apps/unifi.ts) never migrated the poller user, and the classic
+// /api/auth/login the poller uses is what UOS rate-limits: two pods' retry
+// storms tripped AUTHENTICATION_FAILED_LIMIT_REACHED and both pods were
+// locked out of a controller that looked healthy from the Deployment's
+// 1/1. An API key is exclusive of user/pass auth and does not cross the
+// login rate-limiter at all. The `unpoller-user` / `unpoller-password`
+// config and the unpoller-credentials secret are kept (harmless, and the
+// fallback path if a future controller swap needs it) but no longer wired
+// into the deployment env.
+const unifiApiKey = config.requireSecret("unpoller-api-key");
 
 // Secret for UnPoller credentials
-const unpollerSecret = new k8s.core.v1.Secret("unpoller-secret", {
+const unpollerApiKeySecret = new k8s.core.v1.Secret("unpoller-api-key", {
   metadata: {
-    name: "unpoller-credentials",
+    name: "unpoller-api-key",
     namespace: namespaceName,
   },
   type: "Opaque",
   stringData: {
-    password: unifiPassword,
+    api_key: unifiApiKey,
   },
 });
 
@@ -73,15 +82,14 @@ const unpollerDeployment = new k8s.apps.v1.Deployment("unpoller", {
                 value: unifiUrl,
               },
               {
-                name: "UP_UNIFI_DEFAULT_USER",
-                value: unifiUser,
-              },
-              {
-                name: "UP_UNIFI_DEFAULT_PASS",
+                // Exclusive of user/pass: with an API key set, unpoller signs
+                // every request directly and never touches /api/auth/login —
+                // the endpoint UOS rate-limits (see the comment above).
+                name: "UP_UNIFI_DEFAULT_API_KEY",
                 valueFrom: {
                   secretKeyRef: {
-                    name: unpollerSecret.metadata.name,
-                    key: "password",
+                    name: unpollerApiKeySecret.metadata.name,
+                    key: "api_key",
                   },
                 },
               },
@@ -165,22 +173,21 @@ export { unpollerDeployment, unpollerService };
 // Setup Instructions:
 //
 // 1. Create a local user in UniFi Controller:
-//    - Go to https://192.168.178.13:8443 (or your UniFi controller URL)
-//    - Settings → Admins
-//    - Click "Add Admin"
-//    - Name: unpoller
-//    - Role: Read Only
-//    - Password: Generate a strong password
-//    - Enable "Local Access Only"
-//    - Save
+//    - Create an API key in the Network application UI (Settings → Control
+//      Plane → API, or your admin profile → API Keys, depending on version).
+//      An API key is exclusive of user/pass and never crosses the /api/auth
+//      login endpoint that UOS rate-limits (AUTHENTICATION_FAILED_LIMIT_
+//      REACHED locked both pods out during the 2026-09-13..15 outage).
 //
-// 2. Add UnPoller password to Pulumi config:
-//    cd ~/Git/setup/pulumi/k8s
-//    pulumi config set --secret unpoller-password <password-from-step-1>
+// 2. Add the API key to Pulumi config:
+//    pulumi config set --secret unpoller-api-key <key-from-step-1>
 //
 // 3. (Optional) Override default settings:
-//    pulumi config set unpoller-url https://unifi.unifi.svc.cluster.local:8443
-//    pulumi config set unpoller-user unpoller
+//    pulumi config set unpoller-url https://unifi.unifi.svc.cluster.local
+//
+//    Legacy user/pass auth (`unpoller-user` / `unpoller-password` config and
+//    the unpoller-credentials secret) is no longer wired into the deployment
+//    env, but the config keys are harmless to keep as a fallback.
 //
 // 4. Update monitoring/index.ts to export UnPoller:
 //    Add: export * from "./unpoller";
