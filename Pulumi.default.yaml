@@ -37,3 +37,5 @@ config:
     secure: AAABAERwvJ8FDlIYX8zfE9GQx89DTNyRyl5uOZGYiL+Lpu6RdHkUyL9TEP3qNwyVukxja2TYvOHkyKGYOgfWZhkMTsrSsQnL
   k8s-resources:tripCartoApiKey:
     secure: AAABAPlxkvDYN4Dp/5uz04tYlv1wntWTIJ2+xh9vwqlNzSGrrKrLGwoGH9ucxmeYwmCyyfY6gTRD91LgoosCBEzPLQ==
+  k8s-resources:unpoller-api-key:
+    secure: AAABAImmdgC+zn9s7WppChq2Z0YNInSno3DecOE/Im9cUV2PvvYfpHdZVzTRxZJWu7PmlbvhDD4a8ucXHyOqaw==
