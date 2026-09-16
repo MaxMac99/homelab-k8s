@@ -41,6 +41,7 @@
 // only arm64 node.
 
 import * as k8s from "@pulumi/kubernetes";
+import * as authentik from "@pulumi/authentik";
 import * as pulumi from "@pulumi/pulumi";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import {
@@ -49,6 +50,12 @@ import {
   publicIngressClass,
 } from "../infrastructure/sites";
 import { authentikOutpostService } from "../auth/authentik-outpost";
+import {
+  defaultAuthorizationFlow,
+  defaultInvalidationFlow,
+  proxyScopeMappings,
+} from "../auth/authentik-config";
+import { forwardAuthOutpostRecord } from "../auth/authentik-forward-auth";
 import {
   mealsDbPassword,
   postgresqlClusterName,
@@ -534,6 +541,57 @@ const mealsPublicOutpostIngress = new k8s.networking.v1.Ingress(
   },
 );
 
+// ---------------------------------------------------------------------------
+// Authentik configuration-as-code — the proxy provider, application, outpost
+// attachment and group policy that setup step 4 below used to do by hand.
+//
+// What this deliberately does *not* manage: the domain-level "Traefik" proxy
+// provider and the pre-existing applications (Trip, Grafana, Paperless-ngx,
+// Home Assistant, Immich). Those predate config-as-code and would need
+// importing into state before code can take them over — the plan is to do
+// that app-by-app as each one is next touched.
+const mealsProxyProvider = new authentik.ProviderProxy("meals-proxy-provider", {
+  name: "Meals",
+  mode: "forward_single",
+  externalHost: `https://${mealsHost}`,
+  authorizationFlow: defaultAuthorizationFlow.id,
+  invalidationFlow: defaultInvalidationFlow.id,
+  propertyMappings: proxyScopeMappings,
+  // The UI's default for a fresh provider, made explicit so the code object
+  // matches what the UI would have made (and what Trip has).
+  accessTokenValidity: "hours=24",
+});
+
+const mealsApplication = new authentik.Application("meals-application", {
+  name: "Meals",
+  slug: "meals",
+  protocolProvider: mealsProxyProvider.providerProxyId.apply(Number),
+  metaLaunchUrl: `https://${mealsHost}`,
+});
+
+// Attach to the single existing outpost — the UI equivalent of step 4(c).
+// ⚠️ No outpost is created here. Creating one would fight authentik-outpost.ts,
+// which deploys the pod this record serves.
+new authentik.OutpostProviderAttachment("meals-outpost-attachment", {
+  outpost: forwardAuthOutpostRecord.id,
+  protocolProvider: mealsProxyProvider.providerProxyId.apply(Number),
+});
+
+// Step 4(d)'s gate: only members of meals-users may open the web client.
+// ⚠️ The group starts empty — after the first deploy, add yourself in
+// Directory → Groups → meals-users, or /app answers 403 even after a
+// successful login. The API/MCP paths stay outside Authentik entirely (see
+// the header comment).
+const mealsUsersGroup = new authentik.Group("meals-users-group", {
+  name: "meals-users",
+});
+
+new authentik.PolicyBinding("meals-group-binding", {
+  target: mealsApplication.uuid,
+  group: mealsUsersGroup.id,
+  order: 0,
+});
+
 export {
   namespace as mealsNamespace,
   mealsDeployment,
@@ -561,21 +619,13 @@ export {
 //    POST /auth/tokens). This token is what the iOS app and the Custom GPT
 //    send as `Authorization: Bearer meals_…`.
 //
-// 4. Authentik (UI, not API — same recipe as trip.ts):
-//    a. Applications → Providers → Create → Proxy Provider
-//       - Name: Meals
-//       - Authorization flow: default-provider-authorization-implicit-consent
-//       - Type: Forward auth (single application)
-//       - External host: https://meals.mvissing.de
-//    b. Applications → Applications → Create
-//       - Name: Meals, Slug: meals, Provider: from (a)
-//       - Launch URL: https://meals.mvissing.de
-//    c. Applications → Outposts → k8s-forward-auth → add the Meals
-//       application (the one outpost record the middleware already points at;
-//       do not create a second outpost)
-//    d. Bind a group to the Application as policy — without it every
-//       authenticated estate user gets in (only you today, but the binding is
-//       what makes that deliberate).
+// 4. Authentik — now code, not clicks: the proxy provider, the application,
+//    the outpost attachment and the meals-users group gate are created by
+//    pulumi up (see the Authentik section in this file). Prerequisite: the
+//    API provider must be bootstrapped once — `authentikToken` in stack
+//    config, per the instructions at the top of auth/authentik-config.ts.
+//    After the deploy, add yourself to the meals-users group (Directory →
+//    Groups); until then /app answers 403 even after a successful login.
 //
 //    ⚠️ This gates the web client only. The API paths have no Authentik in
 //    front of them, by design — see the header comment.

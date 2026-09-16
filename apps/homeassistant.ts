@@ -4,6 +4,7 @@
 // Integrates with Authentik for OAuth2/OIDC SSO
 
 import * as k8s from "@pulumi/kubernetes";
+import * as authentik from "@pulumi/authentik";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import {
@@ -19,6 +20,61 @@ import {
   postgresqlClusterName,
   homeassistantDbPassword,
 } from "../databases/postgresql";
+import {
+  defaultAuthorizationFlow,
+  defaultInvalidationFlow,
+  oauth2ScopeMappings,
+  signingKey,
+} from "../auth/authentik-config";
+import { adminsGroup } from "../auth/authentik-directory";
+
+// ---------------------------------------------------------------------------
+// Authentik OAuth2/OIDC — the "Provider for Home Assistant" provider and its
+// application, adopted from UI-created objects via `pulumi import`. Home
+// Assistant's own side is configured in its UI (custom OIDC component) with
+// the client id and secret from this provider — they are not managed here,
+// because HA stores them in its on-disk config, not in stack config. Changing
+// the secret in Authentik therefore means re-entering it in the HA UI too.
+const homeAssistantOauth2Provider = new authentik.ProviderOauth2(
+  "home-assistant-oauth2-provider",
+  {
+    name: "Provider for Home Assistant",
+    clientId: "MvWh57myA9NpAi5SPXUJMmqO00rDz4Z51Esrh2oe",
+    authorizationFlow: defaultAuthorizationFlow.id,
+    invalidationFlow: defaultInvalidationFlow.id,
+    propertyMappings: oauth2ScopeMappings,
+    signingKey,
+    // ⚠️ Snake_case map keys — see apps/immich.ts.
+    allowedRedirectUris: [
+      {
+        matching_mode: "strict",
+        url: "https://home.mvissing.de/auth/oidc/callback",
+        redirect_uri_type: "authorization",
+      },
+    ],
+    // Non-default validity — everything else is the provider default.
+    accessTokenValidity: "minutes=5",
+    refreshTokenThreshold: "hours=1",
+  },
+);
+
+const homeAssistantApplication = new authentik.Application(
+  "home-assistant-application",
+  {
+    name: "Home Assistant",
+    slug: "home-assistant",
+    protocolProvider:
+      homeAssistantOauth2Provider.providerOauth2Id.apply(Number),
+    metaLaunchUrl: "https://home.mvissing.de",
+  },
+);
+
+// The authorization gate: admins only (the estate pattern).
+new authentik.PolicyBinding("home-assistant-group-binding", {
+  target: homeAssistantApplication.uuid,
+  group: adminsGroup.id,
+  order: 0,
+});
 
 // Create namespace for Home Assistant
 const namespace = new k8s.core.v1.Namespace("homeassistant", {

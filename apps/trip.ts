@@ -38,6 +38,13 @@ import {
   ZONE_LABEL,
 } from "../infrastructure/sites";
 import { authentikOutpostService } from "../auth/authentik-outpost";
+import * as authentik from "@pulumi/authentik";
+import {
+  defaultAuthorizationFlow,
+  defaultInvalidationFlow,
+  proxyScopeMappings,
+} from "../auth/authentik-config";
+import { userMax, userMichael } from "../auth/authentik-directory";
 
 const config = new pulumi.Config();
 
@@ -518,6 +525,48 @@ const tripPublicOutpostIngress = new k8s.networking.v1.Ingress(
   },
 );
 
+// ---------------------------------------------------------------------------
+// Authentik configuration-as-code — the proxy provider, application and
+// trip-users group that setup step 3 below used to do by hand. Adopted from
+// the UI-created objects via `pulumi import`; values mirror what the UI made.
+//
+// Single-application mode is deliberate (see step 3's reasoning): it pins the
+// OAuth callback to trip.mvissing.de itself and keeps per-app rights
+// enforceable. The outpost attachment predates config-as-code and stays
+// frozen via the outpost record's ignoreChanges (auth/authentik-forward-auth.ts).
+const tripProxyProvider = new authentik.ProviderProxy("trip-proxy-provider", {
+  name: "Trip",
+  mode: "forward_single",
+  externalHost: "https://trip.mvissing.de",
+  authorizationFlow: defaultAuthorizationFlow.id,
+  invalidationFlow: defaultInvalidationFlow.id,
+  propertyMappings: proxyScopeMappings,
+  // The UI's default for a fresh provider, made explicit.
+  accessTokenValidity: "hours=24",
+});
+
+const tripApplication = new authentik.Application("trip-application", {
+  name: "Trip",
+  slug: "trip",
+  protocolProvider: tripProxyProvider.providerProxyId.apply(Number),
+});
+
+// Membership is managed: adding a traveller is a code change.
+const tripUsersGroup = new authentik.Group("trip-users-group", {
+  name: "trip-users",
+  users: [userMichael.id.apply(Number), userMax.id.apply(Number)],
+});
+
+// The authorization gate: trip-users membership. The outpost re-checks this
+// binding per request.
+new authentik.PolicyBinding("trip-group-binding", {
+  // The binding API wants the application's UUID, not the resource id (which
+  // is the slug).
+  target: tripApplication.uuid,
+  group: tripUsersGroup.id,
+  order: 0,
+});
+
 export {
   namespace as tripNamespace,
   tripDeployment,
@@ -543,32 +592,21 @@ export {
 //      pulumi config set --secret tripRegistryPullToken <classic PAT, read:packages>
 //      pulumi config set --secret tripCartoApiKey <CARTO key>
 //
-// 3. Authentik (UI, not API — same recipe as homepage.ts):
-//    a. Applications → Providers → Create → Proxy Provider
-//       - Name: Trip
-//       - Authorization flow: default-provider-authorization-implicit-consent
-//       - Type: Forward auth (single application) — deliberately not
-//         domain-level: a per-app provider is what pins the OAuth callback to
-//         trip.mvissing.de itself (routed by trip-outpost-ingress /
-//         trip-public-outpost-ingress above) and what makes per-app rights
-//         enforceable. Authentik requires the external host in this mode.
-//       - External host: https://trip.mvissing.de
-//       (No cookie domain field — the outpost session cookie is host-scoped.
-//       Estate-wide SSO still applies: the authentik login session at
-//       auth.mvissing.de survives across apps, so the first trip visit is a
-//       short redirect chain, then the host-scoped cookie takes over.)
-//    b. Applications → Applications → Create
-//       - Name: Trip, Slug: trip, Provider: from (a)
-//       - Launch URL: https://trip.mvissing.de
-//    c. Applications → Outposts → k8s-forward-auth → add the Trip
-//       application (that UI name is the one outpost record; the
-//       Pulumi-managed proxy pod is named authentik-outpost in k8s and
-//       connects through it — don't create a second outpost)
-//    d. Bind the family group (or a dedicated Trip group) to the Application
-//       as policy — that binding is the authorization; without it every
-//       authenticated estate user gets in. Users who should hold ONLY trip:
-//       put them in the Trip group and not in the groups bound to other
-//       applications — the outpost re-checks each app's bindings per request.
+// 3. Authentik — now code, not clicks: the proxy provider, the application
+//    and the trip-users group are created by pulumi up (see the Authentik
+//    section in this file; provider prerequisites in
+//    auth/authentik-config.ts). Single-application mode is deliberate: it
+//    pins the OAuth callback to trip.mvissing.de itself (routed by
+//    trip-outpost-ingress / trip-public-outpost-ingress above) and makes
+//    per-app rights enforceable. (No cookie domain — the outpost session
+//    cookie is host-scoped. Estate-wide SSO still applies: the authentik
+//    login session at auth.mvissing.de survives across apps, so the first
+//    trip visit is a short redirect chain, then the host-scoped cookie takes
+//    over.) The outpost attachment predates config-as-code and stays frozen
+//    via the outpost record's ignoreChanges. Authorization = trip-users
+//    membership; users who should hold ONLY trip go in that group and not in
+//    the groups bound to other applications — the outpost re-checks each
+//    app's bindings per request.
 //
 // 4. DNS — nothing to add, verified 2026-08-31:
 //    - Public zone: IONOS wildcard answers trip.mvissing.de with

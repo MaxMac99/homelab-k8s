@@ -4,6 +4,7 @@
 // Accessible via grafana.mvissing.de
 
 import * as k8s from "@pulumi/kubernetes";
+import * as authentik from "@pulumi/authentik";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
@@ -23,6 +24,13 @@ import {
   grafanaDatabaseUser,
   grafanaDatabaseSecretName,
 } from "./grafana-database";
+import {
+  defaultAuthorizationFlow,
+  defaultInvalidationFlow,
+  oauth2ScopeMappings,
+  signingKey,
+} from "../auth/authentik-config";
+import { adminsGroup } from "../auth/authentik-directory";
 
 // PersistentVolumeClaim for Grafana plugin storage
 const grafanaPVC = new k8s.core.v1.PersistentVolumeClaim("grafana-pvc", {
@@ -41,12 +49,49 @@ const grafanaPVC = new k8s.core.v1.PersistentVolumeClaim("grafana-pvc", {
   },
 });
 
-// Get Pulumi config for Authentik OAuth credentials
-const config = new pulumi.Config();
-const authentikClientId = config.requireSecret("grafana-oauth-client-id");
-const authentikClientSecret = config.requireSecret(
-  "grafana-oauth-client-secret",
+// ---------------------------------------------------------------------------
+// Authentik OAuth — provider and application managed here since the
+// config-as-code adoption. Credentials flow from the provider resource
+// (clientSecret as a secret output); the stack-config copies
+// (grafana-oauth-client-id/secret) were removed when this landed.
+const grafanaOauth2Provider = new authentik.ProviderOauth2(
+  "grafana-oauth2-provider",
+  {
+    name: "Grafana",
+    clientId: "ZWYXO9Pm5cuRFZWe3tYT6qxX3wPS2CXdZW2yq3vv",
+    authorizationFlow: defaultAuthorizationFlow.id,
+    invalidationFlow: defaultInvalidationFlow.id,
+    propertyMappings: oauth2ScopeMappings,
+    signingKey,
+    // ⚠️ Snake_case map keys — see apps/immich.ts.
+    allowedRedirectUris: [
+      {
+        matching_mode: "strict",
+        url: "https://grafana.mvissing.de/login/generic_oauth",
+        redirect_uri_type: "authorization",
+      },
+    ],
+    // Non-default validity — everything else is the provider default.
+    accessTokenValidity: "minutes=5",
+    refreshTokenThreshold: "hours=1",
+  },
 );
+
+const grafanaApplication = new authentik.Application("grafana-application", {
+  name: "Grafana",
+  slug: "grafana",
+  protocolProvider: grafanaOauth2Provider.providerOauth2Id.apply(Number),
+});
+
+// The authorization gate: admins only (the estate pattern).
+new authentik.PolicyBinding("grafana-group-binding", {
+  target: grafanaApplication.uuid,
+  group: adminsGroup.id,
+  order: 0,
+});
+
+const authentikClientId = grafanaOauth2Provider.clientId;
+const authentikClientSecret = grafanaOauth2Provider.clientSecret;
 const authentikUrl = "https://auth.mvissing.de";
 
 // Generate random password for Grafana admin user
@@ -878,35 +923,12 @@ export { grafana };
 
 // Post-deployment setup required:
 //
-// 1. Create OAuth2/OIDC Provider in Authentik:
-//    - Go to Authentik Admin UI → Applications → Providers
-//    - Click "Create" → OAuth2/OpenID Provider
-//    - Name: Grafana
-//    - Authorization flow: default-provider-authorization-implicit-consent
-//    - Client type: Confidential
-//    - Client ID: <generate or use a custom value>
-//    - Client Secret: <generate>
-//    - Redirect URIs: https://grafana.mvissing.de/login/generic_oauth
-//    - Signing Key: authentik Self-signed Certificate
-//
-// 2. Create Application in Authentik:
-//    - Go to Applications → Create
-//    - Name: Grafana
-//    - Slug: grafana
-//    - Provider: Select the provider created above
-//    - Launch URL: https://grafana.mvissing.de
-//
-// 3. (Optional) Create Groups for role mapping:
-//    - "Grafana Admins" → Full admin access
-//    - "Grafana Editors" → Can edit dashboards
-//    - Default: Viewer access
-//
-// 4. Add OAuth credentials to Pulumi config:
-//    pulumi config set --secret grafana-oauth-client-id <client-id>
-//    pulumi config set --secret grafana-oauth-client-secret <client-secret>
-//
-// 5. Deploy:
-//    pulumi up
+// 1. Authentik OAuth — now code, not clicks: the provider and application are
+//    declared in this file (see the Authentik OAuth section), managed through
+//    the API provider configured by authentik:url / authentik:token in stack
+//    config (see auth/authentik-config.ts). The client credentials flow from
+//    the provider resource itself — nothing to copy into stack config.
+//    Authorization is admins-group membership (grafana-group-binding).
 //
 // Access Grafana:
 //   URL: https://grafana.mvissing.de

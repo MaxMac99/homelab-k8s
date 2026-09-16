@@ -5,3 +5,10 @@ runtime:
   options:
     packagemanager: yarn
     nodeargs: "--loader ts-node/esm --no-warnings --experimental-specifier-resolution=node"
+packages:
+  authentik:
+    source: pulumi/pulumi/terraform-provider
+    version: 1.4.0
+    parameters:
+      - goauthentik/authentik
+      - 2026.8.0

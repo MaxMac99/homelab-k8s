@@ -4,6 +4,7 @@
 // Media storage on NFS (tank pool), data/consume on fast local storage
 
 import * as k8s from "@pulumi/kubernetes";
+import * as authentik from "@pulumi/authentik";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
@@ -16,6 +17,13 @@ import {
 } from "../databases/postgresql";
 import { redisHost } from "../databases/redis";
 import { onNode, winkelSite, MAXDATA } from "../infrastructure/sites";
+import {
+  defaultAuthorizationFlow,
+  defaultInvalidationFlow,
+  oauth2ScopeMappings,
+  signingKey,
+} from "../auth/authentik-config";
+import { adminsGroup } from "../auth/authentik-directory";
 
 // Create namespace for Paperless
 const namespace = new k8s.core.v1.Namespace("paperless", {
@@ -30,11 +38,58 @@ const namespace = new k8s.core.v1.Namespace("paperless", {
 // Get Pulumi config for sensitive values
 const config = new pulumi.Config();
 const paperlessSecretKey = config.requireSecret("paperless-secret-key");
-const authentikClientId = config.requireSecret("paperless-authentik-client-id");
-const authentikClientSecret = config.requireSecret(
-  "paperless-authentik-client-secret",
-);
 const metricsApiToken = config.requireSecret("paperless-metrics-api-token");
+
+// ---------------------------------------------------------------------------
+// Authentik OIDC — provider and application managed here since the
+// config-as-code adoption (authentik/* for the pattern). The client
+// credentials flow from the provider resource: `clientId` is public,
+// `clientSecret` is a secret output captured at import time. The stack-config
+// copies (paperless-authentik-client-id/secret) were removed when this
+// landed. The redirect URI below must stay in sync with the login callback
+// path allauth builds — see the setup notes at the bottom of this file.
+const paperlessOauth2Provider = new authentik.ProviderOauth2(
+  "paperless-oauth2-provider",
+  {
+    name: "Paperless-ngx",
+    clientId: "oJ9jbLXmdJnb1gp5BpP37y5u5UUhG8gcFkwChDfF",
+    authorizationFlow: defaultAuthorizationFlow.id,
+    invalidationFlow: defaultInvalidationFlow.id,
+    propertyMappings: oauth2ScopeMappings,
+    signingKey,
+    // ⚠️ Snake_case map keys — see apps/immich.ts.
+    allowedRedirectUris: [
+      {
+        matching_mode: "strict",
+        url: "https://dms.mvissing.de/accounts/oidc/authentik/login/callback/",
+        redirect_uri_type: "authorization",
+      },
+    ],
+    // Non-default validity — everything else is the provider default.
+    accessTokenValidity: "minutes=5",
+    refreshTokenThreshold: "hours=1",
+  },
+);
+
+const paperlessApplication = new authentik.Application(
+  "paperless-application",
+  {
+    name: "Paperless-ngx",
+    slug: "paperless",
+    protocolProvider: paperlessOauth2Provider.providerOauth2Id.apply(Number),
+    metaLaunchUrl: "https://dms.mvissing.de",
+  },
+);
+
+// The authorization gate: admins only (the estate pattern).
+new authentik.PolicyBinding("paperless-group-binding", {
+  target: paperlessApplication.uuid,
+  group: adminsGroup.id,
+  order: 0,
+});
+
+const authentikClientId = paperlessOauth2Provider.clientId;
+const authentikClientSecret = paperlessOauth2Provider.clientSecret;
 
 // Store secrets in Kubernetes (in paperless namespace)
 const paperlessSecret = new k8s.core.v1.Secret("paperless-secret", {
@@ -746,18 +801,16 @@ export {
 //    sudo mkdir -p /tank/k8s/nfs/paperless-media
 //    sudo chown -R 1000:1000 /tank/k8s/nfs/paperless-media
 //
-// 3. Configure Authentik OAuth2/OIDC Provider:
-//    a. Go to Authentik UI (https://auth.mvissing.de)
-//    b. Create new OAuth2/OpenID Provider:
-//       - Name: Paperless-ngx
-//       - Client type: Confidential
-//       - Redirect URIs: https://dms.mvissing.de/accounts/oidc/authentik/login/callback/
-//       - Signing Key: (auto-generated)
+// 3. Authentik OAuth2/OIDC — now code, not clicks: the provider and
+//    application are declared in this file (see the Authentik OIDC section),
+//    managed through the API provider configured by authentik:url /
+//    authentik:token in stack config (see auth/authentik-config.ts). The
+//    client credentials flow from the provider resource itself.
 //
-//    ⚠️ Note the `/oidc/` segment. This file previously documented
-//    `/accounts/authentik/login/callback/`, which Authentik rejects with
-//    "The request fails due to a missing, invalid, or mismatching redirection
-//    URI". allauth namespaces the openid_connect provider under
+//    ⚠️ Note the `/oidc/` segment in the redirect URI. This file previously
+//    documented `/accounts/authentik/login/callback/`, which Authentik rejects
+//    with "The request fails due to a missing, invalid, or mismatching
+//    redirection URI". allauth namespaces the openid_connect provider under
 //    `/accounts/oidc/<provider_id>/`, where <provider_id> is the `id` field in
 //    PAPERLESS_SOCIALACCOUNT_PROVIDERS above ("authentik"). Do not guess it —
 //    ask Django, which is what actually builds the URL:
@@ -767,27 +820,14 @@ export {
 //         django.setup(); from django.urls import get_resolver; \
 //         print([str(p.pattern) for p in get_resolver().url_patterns])"
 //
-//    ⚠️ If you create the provider through `ak shell` rather than the UI or the
-//    REST API, `grant_types` comes out EMPTY — it is a serializer default, not
-//    a model default, so Model.objects.create() skips it. Authentik then fails
-//    with "Invalid grant_type for provider" and returns error=invalid_request
-//    to the callback, which looks like a client bug. Copy an existing working
-//    provider's `grant_types`, `access_token_validity` and
-//    `refresh_token_threshold` explicitly, then diff the two objects field by
-//    field before trusting it.
-//    c. Create new Application:
-//       - Name: Paperless-ngx
-//       - Slug: paperless
-//       - Provider: (select the provider created above)
-//    d. Note the Client ID and Client Secret
+//    (Historical: this provider was once created via `ak shell`, which left
+//    `grant_types` empty — a serializer default, not a model default — and
+//    every callback failed with error=invalid_request. It now lives in code
+//    where the field list is explicit.)
 //
 // 4. Set Pulumi config secrets (before deploying):
 //    # Generate a random secret key (or reuse the existing one)
 //    pulumi config set --secret paperless-secret-key "$(openssl rand -hex 32)"
-//
-//    # Set Authentik OAuth credentials from step 3
-//    pulumi config set --secret paperless-authentik-client-id "YOUR_CLIENT_ID"
-//    pulumi config set --secret paperless-authentik-client-secret "YOUR_CLIENT_SECRET"
 //
 // 5. ⚠️ RESTORE THE DATABASE BEFORE THE FIRST DEPLOY. Paperless migrates an
 //    empty database on first start, and the dump then collides with the schema

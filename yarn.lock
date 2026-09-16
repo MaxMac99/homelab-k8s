@@ -568,6 +568,13 @@
   resolved "https://registry.yarnpkg.com/@protobufjs/utf8/-/utf8-1.1.2.tgz#78d476333d85d5b1c792e257bca74ba080da49a4"
   integrity sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==
 
+"@pulumi/authentik@file:sdks/authentik":
+  version "2026.8.0"
+  dependencies:
+    "@pulumi/pulumi" "^3.238.0"
+    "@types/node" "^20"
+    typescript "^4.7.0"
+
 "@pulumi/kubernetes@^4.23.0":
   version "4.34.0"
   resolved "https://registry.yarnpkg.com/@pulumi/kubernetes/-/kubernetes-4.34.0.tgz#0a89d8cbb75a447c5cfa9934451a36e8579c6433"
@@ -581,6 +588,37 @@
   version "3.261.0"
   resolved "https://registry.yarnpkg.com/@pulumi/pulumi/-/pulumi-3.261.0.tgz#7596eb3c49420a8d588e94075262abaa3a118e8f"
   integrity sha512-gZDiCmaBKxXpIagOytLTOc/GOWYMj/8OgW/X78RN7ngv7+N550+tWIu9dETPrz7NmWVWfeXdjGeRmH+GxuaPxg==
+  dependencies:
+    "@grpc/grpc-js" "^1.10.1"
+    "@logdna/tail-file" "^2.0.6"
+    "@npmcli/arborist" "^9.0.0"
+    "@opentelemetry/api" "^1.9"
+    "@opentelemetry/core" "^2.9"
+    "@opentelemetry/exporter-trace-otlp-grpc" "^0.220"
+    "@opentelemetry/exporter-zipkin" "^2.9"
+    "@opentelemetry/instrumentation" "^0.220"
+    "@opentelemetry/instrumentation-grpc" "^0.220"
+    "@opentelemetry/resources" "^2.9"
+    "@opentelemetry/sdk-trace-base" "^2.9"
+    "@opentelemetry/sdk-trace-node" "^2.9"
+    "@opentelemetry/semantic-conventions" "^1.42"
+    "@types/google-protobuf" "^3.15.5"
+    "@types/semver" "^7.5.6"
+    execa "^5.1.0"
+    google-protobuf "^3.21.4"
+    ini "^2.0.0"
+    js-yaml "^4.0.0"
+    minimist "^1.2.6"
+    normalize-package-data "^6.0.0"
+    require-from-string "^2.0.1"
+    semver "^7.5.2"
+    source-map-support "^0.5.6"
+    upath "^1.1.0"
+
+"@pulumi/pulumi@^3.238.0":
+  version "3.263.0"
+  resolved "https://registry.yarnpkg.com/@pulumi/pulumi/-/pulumi-3.263.0.tgz#94dc997b3791742d1aa518b3acb7fc7bffb3c8a0"
+  integrity sha512-ZIWdlwKCSRFkUxRmISu3FT7db7Ac+Hfjh1ta3cyau+QupneuzZ+OFzezM6Var9PeNRaHNyWtSPg7Qjq8CHNzww==
   dependencies:
     "@grpc/grpc-js" "^1.10.1"
     "@logdna/tail-file" "^2.0.6"
@@ -720,6 +758,13 @@
   integrity sha512-k97ENvZWtvA6yqz5/FS6a7duDgOPEeOQOc2iKS/nY6mX6qJUKtLnWzQS+Xj6tXweyj6ZcTAK2Qecetnvi9nCLA==
   dependencies:
     undici-types "~8.3.0"
+
+"@types/node@^20":
+  version "20.19.43"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.19.43.tgz#fcecf580ba42a0db55cf404c372c97973c376c97"
+  integrity sha512-6oYBAi5ikg4Pl+kGsoYtawUMBT2zZMCvPNF7pVLnHZfd1zf38DRiWn/gT01RYCdUqkv7Fhr+C9ot4/tb+2sVvA==
+  dependencies:
+    undici-types "~6.21.0"
 
 "@types/node@^24.0.0":
   version "24.13.3"
@@ -2142,10 +2187,20 @@ typescript-eslint@^8.46.1:
     "@typescript-eslint/typescript-estree" "8.69.0"
     "@typescript-eslint/utils" "8.69.0"
 
+typescript@^4.7.0:
+  version "4.9.5"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.9.5.tgz#095979f9bcc0d09da324d58d03ce8f8374cbe65a"
+  integrity sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g==
+
 typescript@^6.0.0:
   version "6.0.3"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-6.0.3.tgz#90251dc007916e972786cb94d74d15b185577d21"
   integrity sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==
+
+undici-types@~6.21.0:
+  version "6.21.0"
+  resolved "https://registry.yarnpkg.com/undici-types/-/undici-types-6.21.0.tgz#691d00af3909be93a7faa13be61b3a5b50ef12cb"
+  integrity sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==
 
 undici-types@~7.18.0:
   version "7.18.2"

@@ -10,24 +10,112 @@
 // that does and does not protect.
 
 import * as k8s from "@pulumi/kubernetes";
+import * as authentik from "@pulumi/authentik";
 import * as pulumi from "@pulumi/pulumi";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import { onNode, MAXDATA, publicIngressClass } from "../infrastructure/sites";
 import { postgresWinkelHost, immichDatabase } from "../databases/postgresql";
+import {
+  defaultAuthorizationFlow,
+  defaultInvalidationFlow,
+  oauth2ScopeMappings,
+  signingKey,
+} from "../auth/authentik-config";
+import {
+  userMax,
+  userMichael,
+  userSilke,
+  userAnna,
+} from "../auth/authentik-directory";
 
 const config = new pulumi.Config();
 
-/**
- * Authentik OIDC credentials for the `immich` application.
- *
- * ⚠️ Created through Authentik's API, not declared here — this repo has no
- * Authentik blueprints, and Grafana and Paperless work the same way: the
- * provider lives in Authentik, only the resulting credentials live in the
- * stack's encrypted config. That means the provider itself is **not** captured
- * by this repo and would have to be rebuilt by hand after an Authentik rebuild.
- */
-const oauthClientId = config.requireSecret("immich-oauth-client-id");
-const oauthClientSecret = config.requireSecret("immich-oauth-client-secret");
+// ---------------------------------------------------------------------------
+// Authentik OIDC — the provider, application, immich_role scope mapping and
+// immich-users group, all managed here since the config-as-code adoption.
+// The OAuth client credentials flow from the provider resource itself:
+// `clientId` is public, `clientSecret` is a secret output captured from
+// Authentik at import time — the stack-config copies
+// (immich-oauth-client-id/secret) were removed when this landed.
+//
+// ⚠️ The role claim below references the `admins` group by name
+// (auth/authentik-directory.ts) and Immich applies claims **at user creation
+// only and never re-synced** — see the oauth block further down.
+const immichRoleMapping = new authentik.PropertyMappingProviderScope(
+  "immich-role-scope-mapping",
+  {
+    name: "Immich: immich_role",
+    scopeName: "immich_role",
+    description:
+      "Returns admin for members of the admins group, user otherwise. Immich applies this at user creation only.",
+    expression: `return {
+    "immich_role": "admin" if ak_is_group_member(request.user, name="admins") else "user",
+}`,
+  },
+);
+
+const immichOauth2Provider = new authentik.ProviderOauth2(
+  "immich-oauth2-provider",
+  {
+    name: "Immich",
+    clientId: "N03fsGBtaXmLlAmJxmcnfLkjELuQt6vQ5GdkAZAk",
+    authorizationFlow: defaultAuthorizationFlow.id,
+    invalidationFlow: defaultInvalidationFlow.id,
+    propertyMappings: [...oauth2ScopeMappings, immichRoleMapping.id],
+    signingKey,
+    // ⚠️ The keys here are the API's snake_case names — the field is a plain
+    // map, so camelCase keys would be sent verbatim and break the callback
+    // configuration on apply.
+    allowedRedirectUris: [
+      {
+        matching_mode: "strict",
+        url: "https://photos.mvissing.de/auth/login",
+        redirect_uri_type: "authorization",
+      },
+      {
+        matching_mode: "strict",
+        url: "https://photos.mvissing.de/user-settings",
+        redirect_uri_type: "authorization",
+      },
+      // The iOS app's custom-scheme callback.
+      {
+        matching_mode: "strict",
+        url: "app.immich:///oauth-callback",
+        redirect_uri_type: "authorization",
+      },
+    ],
+    // Non-default validity — everything else is the provider default.
+    accessTokenValidity: "hours=1",
+    refreshTokenThreshold: "seconds=0",
+  },
+);
+
+const immichApplication = new authentik.Application("immich-application", {
+  name: "Immich",
+  slug: "immich",
+  protocolProvider: immichOauth2Provider.providerOauth2Id.apply(Number),
+  metaLaunchUrl: "https://photos.mvissing.de",
+  metaDescription: "Photos",
+});
+
+// Membership is managed (like admins): adding someone to Immich is a code
+// change.
+export const immichUsersGroup = new authentik.Group("immich-users-group", {
+  name: "immich-users",
+  users: [
+    userAnna.id.apply(Number),
+    userSilke.id.apply(Number),
+    userMichael.id.apply(Number),
+    userMax.id.apply(Number),
+  ],
+});
+
+// The authorization gate: immich-users membership.
+new authentik.PolicyBinding("immich-group-binding", {
+  target: immichApplication.uuid,
+  group: immichUsersGroup.id,
+  order: 0,
+});
 
 const namespace = new k8s.core.v1.Namespace("immich", {
   metadata: { name: "immich" },
@@ -432,8 +520,8 @@ const immich = new k8s.helm.v3.Release(
           oauth: {
             enabled: true,
             issuerUrl: "https://auth.mvissing.de/application/o/immich/",
-            clientId: oauthClientId,
-            clientSecret: oauthClientSecret,
+            clientId: immichOauth2Provider.clientId,
+            clientSecret: immichOauth2Provider.clientSecret,
             scope: "openid email profile immich_role",
             roleClaim: "immich_role",
             storageLabelClaim: "preferred_username",

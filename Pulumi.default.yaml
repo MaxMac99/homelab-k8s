@@ -7,16 +7,8 @@ config:
     secure: AAABAP4/3FoK+tI34i09n8fX8SNHGFRtfYoJsgDF7HP561NXOB1i1tDmSm4=
   k8s-resources:authentikOutpostToken:
     secure: AAABANuXMityy9XDpnbF6VUEmbYlFA3vvLuJL3HmaWsV9/5SH7484v9b34AQwiJA9PGzWuehoEH3EYnmVXwDZpBqQUUAbnIvs7U0bytL65WpBbhf8kGWYXtDYfg=
-  k8s-resources:grafana-oauth-client-id:
-    secure: AAABAMs7UhjA9DVRcIoxcI419cHtP4rGEZy1gcaD9MY1wTB8ZAN+//fVbewL6v/w94OGLoZlvHLueqzhOYDyg6UEKv8uxPpg
-  k8s-resources:grafana-oauth-client-secret:
-    secure: AAABAPVSIRblbEQfV8P5sqpM1lZeufxoPRBEIdliNxNfpM2BYFMbo7rz36fAtx4ur63CKxevI5LXkCJrL2/YGwMpDxaB/hLqX/BkPuuZi5bHg7Y5fki2DTY1cOd0u9a6oN/6kzNr9Yf/CGF+b4DOsfP+85fMGlIpnK4zw0UmMlvK407psiNB5q7C12CPUzMVvybH5BVZ3m5LtLjrTRNwAg==
   k8s-resources:paperless-secret-key:
     secure: AAABAPE/xzRrdmA6kHdBUax6+9nFOA5GRKEJPFtsw+ss+WojimsVe9mCOWu3QlXsCV8K+901QGat
-  k8s-resources:paperless-authentik-client-id:
-    secure: AAABADOLt/7p+QvMf+1UcP4FBiJbBbMt+2z6NPkWwFtX8+AgSWMYkWW5jO+w1JNN35p4d/Ht5E7ku8DqIQZdjk+e8Iw3EVbo
-  k8s-resources:paperless-authentik-client-secret:
-    secure: AAABAFKIv6sQYh6GM9QO74o6nFZfcrEUOpugTYwJDYtikHS5vmaytM8A05CwUvZxRGtlI6qd6/kBwJACF2io17jBZByeG8eEmb0KvbBSxWNF5mq2K1fmidDyTvhBp3PFnvfD8OE2dmmPc+PI5/UlfAHeEcDpLYdnuqmq1wk/hdF3VLD2PFksBmNZZDQ8aFo31gIiHBOVrTZquSbWuFt+Ag==
   k8s-resources:paperless-metrics-api-token:
     secure: AAABAMfpCKi7SejoPaEHDs4N0o2+1TYO7s4zd49Mt8fKdSj01+UgPfN2Q0j43kZaviEATXP0HxIbW67U8crb0kYm42BByCaS
   k8s-resources:authentikApiToken:
@@ -29,13 +21,12 @@ config:
     secure: AAABAHkiar7BxB0zi3x9ueiWnEsghrqRYFTUpARqPTayOfCKN13oCjsdBdEwKg2tAzB2PASxwD2dTg4yw0kRlS2yqqmajVGZ
   k8s-resources:deadmans-switch-ping-url:
     secure: AAABABNRfIe5U30avKc5kS8GtCP9y7kyHrfI/QMgNURAfjW/dAtvvWPiCr8N+B3m3q1xpn87g/jnH9IeQoOjTboZWpp+ap/QEpX8gl0PnzZFwsCulm8hRA==
-  k8s-resources:immich-oauth-client-id:
-    secure: AAABAJVh7W7br3zZr/baDdr/QVssMDDYdFcn1Sa0MeojPPd5l1fHOZsu9Br23aa2ZsZbXrxOc1rVpM/A21VIXEZ0CmwtcqL/
-  k8s-resources:immich-oauth-client-secret:
-    secure: AAABAJvvQR3eHBEsm2S++py0cyDM+YilSpXobDHIv866x5uxbpp5bRM3SixTNq7GSuh4YIkGIC7PoIX9WS13+fYSjvbWDzueM1wG3gxjkjWcbI39bBIGDLMF44GlkzpgxviTwThyiuRdRLrkePEoXSJaxh7qibGXLnfHHs0brZ/8bngLQZdKCT3PE/poLzod4pMiWBvcYsjJNJGPBmrrKQ==
   k8s-resources:tripRegistryPullToken:
     secure: AAABAERwvJ8FDlIYX8zfE9GQx89DTNyRyl5uOZGYiL+Lpu6RdHkUyL9TEP3qNwyVukxja2TYvOHkyKGYOgfWZhkMTsrSsQnL
   k8s-resources:tripCartoApiKey:
     secure: AAABAPlxkvDYN4Dp/5uz04tYlv1wntWTIJ2+xh9vwqlNzSGrrKrLGwoGH9ucxmeYwmCyyfY6gTRD91LgoosCBEzPLQ==
   k8s-resources:unpoller-api-key:
     secure: AAABAImmdgC+zn9s7WppChq2Z0YNInSno3DecOE/Im9cUV2PvvYfpHdZVzTRxZJWu7PmlbvhDD4a8ucXHyOqaw==
+  authentik:url: https://auth.mvissing.de
+  authentik:token:
+    secure: AAABACJ6xEmkM3Qapp8mTIzH6/bhfCQV4seNCumliJwEK5g2OsYvc0LhcRWECJkZlBEWqPnitGXRjBxZBrG/pnoQhxSNTfdDnP6qiHWb7uA=
