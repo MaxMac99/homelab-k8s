@@ -99,6 +99,7 @@ const backupTargets = [
     host: postgresqlHost,
     secret: "postgres-homeassistant",
   },
+  { db: "meals", host: postgresqlHost, secret: "postgres-meals" },
   { db: "grafana", host: postgresWinkelHost, secret: "postgres-grafana" },
   { db: "paperless", host: postgresWinkelHost, secret: "postgres-paperless" },
   { db: "immich", host: postgresWinkelHost, secret: "postgres-immich" },

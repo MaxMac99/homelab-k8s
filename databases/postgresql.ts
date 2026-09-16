@@ -1,7 +1,7 @@
 // Shared PostgreSQL using CloudNativePG Operator.
 //
 // Two clusters, and they are not interchangeable:
-//   - `postgres`        — brink-server, PG 18.4. authentik, homeassistant.
+//   - `postgres`        — brink-server, PG 18.4. authentik, homeassistant, meals.
 //   - `postgres-winkel` — maxdata, PG 18.4 + VectorChord. grafana, paperless,
 //                         immich.
 //
@@ -216,6 +216,33 @@ const immichPasswordSecret = new k8s.core.v1.Secret(
   },
 );
 
+// Generate password for meals user
+const mealsPassword = new random.RandomPassword("meals-db-password", {
+  length: 32,
+  special: false,
+});
+
+// Create secret with password for meals user
+// This will be used by CNPG declarative role management
+// Includes Reflector annotations to mirror to meals namespace
+const mealsPasswordSecret = new k8s.core.v1.Secret("postgres-meals-password", {
+  metadata: {
+    name: "postgres-meals",
+    namespace: namespace.metadata.name,
+    annotations: {
+      "reflector.v1.k8s.emberstack.com/reflection-auto-enabled": "true",
+      "reflector.v1.k8s.emberstack.com/reflection-allowed": "true",
+      "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces": "meals",
+      "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces": "meals",
+    },
+  },
+  type: "kubernetes.io/basic-auth",
+  stringData: {
+    username: "meals",
+    password: mealsPassword.result,
+  },
+});
+
 /**
  * ⚠️ Migration window only — flip to `false` once `postgres-winkel` has
  * finished bootstrapping.
@@ -355,6 +382,14 @@ const postgresCluster = new k8s.apiextensions.CustomResource(
             login: true,
             passwordSecret: {
               name: homeassistantPasswordSecret.metadata.name,
+            },
+          },
+          {
+            name: "meals",
+            ensure: "present",
+            login: true,
+            passwordSecret: {
+              name: mealsPasswordSecret.metadata.name,
             },
           },
         ],
@@ -766,6 +801,7 @@ export const grafanaDbPassword = grafanaPassword.result;
 export const paperlessDbPassword = paperlessPassword.result;
 export const homeassistantDbPassword = homeassistantPassword.result;
 export const immichDbPassword = immichPassword.result;
+export const mealsDbPassword = mealsPassword.result;
 
 export { immichDatabase };
 

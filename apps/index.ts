@@ -16,6 +16,7 @@ import "./mosquitto";
 import "./timemachine";
 import "./immich";
 import "./trip";
+import "./meals";
 
 export * from "./paperless";
 export * from "./homepage";
@@ -26,3 +27,4 @@ export * from "./mosquitto";
 export * from "./timemachine";
 export * from "./immich";
 export * from "./trip";
+export * from "./meals";
