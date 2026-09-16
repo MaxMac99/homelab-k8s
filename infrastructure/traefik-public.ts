@@ -126,6 +126,12 @@ const traefikPublic = new k8s.helm.v3.Chart(
         // is the one that matters today.
         kubernetesIngress: {
           ingressClass: publicIngressClass,
+          // The public outpost-path Ingresses (trip, meals) back onto a
+          // cross-namespace ExternalName alias for the authentik outpost —
+          // without this flag Traefik drops those routers and the forward-auth
+          // callback 404s at the app's own backend on the public edge, same
+          // failure mode as the internal Traefik (see traefik.ts).
+          allowExternalNameServices: true,
           // Nothing to publish — there is no Service to copy an address from,
           // and leaving this on makes Traefik log about a missing one forever.
           publishedService: {

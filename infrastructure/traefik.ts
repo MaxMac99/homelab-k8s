@@ -187,6 +187,19 @@ const traefik = new k8s.helm.v3.Chart(
         },
       },
 
+      providers: {
+        kubernetesIngress: {
+          // Required for the outpost-path Ingresses (trip, meals): their
+          // backend is a cross-namespace ExternalName alias pointing at
+          // authentik-outpost.authentik.svc.cluster.local, and Traefik
+          // defaults to *silently dropping* ExternalName-backed services —
+          // the router never exists and `/outpost.goauthentik.io/*` falls
+          // through to the app's root router (seen as the app's own 404 on
+          // the forward-auth callback, i.e. a login that cannot ever finish).
+          allowExternalNameServices: true,
+        },
+      },
+
       ports: {
         web: {
           port: 80,
