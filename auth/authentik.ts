@@ -151,7 +151,7 @@ const authentikRedisDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "redis",
-              image: "redis:8.10.1-alpine",
+              image: "redis:8.10.2-alpine",
               args: ["--appendonly", "yes", "--dir", "/data"],
               ports: [{ containerPort: 6379, name: "redis" }],
               volumeMounts: [{ name: "data", mountPath: "/data" }],
