@@ -1,1 +1,2833 @@
-{"openapi":"3.0.3","info":{"title":"Meals","description":"Meal planning and shopping for this household. Metric units only (g, kg, ml, l or natural-unit counts).","version":"gpt-1"},"servers":[{"url":"https://meals.mvissing.de"}],"security":[{"HTTPBearer":[]}],"paths":{"/ingredients":{"get":{"tags":["ingredients"],"summary":"List Ingredients","description":"Filter by `value_tier=premium` for the shopping list of things the\nhousehold has decided are worth paying up for (and `budget` for the\nown-brand-is-fine ones).\n\n`search` matches anywhere in the nam...","operationId":"list_ingredients_ingredients_get","security":[{"HTTPBearer":[]}],"parameters":[{"name":"search","in":"query","required":false,"schema":{"title":"Search","type":"string","maxLength":200,"nullable":true}},{"name":"name","in":"query","required":false,"schema":{"description":"exact lookup, folded the same way a write is: name=fresh mint finds 'mint'","title":"Name","type":"string","maxLength":200,"nullable":true},"description":"exact lookup, folded the same way a write is: name=fresh mint finds 'mint'"},{"name":"staples_only","in":"query","required":false,"schema":{"type":"boolean","default":false,"title":"Staples Only"}},{"name":"value_tier","in":"query","required":false,"schema":{"description":"filter by buying advice; valid tiers: 'premium' (worth paying up for), 'budget' (own-brand is fine), 'any' (no strong opinion)","title":"Value Tier","type":"string","nullable":true},"description":"filter by buying advice; valid tiers: 'premium' (worth paying up for), 'budget' (own-brand is fine), 'any' (no strong opinion)"},{"name":"sort","in":"query","required":false,"schema":{"enum":["name","aisle","value_tier"],"type":"string","description":"name (default), aisle (store-walking order, the same walk the shopping list uses), or value_tier (⭐ premium first, then 💷 budget, then no opinion)","default":"name","title":"Sort"},"description":"name (default), aisle (store-walking order, the same walk the shopping list uses), or value_tier (⭐ premium first, then 💷 budget, then no opinion)"}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/IngredientOut"},"title":"Response List Ingredients Ingredients Get"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/ingredients/duplicates":{"get":{"tags":["ingredients"],"summary":"List Duplicate Ingredients","description":"Ingredients in this household that are the same food under two names —\n\"mint\" and \"mint leaves\", \"garlic\" and \"garlic cloves\".\n\nNew writes are folded to one name automatically, so what shows up her...","operationId":"list_duplicate_ingredients_ingredients_duplicates_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/DuplicatesOut"}}}}},"security":[{"HTTPBearer":[]}]}},"/ingredients/{ingredient_id}/merge":{"post":{"tags":["ingredients"],"summary":"Merge Into Ingredient","description":"Fold duplicate ingredients into this one, which survives.\n\nEverything pointing at a duplicate — recipe lines, a meal's loose\ningredients, shopping-list lines and their contributions — is repointed...","operationId":"merge_into_ingredient_ingredients__ingredient_id__merge_post","security":[{"HTTPBearer":[]}],"parameters":[{"name":"ingredient_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Ingredient Id"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/MergeIn"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MergeOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/ingredients/{ingredient_id}":{"patch":{"tags":["ingredients"],"summary":"Update Ingredient","description":"Set the aisle (e.g. an AI tagging an ❓ ingredient), toggle the staples\nflag (staples are hidden from the list by default), or record whether the\npremium version of this ingredient is worth it.\n\n`va...","operationId":"update_ingredient_ingredients__ingredient_id__patch","security":[{"HTTPBearer":[]}],"parameters":[{"name":"ingredient_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Ingredient Id"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/IngredientUpdate"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/IngredientOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/recipes/ingest":{"post":{"tags":["recipes"],"summary":"Ingest Recipe Url","description":"Submit a recipe URL. A URL already in the library returns the cached\nrecipe instantly (parse once, reuse forever). New URLs are fetched and\nparsed from their schema.org/Recipe JSON-LD — no LLM invo...","operationId":"ingest_recipe_url_recipes_ingest_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/IngestIn"}}},"required":true},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/IngestOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}},"security":[{"HTTPBearer":[]}]}},"/recipes":{"post":{"tags":["recipes"],"summary":"Create Recipe","description":"Create a recipe: manual entry (no URL) or a structured recipe an AI\nparsed from a page (set parse_source='ai' and include source_url).\nSubmitting a source_url that already exists returns the stored...","operationId":"create_recipe_recipes_post","security":[{"HTTPBearer":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/RecipeCreate"}}}},"responses":{"201":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/RecipeOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}},"get":{"tags":["recipes"],"summary":"List Recipes","operationId":"list_recipes_recipes_get","security":[{"HTTPBearer":[]}],"parameters":[{"name":"search","in":"query","required":false,"schema":{"title":"Search","type":"string","maxLength":300,"nullable":true}},{"name":"tag","in":"query","required":false,"schema":{"title":"Tag","type":"string","maxLength":50,"nullable":true}},{"name":"max_total_minutes","in":"query","required":false,"schema":{"title":"Max Total Minutes","type":"integer","minimum":1,"nullable":true}},{"name":"sort","in":"query","required":false,"schema":{"enum":["title","most_cooked","least_recently_cooked"],"type":"string","description":"title (default), most_cooked ('our regulars'), or least_recently_cooked ('what haven't we had in ages' — never-cooked recipes come first)","default":"title","title":"Sort"},"description":"title (default), most_cooked ('our regulars'), or least_recently_cooked ('what haven't we had in ages' — never-cooked recipes come first)"}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/RecipeSummary"},"title":"Response List Recipes Recipes Get"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/recipes/{recipe_id}":{"get":{"tags":["recipes"],"summary":"Get Recipe Detail","operationId":"get_recipe_detail_recipes__recipe_id__get","security":[{"HTTPBearer":[]}],"parameters":[{"name":"recipe_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Recipe Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/RecipeOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}},"patch":{"tags":["recipes"],"summary":"Update Recipe","description":"Correct a parsed recipe. Edits mark the recipe as human-edited so\nnothing automated overwrites them. If the recipe is part of a meal on an\nactive plan, the shopping list is re-synced to the new ing...","operationId":"update_recipe_recipes__recipe_id__patch","security":[{"HTTPBearer":[]}],"parameters":[{"name":"recipe_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Recipe Id"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/RecipeUpdate"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/RecipeOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}},"delete":{"tags":["recipes"],"summary":"Delete Recipe","operationId":"delete_recipe_recipes__recipe_id__delete","security":[{"HTTPBearer":[]}],"parameters":[{"name":"recipe_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Recipe Id"}}],"responses":{"204":{"description":"Successful Response"},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/recipes/{recipe_id}/reparse":{"post":{"tags":["recipes"],"summary":"Reparse Recipe","description":"Re-read this recipe from its `source_url` and replace what the page\nsays: title, servings, times, image, instructions, tags and ingredients.\n\nParse once, reuse forever (Q3) is the default because p...","operationId":"reparse_recipe_recipes__recipe_id__reparse_post","security":[{"HTTPBearer":[]}],"parameters":[{"name":"recipe_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Recipe Id"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ReparseIn"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/RecipeOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/meals":{"post":{"tags":["meals"],"summary":"Create Meal","description":"A meal = zero or more recipes plus loose ingredients — 'cottage pie\nwith peas and carrots on the side' is one recipe and two loose\ningredients, no recipe needed for the veg.\n\nUse `recipes: [{recipe...","operationId":"create_meal_meals_post","security":[{"HTTPBearer":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/MealCreate"}}}},"responses":{"201":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MealOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}},"get":{"tags":["meals"],"summary":"List Meals","operationId":"list_meals_meals_get","security":[{"HTTPBearer":[]}],"parameters":[{"name":"search","in":"query","required":false,"schema":{"title":"Search","type":"string","maxLength":300,"nullable":true}},{"name":"slot","in":"query","required":false,"schema":{"title":"Slot","type":"string","maxLength":30,"nullable":true}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/MealOut"},"title":"Response List Meals Meals Get"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/meals/{meal_id}":{"get":{"tags":["meals"],"summary":"Get Meal Detail","operationId":"get_meal_detail_meals__meal_id__get","security":[{"HTTPBearer":[]}],"parameters":[{"name":"meal_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Meal Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MealOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}},"patch":{"tags":["meals"],"summary":"Update Meal","description":"Rename, re-slot, or change composition. Composition changes re-sync\nthe meal's contributions on the active shopping list.\n\nChanging a recipe's `scale` is a composition change: send the whole\n`recip...","operationId":"update_meal_meals__meal_id__patch","security":[{"HTTPBearer":[]}],"parameters":[{"name":"meal_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Meal Id"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/MealUpdate"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MealOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}},"delete":{"tags":["meals"],"summary":"Delete Meal","description":"Deleting a meal takes it off every plan and decrements its\nshopping-list contributions first. The cooked history survives (issue\n#13): `cooked_events` keeps its own copy of the name.","operationId":"delete_meal_meals__meal_id__delete","security":[{"HTTPBearer":[]}],"parameters":[{"name":"meal_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Meal Id"}}],"responses":{"204":{"description":"Successful Response"},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/plans":{"post":{"tags":["plans"],"summary":"Create Plan","description":"Start a weekly-ish plan — a pool of meal options, never a calendar.\nPass copy_from_plan_id to start from a previous week ('same as two weeks\nago'); copied meals immediately contribute to the shoppi...","operationId":"create_plan_plans_post","security":[{"HTTPBearer":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/PlanCreate"}}}},"responses":{"201":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/PlanOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}},"get":{"tags":["plans"],"summary":"List Plans","operationId":"list_plans_plans_get","security":[{"HTTPBearer":[]}],"parameters":[{"name":"status","in":"query","required":false,"schema":{"title":"Status","type":"string","pattern":"^(active|archived)$","nullable":true}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/PlanSummary"},"title":"Response List Plans Plans Get"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/plans/current":{"get":{"tags":["plans"],"summary":"Current Plan","description":"The most recent active plan — 'what are our options this week?'","operationId":"current_plan_plans_current_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/PlanOut"}}}}},"security":[{"HTTPBearer":[]}]}},"/plans/{plan_id}":{"get":{"tags":["plans"],"summary":"Get Plan Detail","operationId":"get_plan_detail_plans__plan_id__get","security":[{"HTTPBearer":[]}],"parameters":[{"name":"plan_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Plan Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/PlanOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/plans/{plan_id}/meals":{"post":{"tags":["plans"],"summary":"Add Meal","description":"Add a meal to the plan. All its recipe ingredients and loose\ningredients land on the shopping list, merged into existing lines where\nthe unit matches.","operationId":"add_meal_plans__plan_id__meals_post","security":[{"HTTPBearer":[]}],"parameters":[{"name":"plan_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Plan Id"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/AddMealIn"}}}},"responses":{"201":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/PlanOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/plans/{plan_id}/meals/{plan_meal_id}":{"delete":{"tags":["plans"],"summary":"Remove Meal","description":"Remove a meal option ('scratch the burgers, we're out Friday'). Its\nshopping-list contributions are decremented; ad-hoc items are never\ntouched.","operationId":"remove_meal_plans__plan_id__meals__plan_meal_id__delete","security":[{"HTTPBearer":[]}],"parameters":[{"name":"plan_meal_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Plan Meal Id"}},{"name":"plan_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Plan Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/PlanOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/plans/{plan_id}/meals/{plan_meal_id}/cooked":{"post":{"tags":["plans"],"summary":"Mark Cooked","description":"Mark a meal option as cooked — the hook for future 'what do we\nactually eat' insights. Idempotent.","operationId":"mark_cooked_plans__plan_id__meals__plan_meal_id__cooked_post","security":[{"HTTPBearer":[]}],"parameters":[{"name":"plan_meal_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Plan Meal Id"}},{"name":"plan_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Plan Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/PlanOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}},"delete":{"tags":["plans"],"summary":"Undo Mark Cooked","description":"Take back a mistaken 'cooked' (issue #51). Un-ticks the meal and removes\nthe cooking from the record, so `times_cooked` and `last_cooked_at` come\nback down for the meal and for every recipe it held...","operationId":"undo_mark_cooked_plans__plan_id__meals__plan_meal_id__cooked_delete","security":[{"HTTPBearer":[]}],"parameters":[{"name":"plan_meal_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Plan Meal Id"}},{"name":"plan_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Plan Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/PlanOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/plans/{plan_id}/archive":{"post":{"tags":["plans"],"summary":"Archive Plan","description":"Archive a plan. Its meals' contributions are removed from the active\nshopping list (an already-archived list keeps its history).","operationId":"archive_plan_plans__plan_id__archive_post","security":[{"HTTPBearer":[]}],"parameters":[{"name":"plan_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Plan Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/PlanOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/shopping-list":{"get":{"tags":["shopping-list"],"summary":"Get Shopping List","description":"The live shopping list, sorted in store-walking order (aisle emoji,\nthen name). Staples and 'already have it' items are hidden by default;\nhidden_staples says how many are waiting for a staples che...","operationId":"get_shopping_list_shopping_list_get","security":[{"HTTPBearer":[]}],"parameters":[{"name":"include_staples","in":"query","required":false,"schema":{"type":"boolean","description":"Reveal staple items for a pre-shop staples check","default":false,"title":"Include Staples"},"description":"Reveal staple items for a pre-shop staples check"},{"name":"include_excluded","in":"query","required":false,"schema":{"type":"boolean","description":"Reveal items marked 'already have it'","default":false,"title":"Include Excluded"},"description":"Reveal items marked 'already have it'"}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ShoppingListOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/shopping-list/items":{"post":{"tags":["shopping-list"],"summary":"Add Item","description":"Fast ad-hoc add — the milk-is-out case. Merges into an existing line\nwhen the ingredient and unit match. Supply a client-generated id to make\nthe call idempotent (safe retries, offline sync); a rep...","operationId":"add_item_shopping_list_items_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/AdhocItemIn"}}},"required":true},"responses":{"201":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ListItemOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}},"security":[{"HTTPBearer":[]}]}},"/shopping-list/items/{item_id}":{"patch":{"tags":["shopping-list"],"summary":"Update Item","description":"Check items off while shopping, mark 'already have it' (excluded —\nhidden from this shop without losing why it was needed), or mark a staple\nas needed during a staples check (staple_needed — that o...","operationId":"update_item_shopping_list_items__item_id__patch","security":[{"HTTPBearer":[]}],"parameters":[{"name":"item_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Item Id"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ListItemUpdate"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ListItemOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/shopping-list/archive":{"post":{"tags":["shopping-list"],"summary":"Archive Shopping List","description":"Finish the shop: archive the current list and start a fresh empty one.","operationId":"archive_shopping_list_shopping_list_archive_post","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ArchiveOut"}}}}},"security":[{"HTTPBearer":[]}]}},"/supermarkets":{"get":{"tags":["supermarkets"],"summary":"List Supermarkets","description":"The household's supermarkets and their saved aisle walking orders.\n\nThe `is_active` one decides the order the shopping list is sorted in and\nthe order `GET /aisles` returns; when none is active the...","operationId":"list_supermarkets_supermarkets_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"items":{"$ref":"#/components/schemas/SupermarketOut"},"type":"array","title":"Response List Supermarkets Supermarkets Get"}}}}},"security":[{"HTTPBearer":[]}]},"post":{"tags":["supermarkets"],"summary":"Create Supermarket","description":"Save a supermarket and, optionally, its aisle walking order.\n\n`aisle_order` is aisle emojis first-to-last as you walk that store; any\nyou leave out keep their usual place at the end, and omitting i...","operationId":"create_supermarket_supermarkets_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/SupermarketCreate"}}},"required":true},"responses":{"201":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/SupermarketOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}},"security":[{"HTTPBearer":[]}]}},"/supermarkets/{supermarket_id}":{"patch":{"tags":["supermarkets"],"summary":"Update Supermarket","description":"Rename a supermarket, replace its aisle walking order, or switch the\nactive store: `{\"is_active\": true}` sorts the shopping list for this one\n(\"we're at Aldi today\"), `{\"is_active\": false}` goes ba...","operationId":"update_supermarket_supermarkets__supermarket_id__patch","security":[{"HTTPBearer":[]}],"parameters":[{"name":"supermarket_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Supermarket Id"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/SupermarketUpdate"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/SupermarketOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/freezer":{"get":{"tags":["freezer"],"summary":"Get Freezer","description":"What is in the freezer, oldest batch first — that is the one to eat\nnext. Each batch says how many portions are left and, when it came from\nthe app, which meal or recipe it was; `total_portions` is...","operationId":"get_freezer_freezer_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/FreezerOut"}}}}},"security":[{"HTTPBearer":[]}]},"post":{"tags":["freezer"],"summary":"Add To Freezer","description":"Put a batch in the freezer. Name it one way: `meal_id` for a meal\n(the batch takes the meal's name), `recipe_id` for a recipe (the title),\nor `label` for anything that did not come through the app...","operationId":"add_to_freezer_freezer_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/FreezerAddIn"}}},"required":true},"responses":{"201":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/FreezerItemOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}},"security":[{"HTTPBearer":[]}]}},"/freezer/{item_id}":{"patch":{"tags":["freezer"],"summary":"Update Freezer Item","description":"Correct a batch: set `portions` outright (a recount), rename it, change\nthe note or the date it went in. To eat from it use\nPOST /freezer/{item_id}/take instead, which also clears an emptied batch.","operationId":"update_freezer_item_freezer__item_id__patch","security":[{"HTTPBearer":[]}],"parameters":[{"name":"item_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Item Id"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/FreezerItemUpdate"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/FreezerItemOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}},"delete":{"tags":["freezer"],"summary":"Remove From Freezer","description":"Take a whole batch out, whatever is left of it — binned, given away, or\nnever there. Nothing else is touched.","operationId":"remove_from_freezer_freezer__item_id__delete","security":[{"HTTPBearer":[]}],"parameters":[{"name":"item_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Item Id"}}],"responses":{"204":{"description":"Successful Response"},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/freezer/{item_id}/take":{"post":{"tags":["freezer"],"summary":"Take From Freezer","description":"Take portions out to eat (default 1). The reply is the batch with what\nis left; when that reaches 0 the batch is gone from the freezer and the\nreply is the last you will hear of it. Asking for more...","operationId":"take_from_freezer_freezer__item_id__take_post","security":[{"HTTPBearer":[]}],"parameters":[{"name":"item_id","in":"path","required":true,"schema":{"type":"string","format":"uuid","title":"Item Id"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/FreezerTakeIn"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/FreezerItemOut"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/limits":{"get":{"tags":["meta"],"summary":"Get Limits","description":"Every limit that applies to your household, with how much is used and how\nmuch is left.\n\n**Check this before a bulk import.** `remaining` is how many more of a thing\nyou can create; a `limit` of `n...","operationId":"get_limits_limits_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/LimitsOut"}}}}},"security":[{"HTTPBearer":[]}]}}},"components":{"securitySchemes":{"HTTPBearer":{"type":"http","scheme":"bearer"}},"schemas":{"LimitsOut":{"properties":{"tier":{"type":"string","title":"Tier","description":"The tier that produced these numbers."},"limited":{"type":"boolean","title":"Limited","description":"Whether this deployment limits anything at all. False on a self-hosted server that has configured nothing, where every allowance below is unlimited."},"resources":{"items":{"$ref":"#/components/schemas/ResourceAllowanceOut"},"type":"array","title":"Resources"}},"type":"object","required":["tier","limited","resources"],"title":"LimitsOut","description":"Everything this server allows the calling household."},"ResourceAllowanceOut":{"properties":{"resource":{"type":"string","title":"Resource","description":"The resource this allowance governs, e.g. 'recipes'."},"limit":{"title":"Limit","description":"How many are allowed, or null for unlimited. This is the number the household will actually meet: whichever of its tier's cap and this server's fair-use ceiling is lower.","type":"integer","nullable":true},"used":{"title":"Used","description":"How many exist now, or null where the number has no meaning: an unlimited allowance (nothing was counted), or one scoped to a single meal or plan rather than the household.","type":"integer","nullable":true},"remaining":{"title":"Remaining","description":"limit - used, floored at zero; null whenever either is null.","type":"integer","nullable":true},"scope":{"type":"string","title":"Scope","description":"Where the allowance applies: 'per household', 'in one meal', 'a month'."},"upgradable":{"type":"boolean","title":"Upgradable","description":"Whether a larger tier on this server would raise this limit. False for a fair-use ceiling, for the largest tier, and for a server that sells nothing."}},"type":"object","required":["resource","limit","used","remaining","scope","upgradable"],"title":"ResourceAllowanceOut","description":"What this household is allowed of one resource, and how much is spent."},"HTTPValidationError":{"properties":{"detail":{"items":{"$ref":"#/components/schemas/ValidationError"},"type":"array","title":"Detail"}},"type":"object","title":"HTTPValidationError"},"ValidationError":{"properties":{"loc":{"items":{"anyOf":[{"type":"string"},{"type":"integer"}]},"type":"array","title":"Location"},"msg":{"type":"string","title":"Message"},"type":{"type":"string","title":"Error Type"},"input":{"title":"Input"},"ctx":{"type":"object","title":"Context"}},"type":"object","required":["loc","msg","type"],"title":"ValidationError"},"FreezerItemOut":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"label":{"type":"string","title":"Label"},"meal_id":{"title":"Meal Id","type":"string","format":"uuid","nullable":true},"recipe_id":{"title":"Recipe Id","type":"string","format":"uuid","nullable":true},"portions":{"type":"integer","title":"Portions"},"note":{"title":"Note","type":"string","nullable":true},"frozen_on":{"type":"string","format":"date","title":"Frozen On"},"created_at":{"type":"string","format":"date-time","title":"Created At"},"updated_at":{"type":"string","format":"date-time","title":"Updated At"}},"type":"object","required":["id","label","meal_id","recipe_id","portions","note","frozen_on","created_at","updated_at"],"title":"FreezerItemOut"},"FreezerTakeIn":{"properties":{"portions":{"type":"integer","maximum":500.0,"minimum":1.0,"title":"Portions","default":1}},"type":"object","title":"FreezerTakeIn"},"FreezerItemUpdate":{"properties":{"label":{"title":"Label","type":"string","maxLength":300,"minLength":1,"nullable":true},"portions":{"title":"Portions","type":"integer","maximum":500.0,"minimum":1.0,"nullable":true},"note":{"title":"Note","type":"string","maxLength":300,"nullable":true},"frozen_on":{"title":"Frozen On","type":"string","format":"date","nullable":true}},"type":"object","title":"FreezerItemUpdate","description":"Correct a batch: set the portions left outright, rename it, change the\nnote or the date. To eat from it use POST /freezer/{item_id}/take, which\nalso clears the batch when the last portion goes."},"FreezerAddIn":{"properties":{"meal_id":{"title":"Meal Id","type":"string","format":"uuid","nullable":true},"recipe_id":{"title":"Recipe Id","type":"string","format":"uuid","nullable":true},"label":{"title":"Label","type":"string","maxLength":300,"minLength":1,"nullable":true},"portions":{"type":"integer","maximum":500.0,"minimum":1.0,"title":"Portions","default":1},"note":{"title":"Note","type":"string","maxLength":300,"nullable":true},"frozen_on":{"title":"Frozen On","type":"string","format":"date","nullable":true}},"type":"object","title":"FreezerAddIn","description":"Put a batch in the freezer. Name it **one** way: `meal_id` (a meal from\nGET /meals — the batch takes the meal's name), `recipe_id` (a recipe from\nGET /recipes — it takes the title), or `label` (fre..."},"FreezerOut":{"properties":{"items":{"items":{"$ref":"#/components/schemas/FreezerItemOut"},"type":"array","title":"Items"},"total_portions":{"type":"integer","title":"Total Portions"}},"type":"object","required":["items","total_portions"],"title":"FreezerOut"},"SupermarketOut":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"name":{"type":"string","title":"Name"},"aisle_order":{"items":{"type":"string"},"type":"array","title":"Aisle Order"},"is_active":{"type":"boolean","title":"Is Active"},"created_at":{"type":"string","format":"date-time","title":"Created At"}},"type":"object","required":["id","name","aisle_order","is_active","created_at"],"title":"SupermarketOut"},"SupermarketUpdate":{"properties":{"name":{"title":"Name","type":"string","maxLength":120,"minLength":1,"nullable":true},"aisle_order":{"title":"Aisle Order","items":{"type":"string"},"type":"array","nullable":true},"is_active":{"title":"Is Active","type":"boolean","nullable":true}},"type":"object","title":"SupermarketUpdate"},"SupermarketCreate":{"properties":{"name":{"type":"string","maxLength":120,"minLength":1,"title":"Name"},"aisle_order":{"title":"Aisle Order","items":{"type":"string"},"type":"array","nullable":true},"is_active":{"type":"boolean","title":"Is Active","default":false}},"type":"object","required":["name"],"title":"SupermarketCreate"},"ArchiveOut":{"properties":{"archived_list_id":{"type":"string","format":"uuid","title":"Archived List Id"},"new_list_id":{"type":"string","format":"uuid","title":"New List Id"}},"type":"object","required":["archived_list_id","new_list_id"],"title":"ArchiveOut"},"ListItemOut":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"ingredient_id":{"type":"string","format":"uuid","title":"Ingredient Id"},"name":{"type":"string","title":"Name"},"aisle":{"type":"string","title":"Aisle"},"aisle_label":{"type":"string","title":"Aisle Label"},"is_staple":{"type":"boolean","title":"Is Staple"},"value_tier":{"type":"string","title":"Value Tier"},"value_tier_label":{"type":"string","title":"Value Tier Label"},"value_note":{"title":"Value Note","type":"string","nullable":true},"quantity":{"title":"Quantity","type":"number","nullable":true},"unit":{"title":"Unit","type":"string","nullable":true},"display":{"type":"string","title":"Display"},"checked":{"type":"boolean","title":"Checked"},"excluded":{"type":"boolean","title":"Excluded"},"staple_needed":{"type":"boolean","title":"Staple Needed"},"sources":{"items":{"$ref":"#/components/schemas/SourceOut"},"type":"array","title":"Sources"},"updated_at":{"type":"string","format":"date-time","title":"Updated At"}},"type":"object","required":["id","ingredient_id","name","aisle","aisle_label","is_staple","value_tier","value_tier_label","value_note","quantity","unit","display","checked","excluded","staple_needed","sources","updated_at"],"title":"ListItemOut"},"SourceOut":{"properties":{"ad_hoc":{"type":"boolean","title":"Ad Hoc"},"meal_id":{"title":"Meal Id","type":"string","format":"uuid","nullable":true},"meal_name":{"title":"Meal Name","type":"string","nullable":true},"recipe_id":{"title":"Recipe Id","type":"string","format":"uuid","nullable":true},"recipe_title":{"title":"Recipe Title","type":"string","nullable":true},"quantity":{"title":"Quantity","type":"number","nullable":true}},"type":"object","required":["ad_hoc","meal_id","meal_name","recipe_id","recipe_title","quantity"],"title":"SourceOut"},"ListItemUpdate":{"properties":{"checked":{"title":"Checked","type":"boolean","nullable":true},"excluded":{"title":"Excluded","type":"boolean","nullable":true},"staple_needed":{"title":"Staple Needed","type":"boolean","nullable":true}},"type":"object","title":"ListItemUpdate"},"AdhocItemIn":{"properties":{"name":{"type":"string","maxLength":200,"minLength":1,"title":"Name"},"quantity":{"title":"Quantity","type":"number","exclusiveMinimum":0.0,"nullable":true},"unit":{"title":"Unit","type":"string","maxLength":50,"nullable":true},"raw":{"title":"Raw","type":"string","maxLength":500,"nullable":true},"id":{"title":"Id","type":"string","format":"uuid","nullable":true}},"type":"object","required":["name"],"title":"AdhocItemIn","description":"Ad-hoc addition (the milk-is-out case). Clients may supply their own\nitem id — offline-first iOS creates the item locally and syncs later, and\na retrying AI won't double-add (idempotent by id)."},"ShoppingListOut":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"status":{"type":"string","title":"Status"},"created_at":{"type":"string","format":"date-time","title":"Created At"},"archived_at":{"title":"Archived At","type":"string","format":"date-time","nullable":true},"items":{"items":{"$ref":"#/components/schemas/ListItemOut"},"type":"array","title":"Items"},"hidden_staples":{"type":"integer","title":"Hidden Staples"},"supermarket":{"anyOf":[{"$ref":"#/components/schemas/SupermarketRef"}],"nullable":true}},"type":"object","required":["id","status","created_at","archived_at","items","hidden_staples"],"title":"ShoppingListOut"},"SupermarketRef":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"name":{"type":"string","title":"Name"}},"type":"object","required":["id","name"],"title":"SupermarketRef"},"PlanOut":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"label":{"type":"string","title":"Label"},"starts_on":{"title":"Starts On","type":"string","format":"date","nullable":true},"status":{"type":"string","title":"Status"},"created_at":{"type":"string","format":"date-time","title":"Created At"},"archived_at":{"title":"Archived At","type":"string","format":"date-time","nullable":true},"meals":{"items":{"$ref":"#/components/schemas/PlanMealOut"},"type":"array","title":"Meals"}},"type":"object","required":["id","label","starts_on","status","created_at","archived_at","meals"],"title":"PlanOut"},"PlanMealOut":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"meal":{"$ref":"#/components/schemas/MealOut"},"cooked_at":{"title":"Cooked At","type":"string","format":"date-time","nullable":true}},"type":"object","required":["id","meal","cooked_at"],"title":"PlanMealOut"},"MealOut":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"name":{"type":"string","title":"Name"},"slot":{"title":"Slot","type":"string","nullable":true},"recipes":{"items":{"$ref":"#/components/schemas/MealRecipeOut"},"type":"array","title":"Recipes"},"loose_ingredients":{"items":{"$ref":"#/components/schemas/RecipeLineOut"},"type":"array","title":"Loose Ingredients"},"created_at":{"type":"string","format":"date-time","title":"Created At"},"times_cooked":{"type":"integer","title":"Times Cooked"},"last_cooked_at":{"title":"Last Cooked At","type":"string","format":"date-time","nullable":true}},"type":"object","required":["id","name","slot","recipes","loose_ingredients","created_at","times_cooked","last_cooked_at"],"title":"MealOut"},"RecipeLineOut":{"properties":{"ingredient_id":{"type":"string","format":"uuid","title":"Ingredient Id"},"name":{"type":"string","title":"Name"},"aisle":{"type":"string","title":"Aisle"},"is_staple":{"type":"boolean","title":"Is Staple"},"value_tier":{"type":"string","title":"Value Tier"},"value_note":{"title":"Value Note","type":"string","nullable":true},"quantity":{"title":"Quantity","type":"number","nullable":true},"unit":{"title":"Unit","type":"string","nullable":true},"display":{"type":"string","title":"Display"},"raw":{"title":"Raw","type":"string","nullable":true}},"type":"object","required":["ingredient_id","name","aisle","is_staple","value_tier","value_note","quantity","unit","display","raw"],"title":"RecipeLineOut"},"MealRecipeOut":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"title":{"type":"string","title":"Title"},"source_url":{"title":"Source Url","type":"string","nullable":true},"servings":{"title":"Servings","type":"integer","nullable":true},"prep_minutes":{"title":"Prep Minutes","type":"integer","nullable":true},"cook_minutes":{"title":"Cook Minutes","type":"integer","nullable":true},"image_url":{"title":"Image Url","type":"string","nullable":true},"tags":{"items":{"type":"string"},"type":"array","title":"Tags"},"times_cooked":{"type":"integer","title":"Times Cooked"},"last_cooked_at":{"title":"Last Cooked At","type":"string","format":"date-time","nullable":true},"scale":{"type":"number","title":"Scale","default":1.0},"scaled_servings":{"title":"Scaled Servings","type":"integer","nullable":true}},"type":"object","required":["id","title","source_url","servings","prep_minutes","cook_minutes","image_url","tags","times_cooked","last_cooked_at"],"title":"MealRecipeOut","description":"A recipe as it sits in a meal. `scale` is additive — a client that\ndoesn't know about it reads the recipe exactly as before.\n\n`scaled_servings` is how many this meal's share of the recipe feeds, i...."},"AddMealIn":{"properties":{"meal_id":{"type":"string","format":"uuid","title":"Meal Id"}},"type":"object","required":["meal_id"],"title":"AddMealIn"},"PlanSummary":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"label":{"type":"string","title":"Label"},"starts_on":{"title":"Starts On","type":"string","format":"date","nullable":true},"status":{"type":"string","title":"Status"},"meal_count":{"type":"integer","title":"Meal Count"}},"type":"object","required":["id","label","starts_on","status","meal_count"],"title":"PlanSummary"},"PlanCreate":{"properties":{"label":{"type":"string","maxLength":200,"minLength":1,"title":"Label"},"starts_on":{"title":"Starts On","type":"string","format":"date","nullable":true},"copy_from_plan_id":{"title":"Copy From Plan Id","type":"string","format":"uuid","nullable":true}},"type":"object","required":["label"],"title":"PlanCreate"},"MealUpdate":{"properties":{"name":{"title":"Name","type":"string","maxLength":300,"minLength":1,"nullable":true},"slot":{"title":"Slot","type":"string","maxLength":30,"nullable":true},"recipe_ids":{"title":"Recipe Ids","items":{"type":"string","format":"uuid"},"type":"array","maxItems":20,"nullable":true},"recipes":{"title":"Recipes","items":{"$ref":"#/components/schemas/MealRecipeIn"},"type":"array","maxItems":20,"nullable":true},"loose_ingredients":{"title":"Loose Ingredients","items":{"$ref":"#/components/schemas/IngredientLineIn"},"type":"array","maxItems":50,"nullable":true}},"type":"object","title":"MealUpdate"},"IngredientLineIn":{"properties":{"name":{"type":"string","maxLength":200,"minLength":1,"title":"Name"},"quantity":{"title":"Quantity","type":"number","exclusiveMinimum":0.0,"nullable":true},"unit":{"title":"Unit","type":"string","maxLength":50,"nullable":true},"raw":{"title":"Raw","type":"string","maxLength":500,"nullable":true}},"type":"object","required":["name"],"title":"IngredientLineIn","description":"An ingredient reference in a write payload. AI-ergonomic: ingredients\nare referenced by name (find-or-create), never by id. Quantities are\nnormalised to canonical form here, so a bad unit fails fas..."},"MealRecipeIn":{"properties":{"recipe_id":{"type":"string","format":"uuid","title":"Recipe Id"},"scale":{"type":"number","maximum":20.0,"exclusiveMinimum":0.0,"title":"Scale","default":1.0},"servings":{"title":"Servings","type":"integer","maximum":100.0,"minimum":1.0,"nullable":true}},"type":"object","required":["recipe_id"],"title":"MealRecipeIn","description":"A recipe in a meal, at a multiple of its own quantities (Q18). scale=2\ndoubles what that recipe puts on the shopping list; other meals using the\nsame recipe are unaffected.\n\n`servings` says the sam..."},"MealCreate":{"properties":{"name":{"type":"string","maxLength":300,"minLength":1,"title":"Name"},"slot":{"title":"Slot","type":"string","maxLength":30,"nullable":true},"recipe_ids":{"items":{"type":"string","format":"uuid"},"type":"array","maxItems":20,"title":"Recipe Ids"},"recipes":{"title":"Recipes","items":{"$ref":"#/components/schemas/MealRecipeIn"},"type":"array","maxItems":20,"nullable":true},"loose_ingredients":{"items":{"$ref":"#/components/schemas/IngredientLineIn"},"type":"array","maxItems":50,"title":"Loose Ingredients"}},"type":"object","required":["name"],"title":"MealCreate"},"RecipeOut":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"title":{"type":"string","title":"Title"},"source_url":{"title":"Source Url","type":"string","nullable":true},"servings":{"title":"Servings","type":"integer","nullable":true},"prep_minutes":{"title":"Prep Minutes","type":"integer","nullable":true},"cook_minutes":{"title":"Cook Minutes","type":"integer","nullable":true},"image_url":{"title":"Image Url","type":"string","nullable":true},"instructions":{"title":"Instructions","type":"string","nullable":true},"tags":{"items":{"type":"string"},"type":"array","title":"Tags"},"parse_source":{"type":"string","title":"Parse Source"},"edited":{"type":"boolean","title":"Edited"},"created_at":{"type":"string","format":"date-time","title":"Created At"},"updated_at":{"type":"string","format":"date-time","title":"Updated At"},"times_cooked":{"type":"integer","title":"Times Cooked"},"last_cooked_at":{"title":"Last Cooked At","type":"string","format":"date-time","nullable":true},"ingredients":{"items":{"$ref":"#/components/schemas/RecipeLineOut"},"type":"array","title":"Ingredients"}},"type":"object","required":["id","title","source_url","servings","prep_minutes","cook_minutes","image_url","instructions","tags","parse_source","edited","created_at","updated_at","times_cooked","last_cooked_at","ingredients"],"title":"RecipeOut"},"ReparseIn":{"properties":{"force":{"type":"boolean","title":"Force","default":false}},"type":"object","title":"ReparseIn","description":"`force` is the household saying its own corrections may go (issue #54).\nWithout it, a recipe marked `edited` is refused rather than overwritten."},"RecipeUpdate":{"properties":{"title":{"title":"Title","type":"string","maxLength":300,"minLength":1,"nullable":true},"servings":{"title":"Servings","type":"integer","maximum":100.0,"minimum":1.0,"nullable":true},"prep_minutes":{"title":"Prep Minutes","type":"integer","minimum":0.0,"nullable":true},"cook_minutes":{"title":"Cook Minutes","type":"integer","minimum":0.0,"nullable":true},"image_url":{"title":"Image Url","type":"string","maxLength":1000,"nullable":true},"instructions":{"title":"Instructions","type":"string","nullable":true},"tags":{"title":"Tags","items":{"type":"string"},"type":"array","maxItems":20,"nullable":true},"ingredients":{"title":"Ingredients","items":{"$ref":"#/components/schemas/IngredientLineIn"},"type":"array","maxItems":100,"nullable":true}},"type":"object","title":"RecipeUpdate"},"RecipeSummary":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"title":{"type":"string","title":"Title"},"source_url":{"title":"Source Url","type":"string","nullable":true},"servings":{"title":"Servings","type":"integer","nullable":true},"prep_minutes":{"title":"Prep Minutes","type":"integer","nullable":true},"cook_minutes":{"title":"Cook Minutes","type":"integer","nullable":true},"image_url":{"title":"Image Url","type":"string","nullable":true},"tags":{"items":{"type":"string"},"type":"array","title":"Tags"},"times_cooked":{"type":"integer","title":"Times Cooked"},"last_cooked_at":{"title":"Last Cooked At","type":"string","format":"date-time","nullable":true}},"type":"object","required":["id","title","source_url","servings","prep_minutes","cook_minutes","image_url","tags","times_cooked","last_cooked_at"],"title":"RecipeSummary"},"RecipeCreate":{"properties":{"title":{"type":"string","maxLength":300,"minLength":1,"title":"Title"},"source_url":{"title":"Source Url","type":"string","maxLength":1000,"nullable":true},"servings":{"title":"Servings","type":"integer","maximum":100.0,"minimum":1.0,"nullable":true},"prep_minutes":{"title":"Prep Minutes","type":"integer","minimum":0.0,"nullable":true},"cook_minutes":{"title":"Cook Minutes","type":"integer","minimum":0.0,"nullable":true},"image_url":{"title":"Image Url","type":"string","maxLength":1000,"nullable":true},"instructions":{"title":"Instructions","type":"string","nullable":true},"tags":{"items":{"type":"string"},"type":"array","maxItems":20,"title":"Tags"},"parse_source":{"type":"string","enum":["manual","ai"],"title":"Parse Source","default":"manual"},"ingredients":{"items":{"$ref":"#/components/schemas/IngredientLineIn"},"type":"array","maxItems":100,"title":"Ingredients"}},"type":"object","required":["title"],"title":"RecipeCreate"},"IngestOut":{"properties":{"recipe":{"$ref":"#/components/schemas/RecipeOut"},"cached":{"type":"boolean","title":"Cached"}},"type":"object","required":["recipe","cached"],"title":"IngestOut"},"IngestIn":{"properties":{"url":{"type":"string","maxLength":1000,"minLength":1,"title":"Url"}},"type":"object","required":["url"],"title":"IngestIn"},"IngredientOut":{"properties":{"id":{"type":"string","format":"uuid","title":"Id"},"name":{"type":"string","title":"Name"},"aisle":{"type":"string","title":"Aisle"},"aisle_label":{"type":"string","title":"Aisle Label"},"is_staple":{"type":"boolean","title":"Is Staple"},"value_tier":{"type":"string","title":"Value Tier"},"value_tier_label":{"type":"string","title":"Value Tier Label"},"value_note":{"title":"Value Note","type":"string","nullable":true}},"type":"object","required":["id","name","aisle","aisle_label","is_staple","value_tier","value_tier_label","value_note"],"title":"IngredientOut"},"IngredientUpdate":{"properties":{"aisle":{"title":"Aisle","type":"string","nullable":true},"is_staple":{"title":"Is Staple","type":"boolean","nullable":true},"value_tier":{"title":"Value Tier","type":"string","nullable":true},"value_note":{"title":"Value Note","type":"string","maxLength":200,"nullable":true}},"type":"object","title":"IngredientUpdate"},"MergeOut":{"properties":{"ingredient":{"$ref":"#/components/schemas/IngredientOut"},"merged":{"type":"integer","title":"Merged"}},"type":"object","required":["ingredient","merged"],"title":"MergeOut"},"MergeIn":{"properties":{"duplicate_ids":{"items":{"type":"string","format":"uuid"},"type":"array","maxItems":50,"minItems":1,"title":"Duplicate Ids"}},"type":"object","required":["duplicate_ids"],"title":"MergeIn"},"DuplicatesOut":{"properties":{"groups":{"items":{"$ref":"#/components/schemas/DuplicateGroup"},"type":"array","title":"Groups"},"unfolded":{"items":{"$ref":"#/components/schemas/UnfoldedIngredient"},"type":"array","title":"Unfolded"}},"type":"object","required":["groups","unfolded"],"title":"DuplicatesOut"},"UnfoldedIngredient":{"properties":{"ingredient":{"$ref":"#/components/schemas/IngredientOut"},"canonical_name":{"type":"string","title":"Canonical Name"}},"type":"object","required":["ingredient","canonical_name"],"title":"UnfoldedIngredient","description":"One ingredient whose stored name is not its canonical form, with no\ntwin to merge it with."},"DuplicateGroup":{"properties":{"canonical_name":{"type":"string","title":"Canonical Name"},"keeper":{"$ref":"#/components/schemas/IngredientOut"},"duplicates":{"items":{"$ref":"#/components/schemas/IngredientOut"},"type":"array","title":"Duplicates"}},"type":"object","required":["canonical_name","keeper","duplicates"],"title":"DuplicateGroup"}}}}
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Meals",
+    "description": "Meal planning and shopping for this household. Metric units only (g, kg, ml, l or natural-unit counts).",
+    "version": "gpt-1"
+  },
+  "servers": [{ "url": "https://meals.mvissing.de" }],
+  "security": [{ "HTTPBearer": [] }],
+  "paths": {
+    "/ingredients": {
+      "get": {
+        "tags": ["ingredients"],
+        "summary": "List Ingredients",
+        "description": "Filter by `value_tier=premium` for the shopping list of things the\nhousehold has decided are worth paying up for (and `budget` for the\nown-brand-is-fine ones).\n\n`search` matches anywhere in the nam...",
+        "operationId": "list_ingredients_ingredients_get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Search",
+              "type": "string",
+              "maxLength": 200,
+              "nullable": true
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "exact lookup, folded the same way a write is: name=fresh mint finds 'mint'",
+              "title": "Name",
+              "type": "string",
+              "maxLength": 200,
+              "nullable": true
+            },
+            "description": "exact lookup, folded the same way a write is: name=fresh mint finds 'mint'"
+          },
+          {
+            "name": "staples_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Staples Only"
+            }
+          },
+          {
+            "name": "value_tier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "filter by buying advice; valid tiers: 'premium' (worth paying up for), 'budget' (own-brand is fine), 'any' (no strong opinion)",
+              "title": "Value Tier",
+              "type": "string",
+              "nullable": true
+            },
+            "description": "filter by buying advice; valid tiers: 'premium' (worth paying up for), 'budget' (own-brand is fine), 'any' (no strong opinion)"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["name", "aisle", "value_tier"],
+              "type": "string",
+              "description": "name (default), aisle (store-walking order, the same walk the shopping list uses), or value_tier (⭐ premium first, then 💷 budget, then no opinion)",
+              "default": "name",
+              "title": "Sort"
+            },
+            "description": "name (default), aisle (store-walking order, the same walk the shopping list uses), or value_tier (⭐ premium first, then 💷 budget, then no opinion)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/IngredientOut" },
+                  "title": "Response List Ingredients Ingredients Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingredients/duplicates": {
+      "get": {
+        "tags": ["ingredients"],
+        "summary": "List Duplicate Ingredients",
+        "description": "Ingredients in this household that are the same food under two names —\n\"mint\" and \"mint leaves\", \"garlic\" and \"garlic cloves\".\n\nNew writes are folded to one name automatically, so what shows up her...",
+        "operationId": "list_duplicate_ingredients_ingredients_duplicates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DuplicatesOut" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/ingredients/{ingredient_id}/merge": {
+      "post": {
+        "tags": ["ingredients"],
+        "summary": "Merge Into Ingredient",
+        "description": "Fold duplicate ingredients into this one, which survives.\n\nEverything pointing at a duplicate — recipe lines, a meal's loose\ningredients, shopping-list lines and their contributions — is repointed...",
+        "operationId": "merge_into_ingredient_ingredients__ingredient_id__merge_post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "ingredient_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ingredient Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MergeIn" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MergeOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingredients/{ingredient_id}": {
+      "patch": {
+        "tags": ["ingredients"],
+        "summary": "Update Ingredient",
+        "description": "Set the aisle (e.g. an AI tagging an ❓ ingredient), toggle the staples\nflag (staples are hidden from the list by default), or record whether the\npremium version of this ingredient is worth it.\n\n`va...",
+        "operationId": "update_ingredient_ingredients__ingredient_id__patch",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "ingredient_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ingredient Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/IngredientUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IngredientOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/ingest": {
+      "post": {
+        "tags": ["recipes"],
+        "summary": "Ingest Recipe Url",
+        "description": "Submit a recipe URL. A URL already in the library returns the cached\nrecipe instantly (parse once, reuse forever). New URLs are fetched and\nparsed from their schema.org/Recipe JSON-LD — no LLM invo...",
+        "operationId": "ingest_recipe_url_recipes_ingest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/IngestIn" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IngestOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/recipes": {
+      "post": {
+        "tags": ["recipes"],
+        "summary": "Create Recipe",
+        "description": "Create a recipe: manual entry (no URL) or a structured recipe an AI\nparsed from a page (set parse_source='ai' and include source_url).\nSubmitting a source_url that already exists returns the stored...",
+        "operationId": "create_recipe_recipes_post",
+        "security": [{ "HTTPBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RecipeCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecipeOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["recipes"],
+        "summary": "List Recipes",
+        "operationId": "list_recipes_recipes_get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Search",
+              "type": "string",
+              "maxLength": 300,
+              "nullable": true
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Tag",
+              "type": "string",
+              "maxLength": 50,
+              "nullable": true
+            }
+          },
+          {
+            "name": "max_total_minutes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Max Total Minutes",
+              "type": "integer",
+              "minimum": 1,
+              "nullable": true
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["title", "most_cooked", "least_recently_cooked"],
+              "type": "string",
+              "description": "title (default), most_cooked ('our regulars'), or least_recently_cooked ('what haven't we had in ages' — never-cooked recipes come first)",
+              "default": "title",
+              "title": "Sort"
+            },
+            "description": "title (default), most_cooked ('our regulars'), or least_recently_cooked ('what haven't we had in ages' — never-cooked recipes come first)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/RecipeSummary" },
+                  "title": "Response List Recipes Recipes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{recipe_id}": {
+      "get": {
+        "tags": ["recipes"],
+        "summary": "Get Recipe Detail",
+        "operationId": "get_recipe_detail_recipes__recipe_id__get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecipeOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["recipes"],
+        "summary": "Update Recipe",
+        "description": "Correct a parsed recipe. Edits mark the recipe as human-edited so\nnothing automated overwrites them. If the recipe is part of a meal on an\nactive plan, the shopping list is re-synced to the new ing...",
+        "operationId": "update_recipe_recipes__recipe_id__patch",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RecipeUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecipeOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["recipes"],
+        "summary": "Delete Recipe",
+        "operationId": "delete_recipe_recipes__recipe_id__delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Successful Response" },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{recipe_id}/reparse": {
+      "post": {
+        "tags": ["recipes"],
+        "summary": "Reparse Recipe",
+        "description": "Re-read this recipe from its `source_url` and replace what the page\nsays: title, servings, times, image, instructions, tags and ingredients.\n\nParse once, reuse forever (Q3) is the default because p...",
+        "operationId": "reparse_recipe_recipes__recipe_id__reparse_post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReparseIn" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecipeOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meals": {
+      "post": {
+        "tags": ["meals"],
+        "summary": "Create Meal",
+        "description": "A meal = zero or more recipes plus loose ingredients — 'cottage pie\nwith peas and carrots on the side' is one recipe and two loose\ningredients, no recipe needed for the veg.\n\nUse `recipes: [{recipe...",
+        "operationId": "create_meal_meals_post",
+        "security": [{ "HTTPBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MealCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MealOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["meals"],
+        "summary": "List Meals",
+        "operationId": "list_meals_meals_get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Search",
+              "type": "string",
+              "maxLength": 300,
+              "nullable": true
+            }
+          },
+          {
+            "name": "slot",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Slot",
+              "type": "string",
+              "maxLength": 30,
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/MealOut" },
+                  "title": "Response List Meals Meals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meals/{meal_id}": {
+      "get": {
+        "tags": ["meals"],
+        "summary": "Get Meal Detail",
+        "operationId": "get_meal_detail_meals__meal_id__get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "meal_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Meal Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MealOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["meals"],
+        "summary": "Update Meal",
+        "description": "Rename, re-slot, or change composition. Composition changes re-sync\nthe meal's contributions on the active shopping list.\n\nChanging a recipe's `scale` is a composition change: send the whole\n`recip...",
+        "operationId": "update_meal_meals__meal_id__patch",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "meal_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Meal Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MealUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MealOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["meals"],
+        "summary": "Delete Meal",
+        "description": "Deleting a meal takes it off every plan and decrements its\nshopping-list contributions first. The cooked history survives (issue\n#13): `cooked_events` keeps its own copy of the name.",
+        "operationId": "delete_meal_meals__meal_id__delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "meal_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Meal Id" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Successful Response" },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans": {
+      "post": {
+        "tags": ["plans"],
+        "summary": "Create Plan",
+        "description": "Start a weekly-ish plan — a pool of meal options, never a calendar.\nPass copy_from_plan_id to start from a previous week ('same as two weeks\nago'); copied meals immediately contribute to the shoppi...",
+        "operationId": "create_plan_plans_post",
+        "security": [{ "HTTPBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PlanCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlanOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["plans"],
+        "summary": "List Plans",
+        "operationId": "list_plans_plans_get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Status",
+              "type": "string",
+              "pattern": "^(active|archived)$",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/PlanSummary" },
+                  "title": "Response List Plans Plans Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans/current": {
+      "get": {
+        "tags": ["plans"],
+        "summary": "Current Plan",
+        "description": "The most recent active plan — 'what are our options this week?'",
+        "operationId": "current_plan_plans_current_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlanOut" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/plans/{plan_id}": {
+      "get": {
+        "tags": ["plans"],
+        "summary": "Get Plan Detail",
+        "operationId": "get_plan_detail_plans__plan_id__get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Plan Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlanOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans/{plan_id}/meals": {
+      "post": {
+        "tags": ["plans"],
+        "summary": "Add Meal",
+        "description": "Add a meal to the plan. All its recipe ingredients and loose\ningredients land on the shopping list, merged into existing lines where\nthe unit matches.",
+        "operationId": "add_meal_plans__plan_id__meals_post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Plan Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AddMealIn" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlanOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans/{plan_id}/meals/{plan_meal_id}": {
+      "delete": {
+        "tags": ["plans"],
+        "summary": "Remove Meal",
+        "description": "Remove a meal option ('scratch the burgers, we're out Friday'). Its\nshopping-list contributions are decremented; ad-hoc items are never\ntouched.",
+        "operationId": "remove_meal_plans__plan_id__meals__plan_meal_id__delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "plan_meal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plan Meal Id"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Plan Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlanOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans/{plan_id}/meals/{plan_meal_id}/cooked": {
+      "post": {
+        "tags": ["plans"],
+        "summary": "Mark Cooked",
+        "description": "Mark a meal option as cooked — the hook for future 'what do we\nactually eat' insights. Idempotent.",
+        "operationId": "mark_cooked_plans__plan_id__meals__plan_meal_id__cooked_post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "plan_meal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plan Meal Id"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Plan Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlanOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["plans"],
+        "summary": "Undo Mark Cooked",
+        "description": "Take back a mistaken 'cooked' (issue #51). Un-ticks the meal and removes\nthe cooking from the record, so `times_cooked` and `last_cooked_at` come\nback down for the meal and for every recipe it held...",
+        "operationId": "undo_mark_cooked_plans__plan_id__meals__plan_meal_id__cooked_delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "plan_meal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plan Meal Id"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Plan Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlanOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans/{plan_id}/archive": {
+      "post": {
+        "tags": ["plans"],
+        "summary": "Archive Plan",
+        "description": "Archive a plan. Its meals' contributions are removed from the active\nshopping list (an already-archived list keeps its history).",
+        "operationId": "archive_plan_plans__plan_id__archive_post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Plan Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlanOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shopping-list": {
+      "get": {
+        "tags": ["shopping-list"],
+        "summary": "Get Shopping List",
+        "description": "The live shopping list, sorted in store-walking order (aisle emoji,\nthen name). Staples and 'already have it' items are hidden by default;\nhidden_staples says how many are waiting for a staples che...",
+        "operationId": "get_shopping_list_shopping_list_get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "include_staples",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Reveal staple items for a pre-shop staples check",
+              "default": false,
+              "title": "Include Staples"
+            },
+            "description": "Reveal staple items for a pre-shop staples check"
+          },
+          {
+            "name": "include_excluded",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Reveal items marked 'already have it'",
+              "default": false,
+              "title": "Include Excluded"
+            },
+            "description": "Reveal items marked 'already have it'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ShoppingListOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shopping-list/items": {
+      "post": {
+        "tags": ["shopping-list"],
+        "summary": "Add Item",
+        "description": "Fast ad-hoc add — the milk-is-out case. Merges into an existing line\nwhen the ingredient and unit match. Supply a client-generated id to make\nthe call idempotent (safe retries, offline sync); a rep...",
+        "operationId": "add_item_shopping_list_items_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AdhocItemIn" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListItemOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/shopping-list/items/{item_id}": {
+      "patch": {
+        "tags": ["shopping-list"],
+        "summary": "Update Item",
+        "description": "Check items off while shopping, mark 'already have it' (excluded —\nhidden from this shop without losing why it was needed), or mark a staple\nas needed during a staples check (staple_needed — that o...",
+        "operationId": "update_item_shopping_list_items__item_id__patch",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Item Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ListItemUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListItemOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shopping-list/archive": {
+      "post": {
+        "tags": ["shopping-list"],
+        "summary": "Archive Shopping List",
+        "description": "Finish the shop: archive the current list and start a fresh empty one.",
+        "operationId": "archive_shopping_list_shopping_list_archive_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ArchiveOut" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/supermarkets": {
+      "get": {
+        "tags": ["supermarkets"],
+        "summary": "List Supermarkets",
+        "description": "The household's supermarkets and their saved aisle walking orders.\n\nThe `is_active` one decides the order the shopping list is sorted in and\nthe order `GET /aisles` returns; when none is active the...",
+        "operationId": "list_supermarkets_supermarkets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "$ref": "#/components/schemas/SupermarketOut" },
+                  "type": "array",
+                  "title": "Response List Supermarkets Supermarkets Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      },
+      "post": {
+        "tags": ["supermarkets"],
+        "summary": "Create Supermarket",
+        "description": "Save a supermarket and, optionally, its aisle walking order.\n\n`aisle_order` is aisle emojis first-to-last as you walk that store; any\nyou leave out keep their usual place at the end, and omitting i...",
+        "operationId": "create_supermarket_supermarkets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SupermarketCreate" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SupermarketOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/supermarkets/{supermarket_id}": {
+      "patch": {
+        "tags": ["supermarkets"],
+        "summary": "Update Supermarket",
+        "description": "Rename a supermarket, replace its aisle walking order, or switch the\nactive store: `{\"is_active\": true}` sorts the shopping list for this one\n(\"we're at Aldi today\"), `{\"is_active\": false}` goes ba...",
+        "operationId": "update_supermarket_supermarkets__supermarket_id__patch",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "supermarket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supermarket Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SupermarketUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SupermarketOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/freezer": {
+      "get": {
+        "tags": ["freezer"],
+        "summary": "Get Freezer",
+        "description": "What is in the freezer, oldest batch first — that is the one to eat\nnext. Each batch says how many portions are left and, when it came from\nthe app, which meal or recipe it was; `total_portions` is...",
+        "operationId": "get_freezer_freezer_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FreezerOut" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      },
+      "post": {
+        "tags": ["freezer"],
+        "summary": "Add To Freezer",
+        "description": "Put a batch in the freezer. Name it one way: `meal_id` for a meal\n(the batch takes the meal's name), `recipe_id` for a recipe (the title),\nor `label` for anything that did not come through the app...",
+        "operationId": "add_to_freezer_freezer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FreezerAddIn" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FreezerItemOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/freezer/{item_id}": {
+      "patch": {
+        "tags": ["freezer"],
+        "summary": "Update Freezer Item",
+        "description": "Correct a batch: set `portions` outright (a recount), rename it, change\nthe note or the date it went in. To eat from it use\nPOST /freezer/{item_id}/take instead, which also clears an emptied batch.",
+        "operationId": "update_freezer_item_freezer__item_id__patch",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Item Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FreezerItemUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FreezerItemOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["freezer"],
+        "summary": "Remove From Freezer",
+        "description": "Take a whole batch out, whatever is left of it — binned, given away, or\nnever there. Nothing else is touched.",
+        "operationId": "remove_from_freezer_freezer__item_id__delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Item Id" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Successful Response" },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/freezer/{item_id}/take": {
+      "post": {
+        "tags": ["freezer"],
+        "summary": "Take From Freezer",
+        "description": "Take portions out to eat (default 1). The reply is the batch with what\nis left; when that reaches 0 the batch is gone from the freezer and the\nreply is the last you will hear of it. Asking for more...",
+        "operationId": "take_from_freezer_freezer__item_id__take_post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "Item Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FreezerTakeIn" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FreezerItemOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/limits": {
+      "get": {
+        "tags": ["meta"],
+        "summary": "Get Limits",
+        "description": "Every limit that applies to your household, with how much is used and how\nmuch is left.\n\n**Check this before a bulk import.** `remaining` is how many more of a thing\nyou can create; a `limit` of `n...",
+        "operationId": "get_limits_limits_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LimitsOut" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": { "HTTPBearer": { "type": "http", "scheme": "bearer" } },
+    "schemas": {
+      "LimitsOut": {
+        "properties": {
+          "tier": {
+            "type": "string",
+            "title": "Tier",
+            "description": "The tier that produced these numbers."
+          },
+          "limited": {
+            "type": "boolean",
+            "title": "Limited",
+            "description": "Whether this deployment limits anything at all. False on a self-hosted server that has configured nothing, where every allowance below is unlimited."
+          },
+          "resources": {
+            "items": { "$ref": "#/components/schemas/ResourceAllowanceOut" },
+            "type": "array",
+            "title": "Resources"
+          }
+        },
+        "type": "object",
+        "required": ["tier", "limited", "resources"],
+        "title": "LimitsOut",
+        "description": "Everything this server allows the calling household."
+      },
+      "ResourceAllowanceOut": {
+        "properties": {
+          "resource": {
+            "type": "string",
+            "title": "Resource",
+            "description": "The resource this allowance governs, e.g. 'recipes'."
+          },
+          "limit": {
+            "title": "Limit",
+            "description": "How many are allowed, or null for unlimited. This is the number the household will actually meet: whichever of its tier's cap and this server's fair-use ceiling is lower.",
+            "type": "integer",
+            "nullable": true
+          },
+          "used": {
+            "title": "Used",
+            "description": "How many exist now, or null where the number has no meaning: an unlimited allowance (nothing was counted), or one scoped to a single meal or plan rather than the household.",
+            "type": "integer",
+            "nullable": true
+          },
+          "remaining": {
+            "title": "Remaining",
+            "description": "limit - used, floored at zero; null whenever either is null.",
+            "type": "integer",
+            "nullable": true
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "description": "Where the allowance applies: 'per household', 'in one meal', 'a month'."
+          },
+          "upgradable": {
+            "type": "boolean",
+            "title": "Upgradable",
+            "description": "Whether a larger tier on this server would raise this limit. False for a fair-use ceiling, for the largest tier, and for a server that sells nothing."
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource",
+          "limit",
+          "used",
+          "remaining",
+          "scope",
+          "upgradable"
+        ],
+        "title": "ResourceAllowanceOut",
+        "description": "What this household is allowed of one resource, and how much is spent."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": { "$ref": "#/components/schemas/ValidationError" },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": { "anyOf": [{ "type": "string" }, { "type": "integer" }] },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": { "type": "string", "title": "Message" },
+          "type": { "type": "string", "title": "Error Type" },
+          "input": { "title": "Input" },
+          "ctx": { "type": "object", "title": "Context" }
+        },
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError"
+      },
+      "FreezerItemOut": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "label": { "type": "string", "title": "Label" },
+          "meal_id": {
+            "title": "Meal Id",
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "recipe_id": {
+            "title": "Recipe Id",
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "portions": { "type": "integer", "title": "Portions" },
+          "note": { "title": "Note", "type": "string", "nullable": true },
+          "frozen_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Frozen On"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "meal_id",
+          "recipe_id",
+          "portions",
+          "note",
+          "frozen_on",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "FreezerItemOut"
+      },
+      "FreezerTakeIn": {
+        "properties": {
+          "portions": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Portions",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "title": "FreezerTakeIn"
+      },
+      "FreezerItemUpdate": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "nullable": true
+          },
+          "portions": {
+            "title": "Portions",
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "nullable": true
+          },
+          "note": {
+            "title": "Note",
+            "type": "string",
+            "maxLength": 300,
+            "nullable": true
+          },
+          "frozen_on": {
+            "title": "Frozen On",
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "title": "FreezerItemUpdate",
+        "description": "Correct a batch: set the portions left outright, rename it, change the\nnote or the date. To eat from it use POST /freezer/{item_id}/take, which\nalso clears the batch when the last portion goes."
+      },
+      "FreezerAddIn": {
+        "properties": {
+          "meal_id": {
+            "title": "Meal Id",
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "recipe_id": {
+            "title": "Recipe Id",
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "label": {
+            "title": "Label",
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "nullable": true
+          },
+          "portions": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Portions",
+            "default": 1
+          },
+          "note": {
+            "title": "Note",
+            "type": "string",
+            "maxLength": 300,
+            "nullable": true
+          },
+          "frozen_on": {
+            "title": "Frozen On",
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "title": "FreezerAddIn",
+        "description": "Put a batch in the freezer. Name it **one** way: `meal_id` (a meal from\nGET /meals — the batch takes the meal's name), `recipe_id` (a recipe from\nGET /recipes — it takes the title), or `label` (fre..."
+      },
+      "FreezerOut": {
+        "properties": {
+          "items": {
+            "items": { "$ref": "#/components/schemas/FreezerItemOut" },
+            "type": "array",
+            "title": "Items"
+          },
+          "total_portions": { "type": "integer", "title": "Total Portions" }
+        },
+        "type": "object",
+        "required": ["items", "total_portions"],
+        "title": "FreezerOut"
+      },
+      "SupermarketOut": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "name": { "type": "string", "title": "Name" },
+          "aisle_order": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Aisle Order"
+          },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": ["id", "name", "aisle_order", "is_active", "created_at"],
+        "title": "SupermarketOut"
+      },
+      "SupermarketUpdate": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "nullable": true
+          },
+          "aisle_order": {
+            "title": "Aisle Order",
+            "items": { "type": "string" },
+            "type": "array",
+            "nullable": true
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "title": "SupermarketUpdate"
+      },
+      "SupermarketCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "aisle_order": {
+            "title": "Aisle Order",
+            "items": { "type": "string" },
+            "type": "array",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "SupermarketCreate"
+      },
+      "ArchiveOut": {
+        "properties": {
+          "archived_list_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Archived List Id"
+          },
+          "new_list_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "New List Id"
+          }
+        },
+        "type": "object",
+        "required": ["archived_list_id", "new_list_id"],
+        "title": "ArchiveOut"
+      },
+      "ListItemOut": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "ingredient_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ingredient Id"
+          },
+          "name": { "type": "string", "title": "Name" },
+          "aisle": { "type": "string", "title": "Aisle" },
+          "aisle_label": { "type": "string", "title": "Aisle Label" },
+          "is_staple": { "type": "boolean", "title": "Is Staple" },
+          "value_tier": { "type": "string", "title": "Value Tier" },
+          "value_tier_label": { "type": "string", "title": "Value Tier Label" },
+          "value_note": {
+            "title": "Value Note",
+            "type": "string",
+            "nullable": true
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number",
+            "nullable": true
+          },
+          "unit": { "title": "Unit", "type": "string", "nullable": true },
+          "display": { "type": "string", "title": "Display" },
+          "checked": { "type": "boolean", "title": "Checked" },
+          "excluded": { "type": "boolean", "title": "Excluded" },
+          "staple_needed": { "type": "boolean", "title": "Staple Needed" },
+          "sources": {
+            "items": { "$ref": "#/components/schemas/SourceOut" },
+            "type": "array",
+            "title": "Sources"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ingredient_id",
+          "name",
+          "aisle",
+          "aisle_label",
+          "is_staple",
+          "value_tier",
+          "value_tier_label",
+          "value_note",
+          "quantity",
+          "unit",
+          "display",
+          "checked",
+          "excluded",
+          "staple_needed",
+          "sources",
+          "updated_at"
+        ],
+        "title": "ListItemOut"
+      },
+      "SourceOut": {
+        "properties": {
+          "ad_hoc": { "type": "boolean", "title": "Ad Hoc" },
+          "meal_id": {
+            "title": "Meal Id",
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "meal_name": {
+            "title": "Meal Name",
+            "type": "string",
+            "nullable": true
+          },
+          "recipe_id": {
+            "title": "Recipe Id",
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "recipe_title": {
+            "title": "Recipe Title",
+            "type": "string",
+            "nullable": true
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "ad_hoc",
+          "meal_id",
+          "meal_name",
+          "recipe_id",
+          "recipe_title",
+          "quantity"
+        ],
+        "title": "SourceOut"
+      },
+      "ListItemUpdate": {
+        "properties": {
+          "checked": {
+            "title": "Checked",
+            "type": "boolean",
+            "nullable": true
+          },
+          "excluded": {
+            "title": "Excluded",
+            "type": "boolean",
+            "nullable": true
+          },
+          "staple_needed": {
+            "title": "Staple Needed",
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "title": "ListItemUpdate"
+      },
+      "AdhocItemIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "nullable": true
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string",
+            "maxLength": 50,
+            "nullable": true
+          },
+          "raw": {
+            "title": "Raw",
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "id": {
+            "title": "Id",
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "AdhocItemIn",
+        "description": "Ad-hoc addition (the milk-is-out case). Clients may supply their own\nitem id — offline-first iOS creates the item locally and syncs later, and\na retrying AI won't double-add (idempotent by id)."
+      },
+      "ShoppingListOut": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "status": { "type": "string", "title": "Status" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "archived_at": {
+            "title": "Archived At",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "items": {
+            "items": { "$ref": "#/components/schemas/ListItemOut" },
+            "type": "array",
+            "title": "Items"
+          },
+          "hidden_staples": { "type": "integer", "title": "Hidden Staples" },
+          "supermarket": {
+            "anyOf": [{ "$ref": "#/components/schemas/SupermarketRef" }],
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "archived_at",
+          "items",
+          "hidden_staples"
+        ],
+        "title": "ShoppingListOut"
+      },
+      "SupermarketRef": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "name": { "type": "string", "title": "Name" }
+        },
+        "type": "object",
+        "required": ["id", "name"],
+        "title": "SupermarketRef"
+      },
+      "PlanOut": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "label": { "type": "string", "title": "Label" },
+          "starts_on": {
+            "title": "Starts On",
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "status": { "type": "string", "title": "Status" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "archived_at": {
+            "title": "Archived At",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "meals": {
+            "items": { "$ref": "#/components/schemas/PlanMealOut" },
+            "type": "array",
+            "title": "Meals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "starts_on",
+          "status",
+          "created_at",
+          "archived_at",
+          "meals"
+        ],
+        "title": "PlanOut"
+      },
+      "PlanMealOut": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "meal": { "$ref": "#/components/schemas/MealOut" },
+          "cooked_at": {
+            "title": "Cooked At",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": ["id", "meal", "cooked_at"],
+        "title": "PlanMealOut"
+      },
+      "MealOut": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "name": { "type": "string", "title": "Name" },
+          "slot": { "title": "Slot", "type": "string", "nullable": true },
+          "recipes": {
+            "items": { "$ref": "#/components/schemas/MealRecipeOut" },
+            "type": "array",
+            "title": "Recipes"
+          },
+          "loose_ingredients": {
+            "items": { "$ref": "#/components/schemas/RecipeLineOut" },
+            "type": "array",
+            "title": "Loose Ingredients"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "times_cooked": { "type": "integer", "title": "Times Cooked" },
+          "last_cooked_at": {
+            "title": "Last Cooked At",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slot",
+          "recipes",
+          "loose_ingredients",
+          "created_at",
+          "times_cooked",
+          "last_cooked_at"
+        ],
+        "title": "MealOut"
+      },
+      "RecipeLineOut": {
+        "properties": {
+          "ingredient_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ingredient Id"
+          },
+          "name": { "type": "string", "title": "Name" },
+          "aisle": { "type": "string", "title": "Aisle" },
+          "is_staple": { "type": "boolean", "title": "Is Staple" },
+          "value_tier": { "type": "string", "title": "Value Tier" },
+          "value_note": {
+            "title": "Value Note",
+            "type": "string",
+            "nullable": true
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number",
+            "nullable": true
+          },
+          "unit": { "title": "Unit", "type": "string", "nullable": true },
+          "display": { "type": "string", "title": "Display" },
+          "raw": { "title": "Raw", "type": "string", "nullable": true }
+        },
+        "type": "object",
+        "required": [
+          "ingredient_id",
+          "name",
+          "aisle",
+          "is_staple",
+          "value_tier",
+          "value_note",
+          "quantity",
+          "unit",
+          "display",
+          "raw"
+        ],
+        "title": "RecipeLineOut"
+      },
+      "MealRecipeOut": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "title": { "type": "string", "title": "Title" },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string",
+            "nullable": true
+          },
+          "servings": {
+            "title": "Servings",
+            "type": "integer",
+            "nullable": true
+          },
+          "prep_minutes": {
+            "title": "Prep Minutes",
+            "type": "integer",
+            "nullable": true
+          },
+          "cook_minutes": {
+            "title": "Cook Minutes",
+            "type": "integer",
+            "nullable": true
+          },
+          "image_url": {
+            "title": "Image Url",
+            "type": "string",
+            "nullable": true
+          },
+          "tags": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Tags"
+          },
+          "times_cooked": { "type": "integer", "title": "Times Cooked" },
+          "last_cooked_at": {
+            "title": "Last Cooked At",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "scale": { "type": "number", "title": "Scale", "default": 1.0 },
+          "scaled_servings": {
+            "title": "Scaled Servings",
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "source_url",
+          "servings",
+          "prep_minutes",
+          "cook_minutes",
+          "image_url",
+          "tags",
+          "times_cooked",
+          "last_cooked_at"
+        ],
+        "title": "MealRecipeOut",
+        "description": "A recipe as it sits in a meal. `scale` is additive — a client that\ndoesn't know about it reads the recipe exactly as before.\n\n`scaled_servings` is how many this meal's share of the recipe feeds, i...."
+      },
+      "AddMealIn": {
+        "properties": {
+          "meal_id": { "type": "string", "format": "uuid", "title": "Meal Id" }
+        },
+        "type": "object",
+        "required": ["meal_id"],
+        "title": "AddMealIn"
+      },
+      "PlanSummary": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "label": { "type": "string", "title": "Label" },
+          "starts_on": {
+            "title": "Starts On",
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "status": { "type": "string", "title": "Status" },
+          "meal_count": { "type": "integer", "title": "Meal Count" }
+        },
+        "type": "object",
+        "required": ["id", "label", "starts_on", "status", "meal_count"],
+        "title": "PlanSummary"
+      },
+      "PlanCreate": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "starts_on": {
+            "title": "Starts On",
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "copy_from_plan_id": {
+            "title": "Copy From Plan Id",
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": ["label"],
+        "title": "PlanCreate"
+      },
+      "MealUpdate": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "nullable": true
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string",
+            "maxLength": 30,
+            "nullable": true
+          },
+          "recipe_ids": {
+            "title": "Recipe Ids",
+            "items": { "type": "string", "format": "uuid" },
+            "type": "array",
+            "maxItems": 20,
+            "nullable": true
+          },
+          "recipes": {
+            "title": "Recipes",
+            "items": { "$ref": "#/components/schemas/MealRecipeIn" },
+            "type": "array",
+            "maxItems": 20,
+            "nullable": true
+          },
+          "loose_ingredients": {
+            "title": "Loose Ingredients",
+            "items": { "$ref": "#/components/schemas/IngredientLineIn" },
+            "type": "array",
+            "maxItems": 50,
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "title": "MealUpdate"
+      },
+      "IngredientLineIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "nullable": true
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string",
+            "maxLength": 50,
+            "nullable": true
+          },
+          "raw": {
+            "title": "Raw",
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "IngredientLineIn",
+        "description": "An ingredient reference in a write payload. AI-ergonomic: ingredients\nare referenced by name (find-or-create), never by id. Quantities are\nnormalised to canonical form here, so a bad unit fails fas..."
+      },
+      "MealRecipeIn": {
+        "properties": {
+          "recipe_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Recipe Id"
+          },
+          "scale": {
+            "type": "number",
+            "maximum": 20.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Scale",
+            "default": 1.0
+          },
+          "servings": {
+            "title": "Servings",
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": ["recipe_id"],
+        "title": "MealRecipeIn",
+        "description": "A recipe in a meal, at a multiple of its own quantities (Q18). scale=2\ndoubles what that recipe puts on the shopping list; other meals using the\nsame recipe are unaffected.\n\n`servings` says the sam..."
+      },
+      "MealCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string",
+            "maxLength": 30,
+            "nullable": true
+          },
+          "recipe_ids": {
+            "items": { "type": "string", "format": "uuid" },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Recipe Ids"
+          },
+          "recipes": {
+            "title": "Recipes",
+            "items": { "$ref": "#/components/schemas/MealRecipeIn" },
+            "type": "array",
+            "maxItems": 20,
+            "nullable": true
+          },
+          "loose_ingredients": {
+            "items": { "$ref": "#/components/schemas/IngredientLineIn" },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Loose Ingredients"
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "MealCreate"
+      },
+      "RecipeOut": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "title": { "type": "string", "title": "Title" },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string",
+            "nullable": true
+          },
+          "servings": {
+            "title": "Servings",
+            "type": "integer",
+            "nullable": true
+          },
+          "prep_minutes": {
+            "title": "Prep Minutes",
+            "type": "integer",
+            "nullable": true
+          },
+          "cook_minutes": {
+            "title": "Cook Minutes",
+            "type": "integer",
+            "nullable": true
+          },
+          "image_url": {
+            "title": "Image Url",
+            "type": "string",
+            "nullable": true
+          },
+          "instructions": {
+            "title": "Instructions",
+            "type": "string",
+            "nullable": true
+          },
+          "tags": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Tags"
+          },
+          "parse_source": { "type": "string", "title": "Parse Source" },
+          "edited": { "type": "boolean", "title": "Edited" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "times_cooked": { "type": "integer", "title": "Times Cooked" },
+          "last_cooked_at": {
+            "title": "Last Cooked At",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "ingredients": {
+            "items": { "$ref": "#/components/schemas/RecipeLineOut" },
+            "type": "array",
+            "title": "Ingredients"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "source_url",
+          "servings",
+          "prep_minutes",
+          "cook_minutes",
+          "image_url",
+          "instructions",
+          "tags",
+          "parse_source",
+          "edited",
+          "created_at",
+          "updated_at",
+          "times_cooked",
+          "last_cooked_at",
+          "ingredients"
+        ],
+        "title": "RecipeOut"
+      },
+      "ReparseIn": {
+        "properties": {
+          "force": { "type": "boolean", "title": "Force", "default": false }
+        },
+        "type": "object",
+        "title": "ReparseIn",
+        "description": "`force` is the household saying its own corrections may go (issue #54).\nWithout it, a recipe marked `edited` is refused rather than overwritten."
+      },
+      "RecipeUpdate": {
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "nullable": true
+          },
+          "servings": {
+            "title": "Servings",
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "nullable": true
+          },
+          "prep_minutes": {
+            "title": "Prep Minutes",
+            "type": "integer",
+            "minimum": 0.0,
+            "nullable": true
+          },
+          "cook_minutes": {
+            "title": "Cook Minutes",
+            "type": "integer",
+            "minimum": 0.0,
+            "nullable": true
+          },
+          "image_url": {
+            "title": "Image Url",
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true
+          },
+          "instructions": {
+            "title": "Instructions",
+            "type": "string",
+            "nullable": true
+          },
+          "tags": {
+            "title": "Tags",
+            "items": { "type": "string" },
+            "type": "array",
+            "maxItems": 20,
+            "nullable": true
+          },
+          "ingredients": {
+            "title": "Ingredients",
+            "items": { "$ref": "#/components/schemas/IngredientLineIn" },
+            "type": "array",
+            "maxItems": 100,
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "title": "RecipeUpdate"
+      },
+      "RecipeSummary": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "title": { "type": "string", "title": "Title" },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string",
+            "nullable": true
+          },
+          "servings": {
+            "title": "Servings",
+            "type": "integer",
+            "nullable": true
+          },
+          "prep_minutes": {
+            "title": "Prep Minutes",
+            "type": "integer",
+            "nullable": true
+          },
+          "cook_minutes": {
+            "title": "Cook Minutes",
+            "type": "integer",
+            "nullable": true
+          },
+          "image_url": {
+            "title": "Image Url",
+            "type": "string",
+            "nullable": true
+          },
+          "tags": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Tags"
+          },
+          "times_cooked": { "type": "integer", "title": "Times Cooked" },
+          "last_cooked_at": {
+            "title": "Last Cooked At",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "source_url",
+          "servings",
+          "prep_minutes",
+          "cook_minutes",
+          "image_url",
+          "tags",
+          "times_cooked",
+          "last_cooked_at"
+        ],
+        "title": "RecipeSummary"
+      },
+      "RecipeCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true
+          },
+          "servings": {
+            "title": "Servings",
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "nullable": true
+          },
+          "prep_minutes": {
+            "title": "Prep Minutes",
+            "type": "integer",
+            "minimum": 0.0,
+            "nullable": true
+          },
+          "cook_minutes": {
+            "title": "Cook Minutes",
+            "type": "integer",
+            "minimum": 0.0,
+            "nullable": true
+          },
+          "image_url": {
+            "title": "Image Url",
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true
+          },
+          "instructions": {
+            "title": "Instructions",
+            "type": "string",
+            "nullable": true
+          },
+          "tags": {
+            "items": { "type": "string" },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Tags"
+          },
+          "parse_source": {
+            "type": "string",
+            "enum": ["manual", "ai"],
+            "title": "Parse Source",
+            "default": "manual"
+          },
+          "ingredients": {
+            "items": { "$ref": "#/components/schemas/IngredientLineIn" },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Ingredients"
+          }
+        },
+        "type": "object",
+        "required": ["title"],
+        "title": "RecipeCreate"
+      },
+      "IngestOut": {
+        "properties": {
+          "recipe": { "$ref": "#/components/schemas/RecipeOut" },
+          "cached": { "type": "boolean", "title": "Cached" }
+        },
+        "type": "object",
+        "required": ["recipe", "cached"],
+        "title": "IngestOut"
+      },
+      "IngestIn": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": ["url"],
+        "title": "IngestIn"
+      },
+      "IngredientOut": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "name": { "type": "string", "title": "Name" },
+          "aisle": { "type": "string", "title": "Aisle" },
+          "aisle_label": { "type": "string", "title": "Aisle Label" },
+          "is_staple": { "type": "boolean", "title": "Is Staple" },
+          "value_tier": { "type": "string", "title": "Value Tier" },
+          "value_tier_label": { "type": "string", "title": "Value Tier Label" },
+          "value_note": {
+            "title": "Value Note",
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "aisle",
+          "aisle_label",
+          "is_staple",
+          "value_tier",
+          "value_tier_label",
+          "value_note"
+        ],
+        "title": "IngredientOut"
+      },
+      "IngredientUpdate": {
+        "properties": {
+          "aisle": { "title": "Aisle", "type": "string", "nullable": true },
+          "is_staple": {
+            "title": "Is Staple",
+            "type": "boolean",
+            "nullable": true
+          },
+          "value_tier": {
+            "title": "Value Tier",
+            "type": "string",
+            "nullable": true
+          },
+          "value_note": {
+            "title": "Value Note",
+            "type": "string",
+            "maxLength": 200,
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "title": "IngredientUpdate"
+      },
+      "MergeOut": {
+        "properties": {
+          "ingredient": { "$ref": "#/components/schemas/IngredientOut" },
+          "merged": { "type": "integer", "title": "Merged" }
+        },
+        "type": "object",
+        "required": ["ingredient", "merged"],
+        "title": "MergeOut"
+      },
+      "MergeIn": {
+        "properties": {
+          "duplicate_ids": {
+            "items": { "type": "string", "format": "uuid" },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Duplicate Ids"
+          }
+        },
+        "type": "object",
+        "required": ["duplicate_ids"],
+        "title": "MergeIn"
+      },
+      "DuplicatesOut": {
+        "properties": {
+          "groups": {
+            "items": { "$ref": "#/components/schemas/DuplicateGroup" },
+            "type": "array",
+            "title": "Groups"
+          },
+          "unfolded": {
+            "items": { "$ref": "#/components/schemas/UnfoldedIngredient" },
+            "type": "array",
+            "title": "Unfolded"
+          }
+        },
+        "type": "object",
+        "required": ["groups", "unfolded"],
+        "title": "DuplicatesOut"
+      },
+      "UnfoldedIngredient": {
+        "properties": {
+          "ingredient": { "$ref": "#/components/schemas/IngredientOut" },
+          "canonical_name": { "type": "string", "title": "Canonical Name" }
+        },
+        "type": "object",
+        "required": ["ingredient", "canonical_name"],
+        "title": "UnfoldedIngredient",
+        "description": "One ingredient whose stored name is not its canonical form, with no\ntwin to merge it with."
+      },
+      "DuplicateGroup": {
+        "properties": {
+          "canonical_name": { "type": "string", "title": "Canonical Name" },
+          "keeper": { "$ref": "#/components/schemas/IngredientOut" },
+          "duplicates": {
+            "items": { "$ref": "#/components/schemas/IngredientOut" },
+            "type": "array",
+            "title": "Duplicates"
+          }
+        },
+        "type": "object",
+        "required": ["canonical_name", "keeper", "duplicates"],
+        "title": "DuplicateGroup"
+      }
+    }
+  }
+}

@@ -24,6 +24,7 @@ Quantities: metric only — g, kg, ml, l — or counts of natural units ("2 tins
 and tells you the expected shape.
 
 Recipes:
+
 - Any recipe link → `POST /recipes/ingest {url}` first; cached URLs are instant.
   A 422 means the server couldn't use the page — fetch and read the page
   yourself, then `POST /recipes` with {title, servings, prep_minutes,
@@ -42,6 +43,7 @@ Recipes:
   records value tiers.
 
 Meals & plans:
+
 - `POST /meals {name, slot, recipe_ids, loose_ingredients}` · edit with
   `PATCH /meals/{id}` — read the meal first and send the FULL replacement lists;
   prefer PATCH over delete-and-recreate (it keeps the meal's place and history).
@@ -50,7 +52,7 @@ Meals & plans:
   divides by the recipe's own servings. One or the other per recipe, never both.
   Countable units round up on the list; confirm the multiple with the user.
 - `GET /plans/current` · `POST /plans {label}` · `POST /plans/{id}/meals
-  {meal_id}` · `DELETE /plans/{id}/meals/{plan_meal_id}`.
+{meal_id}` · `DELETE /plans/{id}/meals/{plan_meal_id}`.
 - Cooked history: `POST /plans/{id}/meals/{plan_meal_id}/cooked`; its DELETE
   takes back a mis-tap (confirm first). Mention `times_cooked` /
   `last_cooked_at`; `GET /recipes?sort=least_recently_cooked` for variety.
