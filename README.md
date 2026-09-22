@@ -47,7 +47,7 @@ points with the `setup` repo.
 ## Prerequisites
 
 ```bash
-yarn install
+bun install
 pulumi login          # Pulumi Cloud; ~/.pulumi/credentials.json holds the session
 ```
 

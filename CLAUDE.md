@@ -9,8 +9,8 @@ Pulumi TypeScript project that manages all Kubernetes resources on a K3S homelab
 ## Commands
 
 ```bash
-# Install dependencies
-yarn install
+# Install dependencies (also compiles sdks/authentik via the root postinstall)
+bun install
 
 # Preview infrastructure changes (dry run)
 pulumi preview
@@ -27,13 +27,22 @@ pulumi up --exclude '**timemachine**' --exclude '**unifi**' \
 pulumi down
 
 # Lint
-npx eslint .
+bunx eslint .
 
 # Format
-npx prettier --check .
+bunx prettier --check .
 ```
 
 There are no tests — validation happens via `pulumi preview` before deploying.
+
+**Runtime is Bun** (`Pulumi.yaml`: `runtime: bun`) — bun transpiles the
+TypeScript program natively, there is no ts-node anywhere. Local runs need
+`bun` and the `pulumi-language-bun` plugin on PATH (nix:
+`pulumiPackages.pulumi-bun`); official CLI releases bundle the plugin, which
+is what CI uses. Bun does not run lifecycle scripts for `file:` deps, so
+`sdks/authentik` is compiled by a **root `postinstall` script** on every
+install; `trustedDependencies` only whitelists the `@pulumi/kubernetes` plugin
+prefetch and `protobufjs`.
 
 ⚠️ **Never use `--target` on this stack. Use `--exclude`.** With eleven Helm
 charts rendering client-side, targeting makes the engine stop work on
@@ -269,11 +278,16 @@ them:
 Dependency updates are automated via Renovate (`renovate.json`) with custom regex managers that detect Docker image versions and Helm chart versions directly from `.ts` files. When changing image or chart versions, maintain the format that Renovate's regex patterns expect (e.g., `image: "repo:tag"` on one line, or `repository`/`tag` on adjacent lines).
 
 ⚠️ **`typescript` is pinned to `^6` deliberately — do not let Renovate take the
-major.** `ts-node@10.9.2` cannot run `typescript@7`: it fails at startup with
-`TypeError: Cannot read properties of undefined (reading 'fileExists')`, before
-any of the program runs. The bump landed unattended and surfaced three days
-later looking like a cluster fault, because the only symptom is that `pulumi`
-cannot load the program at all.
+major.** TypeScript 7 is the native Go port and ships **no compiler JS API**
+(`ts.sys`, `createSourceFile` etc. are all gone), which kills both remaining
+consumers: `typescript-eslint` 8.x hard-fails on TS 7 (support for TS ≥ 7.1 is
+tracked in typescript-eslint#10940), and ts-node is dead. The runtime is bun and
+does not care — only lint and the editor do. When typescript-eslint ships TS7
+support, unpin; TS7 also hard-errors on `moduleResolution: "node"` and
+`ignoreDeprecations`, so `tsconfig.json` needs `nodenext`/`bundler` and those
+keys removed in the same change. Until then the Renovate ignore rule blocks the
+PR (the PR also bumps the vendored SDK's typescript, which breaks the same
+things).
 
 ## Worktrees (agent isolation)
 
