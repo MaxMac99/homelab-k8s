@@ -11,7 +11,10 @@
     "pretty": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@pulumi/authentik": ["./sdks/authentik/bin/index.js"]
+    }
   },
   "files": ["index.ts"]
 }

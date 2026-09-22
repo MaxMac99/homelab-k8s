@@ -27,7 +27,9 @@ jobs:
         with:
           node-version: 24
 
-      - run: corepack enable && yarn install --frozen-lockfile
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
 
       - name: Generate kubeconfig
         run: |

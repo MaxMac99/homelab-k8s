@@ -56,7 +56,7 @@
       "groupName": null
     },
     {
-      "description": "typescript must stay below v7: ts-node@10.9.2 dies at program load on TS7's native API ('Cannot read properties of undefined (reading fileExists)'), so pulumi cannot load the program at all. ts-node has no release supporting TS7 yet.",
+      "description": "typescript must stay below v7: TypeScript 7 ships no compiler JS API, so typescript-eslint 8.x hard-fails on it (TS >= 7.1 support tracked in typescript-eslint#10940). The runtime is bun and unaffected; only lint and the editor care. tsconfig.json also needs moduleResolution/module rework before TS7.",
       "matchPackageNames": ["typescript"],
       "matchUpdateTypes": ["major"],
       "enabled": false
