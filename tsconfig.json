@@ -13,12 +13,8 @@
     "noImplicitReturns": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@pulumi/authentik": [
-        "./sdks/authentik/bin/index.js"
-      ]
+      "@pulumi/authentik": ["./sdks/authentik/bin/index.js"]
     }
   },
-  "files": [
-    "index.ts"
-  ]
+  "files": ["index.ts"]
 }
