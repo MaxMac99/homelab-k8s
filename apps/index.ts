@@ -17,6 +17,7 @@ import "./timemachine";
 import "./immich";
 import "./trip";
 import "./meals";
+import "./foreman";
 
 export * from "./paperless";
 export * from "./homepage";
@@ -28,3 +29,4 @@ export * from "./timemachine";
 export * from "./immich";
 export * from "./trip";
 export * from "./meals";
+export * from "./foreman";

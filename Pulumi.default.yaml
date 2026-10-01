@@ -30,3 +30,5 @@ config:
   authentik:url: https://auth.mvissing.de
   authentik:token:
     secure: AAABACJ6xEmkM3Qapp8mTIzH6/bhfCQV4seNCumliJwEK5g2OsYvc0LhcRWECJkZlBEWqPnitGXRjBxZBrG/pnoQhxSNTfdDnP6qiHWb7uA=
+  k8s-resources:foremanRegistryPullToken:
+    secure: AAABAJkVCxedwN5IMO2DY1MdgzO3KGQjvPfGwJeRnAdiVI4+FAzJ4/hSny1viY2UjYPBpESGlPZONHboPp4nwxoYrZVS5m8f
