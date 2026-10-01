@@ -425,7 +425,7 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
                 {
                   // D-021: der Pod kennt nur das Gateway als Provider.
                   name: "FOREMAN_LLM_BASE_URL",
-                  value: "http://foreman.foreman.svc.cluster.local:8080",
+                  value: "http://foreman.foreman.svc.cluster.local",
                 },
                 {
                   name: "FOREMAN_GATEWAY_ROUTING",
