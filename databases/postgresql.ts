@@ -353,6 +353,17 @@ const postgresCluster = new k8s.apiextensions.CustomResource(
               name: authentikPasswordSecret.metadata.name,
             },
           },
+          // Foreman control plane (apps/foreman.ts). CNPG does NOT auto-create
+          // the Database CR owner (foreman-db applied=false, SQLSTATE 42704) —
+          // the role has to be declared here, like every other app role.
+          {
+            name: "foreman",
+            ensure: "present",
+            login: true,
+            passwordSecret: {
+              name: foremanPasswordSecret.metadata.name,
+            },
+          },
           // ⚠️ Kept until A4. Removing them here while Grafana and Paperless
           // still run against this cluster would strand them mid-cutover; the
           // Winkel cluster declares its own copies, so there is a brief overlap
