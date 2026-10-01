@@ -269,9 +269,13 @@ const foremanPlaybooksSecret = new k8s.core.v1.Secret("foreman-playbooks-git", {
 // Gateway-Routing für die Live-Abnahme: OpenRouter-only (D-033-Fallback-Kette
 // kommt später mit den Claude/Codex-CLI-Adaptern; jeder Modell-Wechsel landet
 // als `model_switch` im workflow_events-Log).
+// Gateway-Routing für die Live-Abnahme: OpenRouter-only (D-033-Fallback-Kette
+// kommt später mit den Claude/Codex-CLI-Adaptern; jeder Modell-Wechsel landet
+// als `model_switch` im workflow_events-Log). Modellwunsch Max: GLM-5.3-Flash
+// (z-ai) für beide Klassen.
 const GATEWAY_ROUTING = JSON.stringify({
-  strong: [{ provider: "open-router", model: "anthropic/claude-sonnet-4.5" }],
-  small: [{ provider: "open-router", model: "openai/gpt-4o-mini" }],
+  strong: [{ provider: "open-router", model: "z-ai/glm-5.3-flash" }],
+  small: [{ provider: "open-router", model: "z-ai/glm-5.3-flash" }],
   budget: {},
 });
 
