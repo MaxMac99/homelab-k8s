@@ -153,10 +153,35 @@ new k8s.rbac.v1.RoleBinding("foreman-control", {
 });
 
 // Pull secret für die privaten GHCR-Packages (foreman-server, foreman-pod).
+// imagePullSecrets lösen nur im Pod-Namespace auf → der gleiche Secret muss
+// auch im Projekt-Namespace der Workspace-Pods liegen.
 new k8s.core.v1.Secret("foreman-registry-pull", {
   metadata: {
     name: "foreman-registry-pull",
     namespace: foremanNamespace.metadata.name,
+  },
+  type: "kubernetes.io/dockerconfigjson",
+  stringData: {
+    ".dockerconfigjson": registryPullToken.apply((token) =>
+      Buffer.from(
+        JSON.stringify({
+          auths: {
+            "ghcr.io": {
+              username: "MaxMac99",
+              password: token,
+              auth: Buffer.from(`MaxMac99:${token}`).toString("base64"),
+            },
+          },
+        }),
+      ).toString("utf8"),
+    ),
+  },
+});
+
+new k8s.core.v1.Secret("foreman-registry-pull-agents", {
+  metadata: {
+    name: "foreman-registry-pull",
+    namespace: foremanAgentsNamespace.metadata.name,
   },
   type: "kubernetes.io/dockerconfigjson",
   stringData: {
