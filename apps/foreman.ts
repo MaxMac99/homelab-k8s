@@ -382,7 +382,7 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
                 },
                 {
                   name: "FOREMAN_POD_IMAGE",
-                  value: "ghcr.io/maxmac99/foreman-pod:0.1.2",
+                  value: "ghcr.io/maxmac99/foreman-pod:0.1.3",
                 },
                 {
                   name: "FOREMAN_IMAGE_PULL_SECRET",
