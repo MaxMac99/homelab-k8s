@@ -389,6 +389,11 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
                   value: "foreman-registry-pull",
                 },
                 {
+                  // State-PVCs pin storage explicitly (estate philosophy).
+                  name: "FOREMAN_STATE_STORAGE_CLASS",
+                  value: "local-path",
+                },
+                {
                   // D-021: der Pod kennt nur das Gateway als Provider.
                   name: "FOREMAN_LLM_BASE_URL",
                   value: "http://foreman.foreman.svc.cluster.local:8080",
