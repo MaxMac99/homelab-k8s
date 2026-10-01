@@ -3,7 +3,7 @@
 // Ein axum-Prozess (D-040: modularer Monolith) mit Workflow-Engine (D-005),
 // Model Gateway (D-021), Gate-Kern mit ntfy-Push (AP-08) und Knowledge-Service
 // (AP-21). Agenten laufen in **on-demand Workspace-Pods** im Namespace
-// `foreman-agents` (D-010/D-036): ein Pod pro Phasen-Versuch, gestorben wird
+// `foreman-proj-<slug>` (D-010/D-036): ein Pod pro Phasen-Versuch, gestorben wird
 // am Gate, Recovery = frischer Clone. Playbook-Definitionen liegen im
 // separaten Repo `MaxMac99/dev-playbooks` (D-006) und werden per Init-Container
 // in ein Empty-Dir geklont; der Pilot ist `MaxMac99/mdcat-lite`.
@@ -60,15 +60,17 @@ export const foremanNamespace = new k8s.core.v1.Namespace("foreman", {
   metadata: { name: "foreman" },
 });
 
+// Der Pilot läuft im Projekt-Namespace `foreman-proj-<slug>` (D-010/D-036,
+// Namensschema des Pod-Runners: Namespace pro Projekt).
 export const foremanAgentsNamespace = new k8s.core.v1.Namespace(
-  "foreman-agents",
+  "foreman-proj-mdcat-lite",
   {
-    metadata: { name: "foreman-agents" },
+    metadata: { name: "foreman-proj-mdcat-lite" },
   },
 );
 
-// Least privilege für die Control Plane: nur Workspace-Pods, Verify-Jobs und
-// State-PVCs in foreman-agents — nichts clusterweit (D-011/D-012).
+// Least privilege für die Control Plane: Workspace-Pods, Verify-Jobs und
+// State-PVCs im Projekt-Namespace — sonst nichts (D-011/D-012).
 export const foremanControlSA = new k8s.core.v1.ServiceAccount(
   "foreman-control",
   {
@@ -78,6 +80,39 @@ export const foremanControlSA = new k8s.core.v1.ServiceAccount(
     },
   },
 );
+
+// Der globale Agent-Pod-Cap (D-036) zählt cluster-weit (Api::all), weil die
+// Engine die Projekt-Namespaces nicht kennt — daher list/watch auf pods für
+// genau diesen SA, sonst nichts.
+export const foremanCapClusterRole = new k8s.rbac.v1.ClusterRole(
+  "foreman-cap-probe",
+  {
+    metadata: { name: "foreman-cap-probe" },
+    rules: [
+      {
+        apiGroups: [""],
+        resources: ["pods"],
+        verbs: ["list", "watch"],
+      },
+    ],
+  },
+);
+
+new k8s.rbac.v1.ClusterRoleBinding("foreman-cap-probe", {
+  metadata: { name: "foreman-cap-probe" },
+  roleRef: {
+    apiGroup: "rbac.authorization.k8s.io",
+    kind: "ClusterRole",
+    name: "foreman-cap-probe",
+  },
+  subjects: [
+    {
+      kind: "ServiceAccount",
+      name: "foreman-control",
+      namespace: foremanNamespace.metadata.name,
+    },
+  ],
+});
 
 export const foremanAgentsRole = new k8s.rbac.v1.Role("foreman-control", {
   metadata: {
@@ -304,7 +339,7 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
             {
               name: "control-plane",
               // Renovate-format one-liner; image built from deploy/server-image.
-              image: "ghcr.io/maxmac99/foreman-server:0.1.2",
+              image: "ghcr.io/maxmac99/foreman-server:0.1.3",
               ports: [{ containerPort: 8080, name: "http" }],
               envFrom: [
                 { secretRef: { name: foremanConfig.metadata.name } },
