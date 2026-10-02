@@ -443,6 +443,13 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
                   value: "2",
                 },
                 {
+                  // Stack-Fragment für den Playbook-Compose (AP-10
+                  // stack_checks: ohne Fragment resolved der Slot `skipped`
+                  // und der CI-Job verweigert fail-loud, D-028).
+                  name: "FOREMAN_STACK",
+                  value: "rust-backend",
+                },
+                {
                   // D-021: der Pod kennt nur das Gateway als Provider.
                   name: "FOREMAN_LLM_BASE_URL",
                   value: "http://foreman.foreman.svc.cluster.local",
