@@ -243,6 +243,37 @@ const mealsPasswordSecret = new k8s.core.v1.Secret("postgres-meals-password", {
   },
 });
 
+// Generate password for foreman user
+const foremanPassword = new random.RandomPassword("foreman-db-password", {
+  length: 32,
+  special: false,
+});
+
+// Create secret with password for foreman user
+// This will be used by CNPG declarative role management
+// Includes Reflector annotations to mirror to foreman namespace
+const foremanPasswordSecret = new k8s.core.v1.Secret(
+  "postgres-foreman-password",
+  {
+    metadata: {
+      name: "postgres-foreman",
+      namespace: namespace.metadata.name,
+      annotations: {
+        "reflector.v1.k8s.emberstack.com/reflection-auto-enabled": "true",
+        "reflector.v1.k8s.emberstack.com/reflection-allowed": "true",
+        "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces":
+          "foreman",
+        "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces": "foreman",
+      },
+    },
+    type: "kubernetes.io/basic-auth",
+    stringData: {
+      username: "foreman",
+      password: foremanPassword.result,
+    },
+  },
+);
+
 /**
  * ⚠️ Migration window only — flip to `false` once `postgres-winkel` has
  * finished bootstrapping.
@@ -813,38 +844,6 @@ export const paperlessDbPassword = paperlessPassword.result;
 export const homeassistantDbPassword = homeassistantPassword.result;
 export const immichDbPassword = immichPassword.result;
 export const mealsDbPassword = mealsPassword.result;
-
-// Generate password for foreman user
-const foremanPassword = new random.RandomPassword("foreman-db-password", {
-  length: 32,
-  special: false,
-});
-
-// Create secret with password for foreman user
-// This will be used by CNPG declarative role management
-// Includes Reflector annotations to mirror to foreman namespace
-const foremanPasswordSecret = new k8s.core.v1.Secret(
-  "postgres-foreman-password",
-  {
-    metadata: {
-      name: "postgres-foreman",
-      namespace: namespace.metadata.name,
-      annotations: {
-        "reflector.v1.k8s.emberstack.com/reflection-auto-enabled": "true",
-        "reflector.v1.k8s.emberstack.com/reflection-allowed": "true",
-        "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces":
-          "foreman",
-        "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces": "foreman",
-      },
-    },
-    type: "kubernetes.io/basic-auth",
-    stringData: {
-      username: "foreman",
-      password: foremanPassword.result,
-    },
-  },
-);
-
 export const foremanDbPassword = foremanPassword.result;
 
 export { immichDatabase };
