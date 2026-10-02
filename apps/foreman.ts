@@ -122,7 +122,9 @@ export const foremanAgentsRole = new k8s.rbac.v1.Role("foreman-control", {
   rules: [
     {
       apiGroups: [""],
-      resources: ["pods", "persistentvolumeclaims"],
+      // pods/log: der CI-Runner liest die Verify-Job-Logs (Klassifikation
+      // green/red, D-028).
+      resources: ["pods", "pods/log", "persistentvolumeclaims"],
       verbs: ["create", "get", "list", "watch", "delete"],
     },
     {
