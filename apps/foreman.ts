@@ -384,6 +384,17 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
                   value: "https://foreman.mvissing.de",
                 },
                 {
+                  // D-034: OIDC für Max' Login — der Server validiert die
+                  // Bearer-JWTs gegen den JWKS des Issuers (fail-loud beim
+                  // Start, wenn Discovery/JWKS nicht erreichbar). Native
+                  // Clients lesen Issuer + Mode von GET /auth/config. Bei
+                  // Authentik ist der Issuer die Anwendungs-URL
+                  // (/application/o/<slug>/), nicht die Domain-Root.
+                  // Optional: FOREMAN_OIDC_AUDIENCE (Audience-Restriktion).
+                  name: "FOREMAN_OIDC_ISSUER",
+                  value: "https://auth.mvissing.de/application/o/foreman/",
+                },
+                {
                   name: "FOREMAN_PLAYBOOKS_DIR",
                   value: "/playbooks",
                 },
