@@ -423,6 +423,15 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
                   value: "local-path",
                 },
                 {
+                  // AP-10/13: ephemere CI-/Merge-Jobs (JobRunner-Port).
+                  name: "FOREMAN_JOB_IMAGE",
+                  value: "ghcr.io/maxmac99/foreman-pod:0.1.4",
+                },
+                {
+                  name: "FOREMAN_JOB_CAP",
+                  value: "2",
+                },
+                {
                   // D-021: der Pod kennt nur das Gateway als Provider.
                   name: "FOREMAN_LLM_BASE_URL",
                   value: "http://foreman.foreman.svc.cluster.local",
