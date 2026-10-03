@@ -467,8 +467,19 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
             // ⚠️ Pinned like Prometheus above: the provisioned Kubernetes Logs
             // dashboard (see ./grafana-dashboards) references this datasource
             // by uid, so the uid must exist before that dashboard is worth
-            // anything. Provisioning updates the existing datasource in
-            // place, so adopting a readable uid breaks nothing.
+            // anything.
+            //
+            // ⚠️ Repinning the uid of an EXISTING datasource is not an
+            // in-place update. Provisioning matches the record by name, sees
+            // a uid it does not hold, and fails with `Datasource provisioning
+            // error: data source not found` — and in Grafana 12 a datasource
+            // provisioning failure is FATAL: the container exits and the pod
+            // crash-loops. Caught 2026-10-03 (Pulumi update 417 timed out
+            // after 600s on a pod that could never become Ready). The fix is
+            // a one-time API delete of the old record — `DELETE
+            // /api/datasources/name/Loki` against the still-running old pod —
+            // after which provisioning recreates it under `loki` on the next
+            // start. Same step applies to any future uid repin.
             uid: LOKI_DS_UID,
             access: "proxy",
             url: lokiUrl,
