@@ -445,6 +445,14 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
                   value: "2",
                 },
                 {
+                  // AP-14 (D-002/D-025): der Deploy-Pfad läuft
+                  // ausschließlich über die GitHub-API des Infra-Repos
+                  // (Renovate-Bump-PR finden, mergen, pulumi-CI
+                  // abwarten) — Pflicht ab 0.1.21 (fail-loud).
+                  name: "FOREMAN_DEPLOY_INFRA_REPO",
+                  value: "MaxMac99/homelab-k8s",
+                },
+                {
                   // Stack-Fragment für den Playbook-Compose (AP-10
                   // stack_checks: ohne Fragment resolved der Slot `skipped`
                   // und der CI-Job verweigert fail-loud, D-028).
