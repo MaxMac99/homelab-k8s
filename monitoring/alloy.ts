@@ -37,8 +37,23 @@ discovery.relabel "pods" {
     source_labels = ["__meta_kubernetes_pod_container_name"]
     target_label  = "container"
   }
+  // "app" is the "service" name the logs dashboard (grafana-dashboards.ts)
+  // filters on. Almost no pod in this cluster carries a plain "app" pod
+  // label — the helm charts set app.kubernetes.io/name instead — so the
+  // fallback below is what populates the service dropdown. Order matters:
+  // the fallback first, then the plain "app" label overwrites it when
+  // present. Both rules use (.+) rather than the default (.*) so an empty
+  // source never wipes a label the previous rule just set.
+  // (No backticks in this comment — this block lives inside the template
+  // literal above, and an unescaped backtick would end it.)
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+    regex         = "(.+)"
+    target_label  = "app"
+  }
   rule {
     source_labels = ["__meta_kubernetes_pod_label_app"]
+    regex         = "(.+)"
     target_label  = "app"
   }
   rule {
@@ -169,6 +184,19 @@ const alloy = new k8s.helm.v3.Chart("alloy", {
   fetchOpts: {
     repo: "https://grafana.github.io/helm-charts",
   },
+  transformations: [
+    // ⚠️ Same trap as the "grafana" ConfigMap in grafana.ts: any change to
+    // this ConfigMap's data (e.g. editing the River config above) plans a
+    // replace, and create-before-delete collides with the live object —
+    // `configmaps "alloy" already exists`. The chart fixes the name, so it
+    // is not ours to auto-name. Cost is a short window with no config,
+    // harmless for a log shipper the same change restarts anyway.
+    (obj: any, opts: any) => {
+      if (obj.kind === "ConfigMap" && obj.metadata?.name === "alloy") {
+        opts.deleteBeforeReplace = true;
+      }
+    },
+  ],
   values: {
     alloy: {
       configMap: {
@@ -255,7 +283,9 @@ export { alloy };
 // (pods/log). No host path mounts required.
 //
 // Automatic labels:
-//   - namespace, pod, container, app (from pod label `app`)
+//   - namespace, pod, container
+//   - app: pod label `app`, falling back to `app.kubernetes.io/name`
+//     (the logs dashboard filters on this — see grafana-dashboards.ts)
 //   - level, logger (extracted by pipeline stages)
 //   - Any other pod label (via labelmap)
 //

@@ -12,6 +12,7 @@ import { onNode, MAXDATA } from "../infrastructure/sites";
 import { namespaceName } from "./namespace";
 import { prometheusUrl } from "./prometheus";
 import { lokiUrl } from "./loki";
+import { kubernetesLogsDashboard, LOKI_DS_UID } from "./grafana-dashboards";
 import { tempoQueryUrl } from "./tempo";
 import {
   ntfyAlertTopic,
@@ -257,27 +258,31 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
         opts.ignoreChanges.push("rules");
       }
     },
-    // ⚠️ Without this, *every* edit to `alerting` or `grafana.ini` below fails
-    // the deploy — and it fails on a resource nobody was thinking about.
+    // ⚠️ Without this, *every* edit to `alerting`, `grafana.ini` or the
+    // `dashboards` below fails the deploy — and it fails on a resource nobody
+    // was thinking about.
     //
     // pulumi-kubernetes treats any change to a ConfigMap's `.data` as a
     // replacement, and replacement is create-before-delete. The chart names
-    // this ConfigMap `grafana`, flatly, so the replacement collides with the
-    // object that is still there:
+    // these ConfigMaps (`grafana`, `grafana-dashboards-default`, …), flatly,
+    // so the replacement collides with the object that is still there:
     //
     //   creation failed: configmaps "grafana" already exists
     //
     // `local-path.ts` dodges the same trap by letting Pulumi auto-name its
     // ConfigMap; `coredns.ts` cannot, because k3s fixes the name, and it
     // reaches for `deleteBeforeReplace` exactly as here. A Helm chart's
-    // rendered names are equally not ours to choose.
+    // rendered names are equally not ours to choose — which is why this
+    // matches *every* ConfigMap in the chart: the dashboard ConfigMap (its
+    // `.data` gains a key per provisioned dashboard) hits the identical
+    // collision, and the next chart-rendered ConfigMap would too.
     //
     // The cost is a short window in which Grafana's configuration is absent.
     // Harmless here: the Deployment rolls on the same change anyway, and
     // Grafana is not on the forward-auth path — unlike Authentik, losing it
     // for a moment costs nothing but a dashboard.
     (obj: any, opts: any) => {
-      if (obj.kind === "ConfigMap" && obj.metadata?.name === "grafana") {
+      if (obj.kind === "ConfigMap") {
         opts.deleteBeforeReplace = true;
       }
     },
@@ -459,6 +464,12 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
           {
             name: "Loki",
             type: "loki",
+            // ⚠️ Pinned like Prometheus above: the provisioned Kubernetes Logs
+            // dashboard (see ./grafana-dashboards) references this datasource
+            // by uid, so the uid must exist before that dashboard is worth
+            // anything. Provisioning updates the existing datasource in
+            // place, so adopting a readable uid breaks nothing.
+            uid: LOKI_DS_UID,
             access: "proxy",
             url: lokiUrl,
             editable: true,
@@ -877,11 +888,16 @@ const grafana = new k8s.helm.v3.Chart("grafana", {
           revision: 1,
           datasource: "Prometheus",
         },
-        // Loki dashboard
-        "loki-dashboard": {
-          gnetId: 13639, // Logs / App
-          revision: 2,
-          datasource: "Loki",
+        // Pod logs with namespace -> service -> pod drill-down. JSON is
+        // maintained in ./grafana-dashboards; the `json` key provisions it
+        // inline, same lifecycle as the gnetId dashboards above.
+        //
+        // (The gnetId 13639 "Logs / App" dashboard that used to sit here is
+        // gone: it filters only on `job`, which Alloy sets for the journal
+        // streams alone, so its single dropdown ever showed "systemd-journal".
+        // Kubernetes Logs replaces it.)
+        "kubernetes-logs": {
+          json: kubernetesLogsDashboard,
         },
         // Cross-site ICMP probes (monitoring/blackbox.ts, Phase 12)
         "blackbox-exporter": {
@@ -957,4 +973,4 @@ export { grafana };
 //   - Kubernetes Cluster monitoring
 //   - Node Exporter metrics
 //   - Kubernetes Pods
-//   - Loki logs viewer
+//   - Kubernetes Logs: pod logs filtered by namespace, service, pod
