@@ -7,14 +7,54 @@
   },
   "timezone": "Europe/Berlin",
   "schedule": ["before 6am"],
-  "rebaseWhen": "behind-base-branch",
+  "rebaseWhen": "conflicted",
   "prHourlyLimit": 5,
-  "prConcurrentLimit": 10,
+  "prConcurrentLimit": 5,
   "labels": ["dependencies"],
   "platformAutomerge": true,
   "packageRules": [
     {
-      "description": "Keep both Postgres clusters on the same major.minor. postgres-winkel runs the tensorchord VectorChord operand image and postgres runs the community one; docs/immich-migration.md 3.1 requires they match, and pg_dump is forward-compatible only.",
+      "description": "typescript must stay below v7: TypeScript 7 ships no compiler JS API, so typescript-eslint 8.x hard-fails on it (TS >= 7.1 support tracked in typescript-eslint#10940). The runtime is bun and unaffected; only lint and the editor care. tsconfig.json also needs moduleResolution/module rework before TS7.",
+      "matchPackageNames": ["typescript"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "All minor and patch updates share one automerged PR; majors stay separate via the rule below.",
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "non-major updates",
+      "automerge": true
+    },
+    {
+      "description": "Track paperless-ngx pre-releases (v3 beta) in their own reviewed PR — not automerged, and a reviewer ping is the notification channel.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/paperless-ngx/paperless-ngx"],
+      "groupName": "paperless prereleases",
+      "ignoreUnstable": false,
+      "automerge": false,
+      "reviewers": ["MaxMac99"]
+    },
+    {
+      "description": "Keep major bumps in their own PRs for easier review/rollback. A reviewer ping notifies; the version-locked groups below come after this rule on purpose and re-group their majors.",
+      "matchUpdateTypes": ["major"],
+      "groupName": null,
+      "reviewers": ["MaxMac99"]
+    },
+    {
+      "description": "Group ARC charts together, including majors: controller and runner are versioned jointly and must not drift while one PR waits.",
+      "matchManagers": ["custom.regex"],
+      "matchDatasources": ["docker"],
+      "groupName": "arc",
+      "matchPackageNames": ["/actions-runner-controller-charts/"]
+    },
+    {
+      "description": "Group authentik server, worker and proxy, including majors: outposts must match the server version exactly or forward auth breaks for every ingress.",
+      "matchDatasources": ["docker"],
+      "groupName": "authentik",
+      "matchPackageNames": ["/goauthentik//"]
+    },
+    {
+      "description": "Keep both Postgres clusters on the same major.minor, including majors. postgres-winkel runs the tensorchord VectorChord operand image and postgres runs the community one; docs/immich-migration.md 3.1 requires they match, and pg_dump is forward-compatible only.",
       "matchDatasources": ["docker"],
       "groupName": "postgres operand images",
       "matchPackageNames": [
@@ -23,49 +63,18 @@
       ]
     },
     {
-      "description": "Auto-merge patch updates",
-      "matchUpdateTypes": ["patch"],
+      "description": "Own app meals: checked on every run instead of only on the scheduled run, automerged, so a freshly pushed build from the meals repo reaches the cluster in minutes-to-hours. Includes majors on purpose — reverting an own-app bump is trivial.",
+      "matchPackageNames": ["ghcr.io/marco308/meals"],
+      "groupName": "meals",
+      "schedule": [],
       "automerge": true
     },
     {
-      "description": "Group ARC charts together",
-      "matchManagers": ["custom.regex"],
-      "matchDatasources": ["docker"],
-      "groupName": "arc",
-      "matchPackageNames": ["/actions-runner-controller-charts/"]
-    },
-    {
-      "description": "Group all npm updates (pulumi + dev tooling)",
-      "matchManagers": ["npm"],
-      "groupName": "pulumi and dev tooling"
-    },
-    {
-      "description": "Group monitoring stack (charts and images)",
-      "groupName": "monitoring stack",
-      "matchPackageNames": ["loki", "grafana", "prometheus", "tempo", "alloy"]
-    },
-    {
-      "description": "Group authentik server and proxy",
-      "matchDatasources": ["docker"],
-      "groupName": "authentik",
-      "matchPackageNames": ["/goauthentik//"]
-    },
-    {
-      "description": "Keep major bumps in their own PRs for easier review/rollback",
-      "matchUpdateTypes": ["major"],
-      "groupName": null
-    },
-    {
-      "description": "typescript must stay below v7: TypeScript 7 ships no compiler JS API, so typescript-eslint 8.x hard-fails on it (TS >= 7.1 support tracked in typescript-eslint#10940). The runtime is bun and unaffected; only lint and the editor care. tsconfig.json also needs moduleResolution/module rework before TS7.",
-      "matchPackageNames": ["typescript"],
-      "matchUpdateTypes": ["major"],
-      "enabled": false
-    },
-    {
-      "description": "Track paperless-ngx pre-releases (v3 beta)",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/paperless-ngx/paperless-ngx"],
-      "ignoreUnstable": false
+      "description": "Own app trip: same fast lane as meals.",
+      "matchPackageNames": ["ghcr.io/maxmac99/vacation-plan-view"],
+      "groupName": "trip",
+      "schedule": [],
+      "automerge": true
     }
   ],
   "customManagers": [
