@@ -344,7 +344,7 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
               // dev-playbooks checkout (D-006): Definitionen sind Daten in
               // einem eigenen Repo; der Init-Container klont frisch pro
               // Pod-Start, damit Playbook-PRs beim nächsten Deploy greifen.
-              image: "docker.io/library/alpine:3.20",
+              image: "docker.io/library/alpine:3.24",
               command: ["/bin/sh", "-ec"],
               args: [
                 `apk add --no-cache git >/dev/null && \
