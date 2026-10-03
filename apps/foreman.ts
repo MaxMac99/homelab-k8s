@@ -370,7 +370,7 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
             {
               name: "control-plane",
               // Renovate-format one-liner; image built from deploy/server-image.
-              image: "ghcr.io/maxmac99/foreman-server:0.1.22",
+              image: "ghcr.io/maxmac99/foreman-server:0.1.23",
               ports: [{ containerPort: 8080, name: "http" }],
               envFrom: [
                 { secretRef: { name: foremanConfig.metadata.name } },
