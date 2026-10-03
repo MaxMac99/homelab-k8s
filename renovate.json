@@ -7,7 +7,7 @@
   },
   "timezone": "Europe/Berlin",
   "schedule": ["before 6am"],
-  "rebaseWhen": "conflicted",
+  "rebaseWhen": "behind-base-branch",
   "prHourlyLimit": 5,
   "prConcurrentLimit": 5,
   "labels": ["dependencies"],
