@@ -17,11 +17,21 @@
 // `app_kubernetes_io_name` label too, but the dashboard deliberately filters
 // on the normalized `app` so one dropdown covers both label styles.
 //
-// ⚠️ `=~` plus allValue=".*" is load-bearing, not decoration: Loki matches a
-// *missing* label as the empty string, and `.*` matches that — so "All"
-// really means all logs, including pods without any app-style label (CronJob
-// pods, the journal streams). A plain `=` or an allValue left empty would
-// silently drop those from every panel.
+// ⚠️ The allValue split is load-bearing, and `.*` everywhere is WRONG.
+// Loki rejects a stream selector whose EVERY matcher is "empty-compatible"
+// (a regex that also matches the empty string): `.*` does, `.+` does not.
+// With all three variables on All and `.*` allValues, every panel failed
+// with `parse error : queries require at least one regexp or equality
+// matcher that does not have an empty-compatible value`. So namespace and
+// pod get `.+` — those labels exist non-empty on every pod-log stream and
+// carry the query's validity — while service keeps `.*`: an `app` matcher
+// matching empty also matches streams WITHOUT the label, which is what
+// keeps "All" including the historical logs from before the Alloy app
+// fallback (everything before 2026-10-03 has no `app` label at all). One
+// non-empty-compatible matcher anywhere in the selector is enough for
+// Loki to accept it. Corollary: the journal streams (no namespace label)
+// are structurally outside this dashboard — they have no
+// namespace/service/pod shape to drill into.
 
 // Same pinning rationale as PROMETHEUS_DS_UID in grafana.ts: dashboards
 // reference datasources by uid, and a derived hash uid is not a contract.
@@ -35,7 +45,6 @@ const lokiVariable = {
   datasource: lokiDs,
   current: { selected: false, text: "All", value: "$__all" },
   includeAll: true,
-  allValue: ".*",
   multi: true,
   options: [],
   refresh: 2, // on dashboard load, so the chain re-scopes on every visit
@@ -44,6 +53,13 @@ const lokiVariable = {
   sort: 1,
   type: "query",
 };
+
+// Namespace and pod exist non-empty on every pod-log stream, so their
+// "All" is `.+` — it matches everything while keeping the selector valid
+// for Loki (see the header note). Service keeps `.*` so its "All" also
+// includes the pre-fallback streams that have no `app` label.
+const alwaysPresentAll = ".+";
+const withAbsentLabelAll = ".*";
 
 const logSelector = '{namespace=~"$namespace", app=~"$service", pod=~"$pod"}';
 
@@ -68,6 +84,7 @@ const dashboard = {
         ...lokiVariable,
         name: "namespace",
         label: "Namespace",
+        allValue: alwaysPresentAll,
         definition: "label_values(namespace)",
         query: "label_values(namespace)",
       },
@@ -75,6 +92,7 @@ const dashboard = {
         ...lokiVariable,
         name: "service",
         label: "Service",
+        allValue: withAbsentLabelAll,
         definition: 'label_values({namespace=~"$namespace"}, app)',
         query: 'label_values({namespace=~"$namespace"}, app)',
       },
@@ -82,6 +100,7 @@ const dashboard = {
         ...lokiVariable,
         name: "pod",
         label: "Pod",
+        allValue: alwaysPresentAll,
         definition:
           'label_values({namespace=~"$namespace", app=~"$service"}, pod)',
         query: 'label_values({namespace=~"$namespace", app=~"$service"}, pod)',
