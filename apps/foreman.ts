@@ -60,12 +60,21 @@ export const foremanNamespace = new k8s.core.v1.Namespace("foreman", {
   metadata: { name: "foreman" },
 });
 
-// Der Pilot läuft im Projekt-Namespace `foreman-proj-<slug>` (D-010/D-036,
-// Namensschema des Pod-Runners: Namespace pro Projekt).
+// Die Projekte laufen in Projekt-Namespaces `foreman-proj-<slug>` (D-010/
+// D-036, Namensschema des Pod-Runners: Namespace pro Projekt, D-013).
+// AP-17 Dogfooding: Foreman arbeitet an sich selbst — der Namespace des
+// 'Foreman'-Projekts kommt dazu (Slug aus dem Projektnamen, project_coords).
 export const foremanAgentsNamespace = new k8s.core.v1.Namespace(
   "foreman-proj-mdcat-lite",
   {
     metadata: { name: "foreman-proj-mdcat-lite" },
+  },
+);
+
+export const foremanDogfoodNamespace = new k8s.core.v1.Namespace(
+  "foreman-proj-foreman",
+  {
+    metadata: { name: "foreman-proj-foreman" },
   },
 );
 
@@ -154,6 +163,51 @@ new k8s.rbac.v1.RoleBinding("foreman-control", {
   ],
 });
 
+// Least privilege im Dogfooding-Namespace — identisch zum Pilot-Namespace
+// (inkl. pods/log für die CI-Log-Lektüre, RBAC-Lücke vom 2026-10-03).
+export const foremanDogfoodRole = new k8s.rbac.v1.Role(
+  "foreman-control-dogfood",
+  {
+    metadata: {
+      name: "foreman-control",
+      namespace: foremanDogfoodNamespace.metadata.name,
+    },
+    rules: [
+      {
+        apiGroups: [""],
+        // pods/log: der CI-Runner liest die Verify-Job-Logs (Klassifikation
+        // green/red, D-028).
+        resources: ["pods", "pods/log", "persistentvolumeclaims"],
+        verbs: ["create", "get", "list", "watch", "delete"],
+      },
+      {
+        apiGroups: ["batch"],
+        resources: ["jobs"],
+        verbs: ["create", "get", "list", "watch", "delete"],
+      },
+    ],
+  },
+);
+
+new k8s.rbac.v1.RoleBinding("foreman-control-dogfood", {
+  metadata: {
+    name: "foreman-control",
+    namespace: foremanDogfoodNamespace.metadata.name,
+  },
+  roleRef: {
+    apiGroup: "rbac.authorization.k8s.io",
+    kind: "Role",
+    name: "foreman-control",
+  },
+  subjects: [
+    {
+      kind: "ServiceAccount",
+      name: "foreman-control",
+      namespace: foremanNamespace.metadata.name,
+    },
+  ],
+});
+
 // Pull secret für die privaten GHCR-Packages (foreman-server, foreman-pod).
 // imagePullSecrets lösen nur im Pod-Namespace auf → der gleiche Secret muss
 // auch im Projekt-Namespace der Workspace-Pods liegen.
@@ -184,6 +238,29 @@ new k8s.core.v1.Secret("foreman-registry-pull-agents", {
   metadata: {
     name: "foreman-registry-pull",
     namespace: foremanAgentsNamespace.metadata.name,
+  },
+  type: "kubernetes.io/dockerconfigjson",
+  stringData: {
+    ".dockerconfigjson": registryPullToken.apply((token) =>
+      Buffer.from(
+        JSON.stringify({
+          auths: {
+            "ghcr.io": {
+              username: "MaxMac99",
+              password: token,
+              auth: Buffer.from(`MaxMac99:${token}`).toString("base64"),
+            },
+          },
+        }),
+      ).toString("utf8"),
+    ),
+  },
+});
+
+new k8s.core.v1.Secret("foreman-registry-pull-dogfood", {
+  metadata: {
+    name: "foreman-registry-pull",
+    namespace: foremanDogfoodNamespace.metadata.name,
   },
   type: "kubernetes.io/dockerconfigjson",
   stringData: {
@@ -370,7 +447,7 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
             {
               name: "control-plane",
               // Renovate-format one-liner; image built from deploy/server-image.
-              image: "ghcr.io/maxmac99/foreman-server:0.1.27",
+              image: "ghcr.io/maxmac99/foreman-server:0.1.28",
               ports: [{ containerPort: 8080, name: "http" }],
               envFrom: [
                 { secretRef: { name: foremanConfig.metadata.name } },
