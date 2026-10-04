@@ -26,6 +26,19 @@ const githubPatSecret = new k8s.core.v1.Secret("github-pat", {
   },
 });
 
+// PAT für das Foreman-Runner-Set (repo-scoped auf MaxMac99/Foreman).
+// App-Auth wäre die rotation-freie Alternative — für Konsistenz mit dem
+// bestehenden Set zuerst PAT (Upgrade-Pfad: GitHub App, D-014-Anmerkung).
+const foremanRunnerPatSecret = new k8s.core.v1.Secret("github-pat-foreman", {
+  metadata: {
+    name: "github-pat-foreman",
+    namespace: arcRunnersNamespace.metadata.name,
+  },
+  stringData: {
+    github_token: config.requireSecret("foremanRunnerPat"),
+  },
+});
+
 // ARC controller
 const arcController = new k8s.helm.v3.Release("arc-controller", {
   chart:
@@ -95,9 +108,52 @@ const arcRunnerScaleSet = new k8s.helm.v3.Release(
   { dependsOn: [arcController, arcRunnerSA, arcRunnerClusterRoleBinding] },
 );
 
+// Foreman-Runner-Set (2026-10-03): zweites Scale-Set für MaxMac99/Foreman —
+// ein Scale-Set bindet an genau eine GitHub-Entität, User-Accounts haben
+// keine Org-Ebene (Doku-verified). Wie homelab-runner: minRunners 0 (keine
+// Idle-Pods), ephemere Runner. containerMode dind: die Release-Workflows
+// bauen/pushen Docker-Images (dockerTools.load → docker push + Smoke) —
+// ohne Docker-Daemon würden die Jobs am fehlenden `docker` scheitern.
+// Nix kommt pro Job via nix-installer-action; der Binary-Cache (attic,
+// namespace foreman) liegt über ClusterIP/LAN in Reichweite.
+const foremanRunnerScaleSet = new k8s.helm.v3.Release(
+  "foreman-runner-set",
+  {
+    chart:
+      "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
+    version: "0.15.0",
+    namespace: arcRunnersNamespace.metadata.name,
+    values: {
+      githubConfigUrl: "https://github.com/MaxMac99/Foreman",
+      githubConfigSecret: foremanRunnerPatSecret.metadata.name,
+      minRunners: 0,
+      maxRunners: 3,
+      runnerScaleSetName: "foreman-runner",
+      containerMode: { type: "dind" },
+      template: {
+        spec: {
+          serviceAccountName: "arc-runner",
+          nodeSelector: {
+            "kubernetes.io/arch": "amd64",
+          },
+          containers: [
+            {
+              name: "runner",
+              image: "ghcr.io/actions/actions-runner:latest",
+              command: ["/home/runner/run.sh"],
+            },
+          ],
+        },
+      },
+    },
+  },
+  { dependsOn: [arcController, arcRunnerSA, arcRunnerClusterRoleBinding] },
+);
+
 export {
   arcController,
   arcRunnerScaleSet,
+  foremanRunnerScaleSet,
   arcRunnerSA,
   arcRunnerClusterRoleBinding,
 };

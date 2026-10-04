@@ -18,6 +18,7 @@ import "./immich";
 import "./trip";
 import "./meals";
 import "./foreman";
+import "./attic";
 
 export * from "./paperless";
 export * from "./homepage";
@@ -30,3 +31,4 @@ export * from "./immich";
 export * from "./trip";
 export * from "./meals";
 export * from "./foreman";
+export * from "./attic";
