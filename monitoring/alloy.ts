@@ -8,7 +8,8 @@ import { lokiUrl } from "./loki";
 
 // River config: discover pods on the current node, split into a paperless
 // pipeline (multiline Python stack traces, regex-parsed timestamps) and a
-// default pipeline (JSON `ts` field as timestamp), then forward to Loki.
+// default pipeline (JSON `ts` field as timestamp, plus Foreman's JSON and
+// opencode's logfmt lines), then forward to Loki.
 const alloyConfig = `
 logging {
   level = "info"
@@ -166,6 +167,55 @@ loki.process "others" {
   stage.labels {
     values = {
       level = "",
+    }
+  }
+
+  // Foreman (Foreman D-045): the control plane logs one JSON object per
+  // line (tracing: level, target, message, the innermost span under
+  // "span"); opencode in the workspace pods logs logfmt to stderr
+  // (timestamp=… level=INFO run=… message=…). The level becomes a label
+  // like everywhere else; work item, phase and opencode run id are high
+  // cardinality and ride along as structured metadata instead of labels.
+  stage.match {
+    selector = \`{namespace="foreman", container="control-plane"}\`
+
+    stage.json {
+      expressions = {
+        target    = "target",
+        work_item = "span.work_item",
+        phase     = "span.phase",
+      }
+    }
+
+    stage.structured_metadata {
+      values = {
+        target    = "",
+        work_item = "",
+        phase     = "",
+      }
+    }
+  }
+
+  stage.match {
+    selector = \`{namespace="foreman", container="opencode"}\`
+
+    stage.logfmt {
+      mapping = {
+        level = "",
+        run   = "",
+      }
+    }
+
+    stage.labels {
+      values = {
+        level = "",
+      }
+    }
+
+    stage.structured_metadata {
+      values = {
+        run = "",
+      }
     }
   }
 }

@@ -322,6 +322,22 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
                   value: "0.0.0.0:8080",
                 },
                 {
+                  // D-045: eine JSON-Zeile pro Log-Event für Loki (Alloy
+                  // hebt level als Label, work_item/phase als structured
+                  // metadata). Ältere Server-Images ignorieren die Variable.
+                  name: "FOREMAN_LOG_FORMAT",
+                  value: "json",
+                },
+                {
+                  name: "RUST_LOG",
+                  value: "info",
+                },
+                {
+                  // opencode in den Agent-Pods loggt nach stderr (--print-logs).
+                  name: "FOREMAN_OPENCODE_LOG_LEVEL",
+                  value: "INFO",
+                },
+                {
                   name: "FOREMAN_PUBLIC_BASE_URL",
                   value: "https://foreman.mvissing.de",
                 },
