@@ -310,7 +310,7 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
             {
               name: "control-plane",
               // Renovate-format one-liner; image built from deploy/server-image.
-              image: "ghcr.io/maxmac99/foreman-server:0.1.30",
+              image: "ghcr.io/maxmac99/foreman-server:0.1.31",
               ports: [{ containerPort: 8080, name: "http" }],
               envFrom: [
                 { secretRef: { name: foremanConfig.metadata.name } },
@@ -320,6 +320,22 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
                 {
                   name: "FOREMAN_BIND",
                   value: "0.0.0.0:8080",
+                },
+                {
+                  // D-045: eine JSON-Zeile pro Log-Event für Loki (Alloy
+                  // hebt level als Label, work_item/phase als structured
+                  // metadata). Ältere Server-Images ignorieren die Variable.
+                  name: "FOREMAN_LOG_FORMAT",
+                  value: "json",
+                },
+                {
+                  name: "RUST_LOG",
+                  value: "info",
+                },
+                {
+                  // opencode in den Agent-Pods loggt nach stderr (--print-logs).
+                  name: "FOREMAN_OPENCODE_LOG_LEVEL",
+                  value: "INFO",
                 },
                 {
                   name: "FOREMAN_PUBLIC_BASE_URL",
