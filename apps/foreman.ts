@@ -3,10 +3,10 @@
 // Ein axum-Prozess (D-040: modularer Monolith) mit Workflow-Engine (D-005),
 // Model Gateway (D-021), Gate-Kern mit ntfy-Push (AP-08) und Knowledge-Service
 // (AP-21). Agenten laufen in **on-demand Workspace-Pods** im Namespace
-// `foreman-proj-<slug>` (D-010/D-036): ein Pod pro Phasen-Versuch, gestorben wird
-// am Gate, Recovery = frischer Clone. Playbook-Definitionen liegen im
-// separaten Repo `MaxMac99/dev-playbooks` (D-006) und werden per Init-Container
-// in ein Empty-Dir geklont; der Pilot ist `MaxMac99/mdcat-lite`.
+// `foreman` — alle Projekte teilen ihn (D-042): ein Pod pro Phasen-Versuch,
+// gestorben wird am Gate, Recovery = frischer Clone. Playbook-Definitionen
+// liegen im separaten Repo `MaxMac99/dev-playbooks` (D-006) und werden per
+// Init-Container in ein Empty-Dir geklont.
 //
 // ⚠️ **Kein public edge — und das ist eine Entscheidung, kein Gap.** Die API
 // ist das Bearer-geschützte Eingangstor (D-024); ntfy-Action-Buttons und die
@@ -60,26 +60,10 @@ export const foremanNamespace = new k8s.core.v1.Namespace("foreman", {
   metadata: { name: "foreman" },
 });
 
-// Die Projekte laufen in Projekt-Namespaces `foreman-proj-<slug>` (D-010/
-// D-036, Namensschema des Pod-Runners: Namespace pro Projekt, D-013).
-// AP-17 Dogfooding: Foreman arbeitet an sich selbst — der Namespace des
-// 'Foreman'-Projekts kommt dazu (Slug aus dem Projektnamen, project_coords).
-export const foremanAgentsNamespace = new k8s.core.v1.Namespace(
-  "foreman-proj-mdcat-lite",
-  {
-    metadata: { name: "foreman-proj-mdcat-lite" },
-  },
-);
-
-export const foremanDogfoodNamespace = new k8s.core.v1.Namespace(
-  "foreman-proj-foreman",
-  {
-    metadata: { name: "foreman-proj-foreman" },
-  },
-);
-
-// Least privilege für die Control Plane: Workspace-Pods, Verify-Jobs und
-// State-PVCs im Projekt-Namespace — sonst nichts (D-011/D-012).
+// Least privilege für die Control Plane (D-011/D-012): Workspace-Pods,
+// Verify-Jobs und State-PVCs aller Projekte laufen im Namespace `foreman`
+// (D-042) — die Role gilt nur hier, kein clusterweites Pod-Listing mehr
+// (das globale Pod-Cap zählt namespaced).
 export const foremanControlSA = new k8s.core.v1.ServiceAccount(
   "foreman-control",
   {
@@ -90,87 +74,12 @@ export const foremanControlSA = new k8s.core.v1.ServiceAccount(
   },
 );
 
-// Der globale Agent-Pod-Cap (D-036) zählt cluster-weit (Api::all), weil die
-// Engine die Projekt-Namespaces nicht kennt — daher list/watch auf pods für
-// genau diesen SA, sonst nichts.
-export const foremanCapClusterRole = new k8s.rbac.v1.ClusterRole(
-  "foreman-cap-probe",
-  {
-    metadata: { name: "foreman-cap-probe" },
-    rules: [
-      {
-        apiGroups: [""],
-        resources: ["pods"],
-        verbs: ["list", "watch"],
-      },
-    ],
-  },
-);
-
-new k8s.rbac.v1.ClusterRoleBinding("foreman-cap-probe", {
-  metadata: { name: "foreman-cap-probe" },
-  roleRef: {
-    apiGroup: "rbac.authorization.k8s.io",
-    kind: "ClusterRole",
-    name: "foreman-cap-probe",
-  },
-  subjects: [
-    {
-      kind: "ServiceAccount",
-      name: "foreman-control",
-      namespace: foremanNamespace.metadata.name,
-    },
-  ],
-});
-
-export const foremanAgentsRole = new k8s.rbac.v1.Role("foreman-control", {
-  metadata: {
-    name: "foreman-control",
-    namespace: foremanAgentsNamespace.metadata.name,
-  },
-  rules: [
-    {
-      apiGroups: [""],
-      // pods/log: der CI-Runner liest die Verify-Job-Logs (Klassifikation
-      // green/red, D-028).
-      resources: ["pods", "pods/log", "persistentvolumeclaims"],
-      verbs: ["create", "get", "list", "watch", "delete"],
-    },
-    {
-      apiGroups: ["batch"],
-      resources: ["jobs"],
-      verbs: ["create", "get", "list", "watch", "delete"],
-    },
-  ],
-});
-
-new k8s.rbac.v1.RoleBinding("foreman-control", {
-  metadata: {
-    name: "foreman-control",
-    namespace: foremanAgentsNamespace.metadata.name,
-  },
-  roleRef: {
-    apiGroup: "rbac.authorization.k8s.io",
-    kind: "Role",
-    name: "foreman-control",
-  },
-  subjects: [
-    {
-      kind: "ServiceAccount",
-      name: "foreman-control",
-      namespace: foremanNamespace.metadata.name,
-    },
-  ],
-});
-
-// Least privilege im Dogfooding-Namespace — identisch zum Pilot-Namespace
-// (inkl. pods/log für die CI-Log-Lektüre, RBAC-Lücke vom 2026-10-03).
-export const foremanDogfoodRole = new k8s.rbac.v1.Role(
-  "foreman-control-dogfood",
+export const foremanControlRole = new k8s.rbac.v1.Role(
+  "foreman-control-workloads",
   {
     metadata: {
       name: "foreman-control",
-      namespace: foremanDogfoodNamespace.metadata.name,
+      namespace: foremanNamespace.metadata.name,
     },
     rules: [
       {
@@ -189,10 +98,10 @@ export const foremanDogfoodRole = new k8s.rbac.v1.Role(
   },
 );
 
-new k8s.rbac.v1.RoleBinding("foreman-control-dogfood", {
+new k8s.rbac.v1.RoleBinding("foreman-control-workloads", {
   metadata: {
     name: "foreman-control",
-    namespace: foremanDogfoodNamespace.metadata.name,
+    namespace: foremanNamespace.metadata.name,
   },
   roleRef: {
     apiGroup: "rbac.authorization.k8s.io",
@@ -209,58 +118,12 @@ new k8s.rbac.v1.RoleBinding("foreman-control-dogfood", {
 });
 
 // Pull secret für die privaten GHCR-Packages (foreman-server, foreman-pod).
-// imagePullSecrets lösen nur im Pod-Namespace auf → der gleiche Secret muss
-// auch im Projekt-Namespace der Workspace-Pods liegen.
+// Control Plane und Workspace-Pods teilen den Namespace (D-042) — ein Secret
+// reicht.
 new k8s.core.v1.Secret("foreman-registry-pull", {
   metadata: {
     name: "foreman-registry-pull",
     namespace: foremanNamespace.metadata.name,
-  },
-  type: "kubernetes.io/dockerconfigjson",
-  stringData: {
-    ".dockerconfigjson": registryPullToken.apply((token) =>
-      Buffer.from(
-        JSON.stringify({
-          auths: {
-            "ghcr.io": {
-              username: "MaxMac99",
-              password: token,
-              auth: Buffer.from(`MaxMac99:${token}`).toString("base64"),
-            },
-          },
-        }),
-      ).toString("utf8"),
-    ),
-  },
-});
-
-new k8s.core.v1.Secret("foreman-registry-pull-agents", {
-  metadata: {
-    name: "foreman-registry-pull",
-    namespace: foremanAgentsNamespace.metadata.name,
-  },
-  type: "kubernetes.io/dockerconfigjson",
-  stringData: {
-    ".dockerconfigjson": registryPullToken.apply((token) =>
-      Buffer.from(
-        JSON.stringify({
-          auths: {
-            "ghcr.io": {
-              username: "MaxMac99",
-              password: token,
-              auth: Buffer.from(`MaxMac99:${token}`).toString("base64"),
-            },
-          },
-        }),
-      ).toString("utf8"),
-    ),
-  },
-});
-
-new k8s.core.v1.Secret("foreman-registry-pull-dogfood", {
-  metadata: {
-    name: "foreman-registry-pull",
-    namespace: foremanDogfoodNamespace.metadata.name,
   },
   type: "kubernetes.io/dockerconfigjson",
   stringData: {
@@ -478,20 +341,13 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
                   value: "/playbooks",
                 },
                 {
-                  // Pilot (approval 2026-10-01): mdcat-lite.
-                  name: "FOREMAN_PILOT_REPO_URL",
-                  value: "https://github.com/MaxMac99/mdcat-lite.git",
+                  // Repo kommt pro Projekt aus dem Project-Store (D-013);
+                  // Pods und Jobs aller Projekte laufen hier (D-042).
+                  name: "FOREMAN_WORKLOAD_NAMESPACE",
+                  value: foremanNamespace.metadata.name,
                 },
                 {
-                  name: "FOREMAN_PILOT_PROJECT_SLUG",
-                  value: "mdcat-lite",
-                },
-                {
-                  name: "FOREMAN_PILOT_NAMESPACE",
-                  value: foremanAgentsNamespace.metadata.name,
-                },
-                {
-                  name: "FOREMAN_PILOT_BASE_BRANCH",
+                  name: "FOREMAN_BASE_BRANCH",
                   value: "main",
                 },
                 {
@@ -599,7 +455,7 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
   {
     dependsOn: [
       foremanControlSA,
-      foremanAgentsRole,
+      foremanControlRole,
       foremanDatabase,
       foremanDbSecret,
       foremanConfig,
