@@ -147,7 +147,7 @@ const HOSTNAME = "photos.mvissing.de";
  * `renovate.json` — the generic `repository`/`tag` regex cannot see it,
  * because `tag: IMMICH_VERSION` is an identifier, not a quoted literal.
  */
-const IMMICH_VERSION = "v3.2.4";
+const IMMICH_VERSION = "v3.3.0";
 
 // ---------------------------------------------------------------------------
 // Library storage — NFS on `tank`, the spinning pool.
@@ -328,7 +328,7 @@ const immich = new k8s.helm.v3.Release(
   "immich",
   {
     chart: "oci://ghcr.io/immich-app/immich-charts/immich",
-    version: "0.13.3",
+    version: "0.13.4",
     namespace: namespace.metadata.name,
     // ⚠️ Pinned rather than auto-named. The chart derives `immich-server`,
     // `immich-valkey` and `immich-machine-learning` from the release name, and
