@@ -87,6 +87,11 @@ const haMcpOauth2Provider = new authentik.ProviderOauth2(
     clientId: oauthClientId.result,
     clientSecret: oauthClientSecret.result,
     clientType: "confidential",
+    // ⚠️ Must be set explicitly. A provider created through the API gets an
+    // *empty* list — unlike the UI, which pre-selects them — and Authentik then
+    // rejects every login with "invalid_request: The request is otherwise
+    // malformed" (logged as "Invalid grant_type for provider").
+    grantTypes: ["authorization_code", "refresh_token"],
     authorizationFlow: defaultAuthorizationFlow.id,
     invalidationFlow: defaultInvalidationFlow.id,
     propertyMappings: oauth2ScopeMappings,
