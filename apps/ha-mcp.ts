@@ -254,7 +254,11 @@ const haMcpDeployment = new k8s.apps.v1.Deployment(
                   value: [
                     "https://claude.ai/api/mcp/auth_callback",
                     "https://claude.com/api/mcp/auth_callback",
+                    // ChatGPT uses the stable URI when the authorization
+                    // server advertises RFC 9207 `iss` (FastMCP's proxy does),
+                    // the per-callback one otherwise.
                     "https://chatgpt.com/connector_platform_oauth_redirect",
+                    "https://chatgpt.com/connector/oauth/*",
                     // Older ChatGPT connectors and Custom GPT actions.
                     "https://chatgpt.com/aip/*/oauth/callback",
                     "http://localhost/callback",
@@ -462,8 +466,10 @@ export {
 // 4. Clients — the endpoint is https://ha-mcp.mvissing.de/mcp everywhere:
 //    - Claude.ai: Customize → Connectors → Add custom connector → URL → Add →
 //      Connect → Authentik login.
-//    - ChatGPT: Settings → Apps & Connectors → Advanced → developer mode →
-//      Create → URL, authentication OAuth → Authentik login.
+//    - ChatGPT (web only): https://chatgpt.com/plugins → + → Add custom MCP
+//      server → URL, authentication OAuth → Create as a plugin → Authentik
+//      login. ⚠️ Write tools need a Business/Enterprise/Edu workspace; Pro
+//      gets read/fetch only.
 //    - Claude Code: claude mcp add --transport http home-assistant
 //      https://ha-mcp.mvissing.de/mcp, then /mcp → Authenticate.
 //    A client whose redirect URI is not in OIDC_ALLOWED_CLIENT_REDIRECT_URIS
