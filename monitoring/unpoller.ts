@@ -68,7 +68,7 @@ const unpollerDeployment = new k8s.apps.v1.Deployment("unpoller", {
         containers: [
           {
             name: "unpoller",
-            image: "golift/unifi-poller:v5.5.1",
+            image: "golift/unifi-poller:v5.6.2",
             ports: [
               {
                 containerPort: 9130,
