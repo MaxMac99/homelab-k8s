@@ -26,12 +26,12 @@
       "automerge": true
     },
     {
-      "description": "Track paperless-ngx pre-releases (v3 beta) in their own reviewed PR — not automerged, and a reviewer ping is the notification channel.",
+      "description": "Track paperless-ngx pre-releases (v3 beta) in their own PR, automerged including majors; the reviewer ping below is the notification channel.",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/paperless-ngx/paperless-ngx"],
       "groupName": "paperless prereleases",
       "ignoreUnstable": false,
-      "automerge": false,
+      "automerge": true,
       "reviewers": ["MaxMac99"]
     },
     {
@@ -75,6 +75,40 @@
       "groupName": "trip",
       "schedule": [],
       "automerge": true
+    },
+    {
+      "description": "Immich server image and chart in their own PR so the notification names the app; automerged including majors.",
+      "matchPackageNames": [
+        "ghcr.io/immich-app/immich-server",
+        "ghcr.io/immich-app/immich-charts/immich"
+      ],
+      "groupName": "immich",
+      "automerge": true
+    },
+    {
+      "description": "Home Assistant in its own PR so the notification names the app; automerged including majors.",
+      "matchPackageNames": ["ghcr.io/home-assistant/home-assistant"],
+      "groupName": "home-assistant",
+      "automerge": true
+    },
+    {
+      "description": "Music Assistant in its own PR so the notification names the app; automerged including majors.",
+      "matchPackageNames": ["ghcr.io/music-assistant/server"],
+      "groupName": "music-assistant",
+      "automerge": true
+    },
+    {
+      "description": "Notify on every update of these apps via a reviewer ping. assignAutomerge keeps the ping even when the PR automerges.",
+      "matchPackageNames": [
+        "ghcr.io/marco308/meals",
+        "ghcr.io/immich-app/immich-server",
+        "ghcr.io/immich-app/immich-charts/immich",
+        "ghcr.io/paperless-ngx/paperless-ngx",
+        "ghcr.io/home-assistant/home-assistant",
+        "ghcr.io/music-assistant/server"
+      ],
+      "reviewers": ["MaxMac99"],
+      "assignAutomerge": true
     }
   ],
   "customManagers": [
