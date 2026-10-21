@@ -20,6 +20,7 @@ import "./meals";
 import "./foreman";
 import "./attic";
 import "./ha-mcp";
+import "./t3code";
 
 export * from "./paperless";
 export * from "./homepage";
@@ -34,3 +35,4 @@ export * from "./meals";
 export * from "./foreman";
 export * from "./attic";
 export * from "./ha-mcp";
+export * from "./t3code";
