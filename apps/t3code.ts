@@ -34,11 +34,12 @@
 // Einmalige Einrichtung nach dem ersten `pulumi up` (Pod ist Ready):
 //   kubectl -n t3code exec -it deploy/t3code -- bash -l
 //     t3 connect            # Device-Code im Browser bestätigen, Service ablehnen
+//     t3 connect publish    # Push + Live Activities, sonst kommt nichts an
 //     claude auth login
-//     codex login
+//     codex login --device-auth
 //     gh auth login && gh auth setup-git
 //     git config --global user.name/user.email …
-//   kubectl -n t3code rollout restart deploy/t3code   # Connect-Link aktivieren
+// Ein laufender Tunnel (`t3 connect status`) braucht keinen Neustart.
 // Danach `t3 update` im Pod + `rollout restart`, um die Version zu wechseln.
 
 import { createHash } from "node:crypto";
@@ -111,6 +112,12 @@ grep -q 'direnv hook bash' ${home}/.bashrc 2>/dev/null || {
   echo 'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"' >> ${home}/.bashrc
   echo 'eval "$(direnv hook bash)"' >> ${home}/.bashrc
 }
+# \`kubectl exec … bash -l\` ist eine Login-Shell und liest nur .bash_profile;
+# das PVC verdeckt die .profile aus dem Image.
+[ -f ${home}/.bash_profile ] || echo '[ -f ~/.bashrc ] && . ~/.bashrc' > ${home}/.bash_profile
+
+# Kein SSH-Key im Pod: gh und git laufen über HTTPS + gh-Credential-Helper.
+gh config set git_protocol https
 
 # Provider-CLIs nur beim ersten Mal; danach aktualisiert T3 sie selbst
 # (Settings → Providers → Update now).
