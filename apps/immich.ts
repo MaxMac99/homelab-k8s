@@ -147,7 +147,7 @@ const HOSTNAME = "photos.mvissing.de";
  * `renovate.json` — the generic `repository`/`tag` regex cannot see it,
  * because `tag: IMMICH_VERSION` is an identifier, not a quoted literal.
  */
-const IMMICH_VERSION = "v3.3.3";
+const IMMICH_VERSION = "v3.3.5";
 
 // ---------------------------------------------------------------------------
 // Library storage — NFS on `tank`, the spinning pool.
