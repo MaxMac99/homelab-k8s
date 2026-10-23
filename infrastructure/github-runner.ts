@@ -43,7 +43,7 @@ const foremanRunnerPatSecret = new k8s.core.v1.Secret("github-pat-foreman", {
 const arcController = new k8s.helm.v3.Release("arc-controller", {
   chart:
     "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller",
-  version: "0.15.0",
+  version: "0.15.1",
   namespace: arcSystemsNamespace.metadata.name,
 });
 
@@ -80,7 +80,7 @@ const arcRunnerScaleSet = new k8s.helm.v3.Release(
   {
     chart:
       "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
-    version: "0.15.0",
+    version: "0.15.1",
     namespace: arcRunnersNamespace.metadata.name,
     values: {
       githubConfigUrl: "https://github.com/MaxMac99/homelab-k8s",
@@ -121,7 +121,7 @@ const foremanRunnerScaleSet = new k8s.helm.v3.Release(
   {
     chart:
       "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
-    version: "0.15.0",
+    version: "0.15.1",
     namespace: arcRunnersNamespace.metadata.name,
     values: {
       githubConfigUrl: "https://github.com/MaxMac99/Foreman",
