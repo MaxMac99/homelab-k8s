@@ -4,11 +4,9 @@
 // zu ist, gesteuert wird von Mac, Web (app.t3.codes) und iPhone. Das MacBook
 // bleibt als zweite T3-Umgebung für Xcode-/iOS-Arbeit, die hier nicht geht.
 //
-// ⚠️ **Haustier, kein Wegwerf-Pod — und das ist eine Entscheidung.** T3
-// aktualisiert sich selbst (`t3 update`), und die Server-Version muss zur
-// Mobile-App passen, die oft released. Ein gepinntes Image hinge ständig
-// hinterher. Deshalb liegt alles, was T3 und die Agenten über die Zeit
-// ansammeln, auf PVCs: $HOME (T3-Binary + Userdata, Provider-Logins,
+// ⚠️ **Haustier, kein Wegwerf-Pod — und das ist eine Entscheidung.** Alles,
+// was T3 und die Agenten über die Zeit ansammeln, liegt auf PVCs: $HOME
+// (T3-Binary + Userdata, Provider-Logins,
 // Repos/Worktrees) und /nix (Devshells der Projekte via direnv). Das Image
 // ist nur die Debian-Basis; `bootstrap.sh` installiert beim ersten Start
 // idempotent nach, was fehlt. Ein PVC-Verlust = neu einloggen (T3 Connect,
@@ -49,6 +47,14 @@ import { ARCH_LABEL, onNode, MAXDATA } from "../infrastructure/sites";
 
 const t3Host = "t3.mvissing.de";
 const t3Port = 3773;
+
+// ⚠️ Die Server-Version muss zur Desktop-/Mobile-App passen, sonst
+// verweigert die neuere Seite die Verbindung (docs/user/updating.md). Der
+// Update-Knopf in der App kann nur einen `t3 service` aktualisieren; ein per
+// `exec t3 serve` gestarteter Server bekommt nur einen Copy-Befehl. Deshalb
+// pinnt Renovate die Version (npm `t3`, eigene Automerge-Spur ohne
+// Schedule), und `bootstrap.sh` gleicht beim Start per `t3 update` an.
+const T3_VERSION = "0.1.2";
 
 // devcontainers/base bringt den Nutzer `vscode` (uid 1000) mit
 // passwortlosem sudo, git, curl und xz mit — alles, was die Installer
@@ -127,7 +133,12 @@ if ! command -v codex >/dev/null; then
   npm install -g @openai/codex
 fi
 
-command -v t3 >/dev/null || curl -fsSL https://t3.codes/install.sh | sh
+if ! command -v t3 >/dev/null; then
+  curl -fsSL https://t3.codes/install.sh | T3CODE_VERSION="$T3_VERSION" sh
+elif [ "$(t3 --version)" != "t3 v$T3_VERSION" ]; then
+  # --allow-downgrade, damit ein git revert des Renovate-Bumps zurückrollt.
+  t3 update --yes --allow-downgrade "$T3_VERSION"
+fi
 
 # Rootfs ist flüchtig: Chromium-Libs und Fonts bei jedem Start.
 sudo env "PATH=$PATH" t3 browser setup
@@ -135,8 +146,10 @@ sudo env "PATH=$PATH" t3 browser setup
 exec t3 serve
 `;
 
+// Bewusst ohne festen Namen: Datenänderungen ersetzen eine ConfigMap, und
+// ein fester Name kollidiert beim create-before-delete mit dem Live-Objekt.
 const t3Bootstrap = new k8s.core.v1.ConfigMap("t3code-bootstrap", {
-  metadata: { name: "t3code-bootstrap", namespace: t3Namespace.metadata.name },
+  metadata: { namespace: t3Namespace.metadata.name },
   data: { "bootstrap.sh": bootstrap },
 });
 
@@ -177,6 +190,7 @@ export const t3Deployment = new k8s.apps.v1.Deployment(
                 { name: "USER", value: user },
                 { name: "T3CODE_HOST", value: "0.0.0.0" },
                 { name: "T3CODE_PORT", value: String(t3Port) },
+                { name: "T3_VERSION", value: T3_VERSION },
               ],
               volumeMounts: [
                 { name: "home", mountPath: home },

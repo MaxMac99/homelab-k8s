@@ -77,6 +77,14 @@
       "automerge": true
     },
     {
+      "description": "T3 Code server: same fast lane as meals, including majors. The desktop/mobile apps auto-update and refuse a server that falls behind, so every hour of lag is an hour without access.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["t3"],
+      "groupName": "t3code",
+      "schedule": [],
+      "automerge": true
+    },
+    {
       "description": "Immich server image and chart in their own PR so the notification names the app; automerged including majors.",
       "matchPackageNames": [
         "ghcr.io/immich-app/immich-server",
@@ -121,6 +129,14 @@
       ],
       "depNameTemplate": "ghcr.io/immich-app/immich-server",
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Match the pinned T3 Code server version (apps/t3code.ts); bootstrap.sh runs `t3 update` to it on pod start",
+      "managerFilePatterns": ["/\\.ts$/"],
+      "matchStrings": ["T3_VERSION\\s*=\\s*[\"'](?<currentValue>[^\"']+)[\"']"],
+      "depNameTemplate": "t3",
+      "datasourceTemplate": "npm"
     },
     {
       "customType": "regex",
