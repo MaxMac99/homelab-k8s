@@ -61,6 +61,11 @@ const T3_VERSION = "0.1.2";
 // zusammenpassen; `bootstrap.sh` gleicht beim Start an. Renovate-Spur wie T3.
 const OPENCODE_VERSION = "2.1.4";
 
+// Commit des setup-Repos, aus dem `bootstrap.sh` die opencode-Config
+// (Skills, Commands, Agents, AGENTS.md, Permissions) baut — dieselbe wie auf
+// dem Mac (modules/apps/opencode/core.nix). Renovate hebt ihn nachts.
+const SETUP_REV = "a2e5d014af727ae138b23a7faa364083d98a0bf1";
+
 // devcontainers/base bringt den Nutzer `vscode` (uid 1000) mit
 // passwortlosem sudo, git, curl und xz mit — alles, was die Installer
 // brauchen. HOME liegt auf dem PVC.
@@ -140,6 +145,35 @@ command -v codex >/dev/null || npm install -g @openai/codex
 [ "$(opencode --version 2>/dev/null)" = "opencode v$OPENCODE_VERSION" ] ||
   npm install -g "@opencode/cli@$OPENCODE_VERSION"
 
+# Env nur für opencode, wie der Mac-Wrapper: container-weit würde claude den
+# Dummy-Key statt des Max-Logins nehmen. ~/.local/bin liegt vor .npm-global.
+mkdir -p ${home}/.local/bin
+cat > ${home}/.local/bin/opencode <<'EOF'
+#!/usr/bin/env bash
+export ANTHROPIC_BASE_URL=http://127.0.0.1:3456
+export ANTHROPIC_API_KEY=x
+export OPENCODE_DISABLE_LSP_DOWNLOAD=1
+exec "$HOME/.npm-global/bin/opencode" "$@"
+EOF
+chmod +x ${home}/.local/bin/opencode
+
+# opencode-Config aus dem setup-Repo. Schlägt der Build fehl (Netz), bleibt
+# der letzte Stand verlinkt, statt T3 am Start zu hindern. Einträge einzeln
+# verlinken: opencode schreibt service.json, package.json und node_modules
+# selbst ins Verzeichnis.
+nix build "github:MaxMac99/setup/$SETUP_REV#opencode-config" \\
+  --out-link ${home}/.local/state/opencode-config ||
+  echo "bootstrap: opencode-config für $SETUP_REV nicht gebaut, behalte den letzten Stand" >&2
+mkdir -p ${home}/.config/opencode
+for entry in ${home}/.local/state/opencode-config/*; do
+  [ -e "$entry" ] || continue
+  target=${home}/.config/opencode/$(basename "$entry")
+  if [ -e "$target" ] && [ ! -L "$target" ]; then
+    mv "$target" "$target.pre-setup"
+  fi
+  ln -sfn "$entry" "$target"
+done
+
 if ! command -v t3 >/dev/null; then
   curl -fsSL https://t3.codes/install.sh | T3CODE_VERSION="$T3_VERSION" sh
 elif [ "$(t3 --version)" != "t3 v$T3_VERSION" ]; then
@@ -199,6 +233,7 @@ export const t3Deployment = new k8s.apps.v1.Deployment(
                 { name: "T3CODE_PORT", value: String(t3Port) },
                 { name: "T3_VERSION", value: T3_VERSION },
                 { name: "OPENCODE_VERSION", value: OPENCODE_VERSION },
+                { name: "SETUP_REV", value: SETUP_REV },
               ],
               volumeMounts: [
                 { name: "home", mountPath: home },
