@@ -118,7 +118,7 @@ unchanged` (t3code-bootstrap ConfigMap replace, t3code Deployment:
   - Verified on the cluster: merged as `582fd0a`, Pulumi Deploy run
     40229567623 green, pod rolled; `opencode --version` in the pod prints
     `opencode v2.1.4` from `/home/vscode/.npm-global/bin/opencode`.
-- [ ] **4. Link the pinned `setup` config into the pod**
+- [x] **4. Link the pinned `setup` config into the pod**
   - Goal: `SETUP_REV` (40-char sha) in `apps/t3code.ts`; `bootstrap.sh`
     runs `nix build github:MaxMac99/setup/$SETUP_REV#opencode-config
 --out-link ~/.local/state/opencode-config` and `ln -sfn`s **each
@@ -139,9 +139,10 @@ unchanged` (t3code-bootstrap ConfigMap replace, t3code Deployment:
     no bootstrap warning. `opencode api get /api/command` lists all 7 global
     commands plus `epic`/`refine`; `/api/skill` lists all 12 global skills,
     `i-have-adhd` and the 4 personal ones.
-  - Pending (**you**): in the pod `opencode auth login` → OpenAI → Sign in
-    with ChatGPT; then an opencode thread in T3 on the pod shows `/plan` and
-    a Codex model answers.
+  - Done by you: `opencode auth login openai --method chatgpt-headless`
+    (`opencode auth list` → `OpenAI stored`) and OpenCode enabled in T3's
+    provider settings on the pod. `opencode run -m openai/gpt-5.6-luna
+"Reply with exactly: OK"` in the pod answers `OK`.
 - [ ] **5. Run Meridian as a sidecar**
   - Goal: a `meridian` container in the t3code pod (same image, `$HOME` PVC,
     `/nix` PVC) runs the `setup` meridian package for `SETUP_REV` — a
@@ -175,4 +176,5 @@ unchanged` (t3code-bootstrap ConfigMap replace, t3code Deployment:
 - Step 2 (setup `c95ab68`): the personal profile is merged into the tree's `opencode.json` instead of riding in `OPENCODE_CONFIG`, so the pod needs no profile env. `packages.meridian` is a wrapper with Meridian's env baked in (step 5 just runs it). Correction to step 4: the Mac's `~/.config/opencode` is a real directory with per-entry symlinks and runtime files written by opencode, so the pod links entries one by one instead of symlinking the directory; step 4 also takes over the Mac wrapper's env (`ANTHROPIC_API_KEY=x`, `OPENCODE_DISABLE_LSP_DOWNLOAD=1`).
 - Step 3: npm `opencode-ai` is still opencode 1 (`latest` 1.19.4); opencode 2 ships as `@opencode/cli` (opencode.ai/v2/docs, install section), currently 2.1.4 = the Mac's brew version. Decision 6 now means that package. It joins the `t3code` Renovate group (one fast-lane PR with `t3`).
 - Step 4: correction — `ANTHROPIC_API_KEY=x` on the container would also hit the `claude` CLI in the pod and replace the Max login with the dummy key (the Mac scopes it to its wrapper for the same reason). The env therefore lives in a `~/.local/bin/opencode` wrapper written by `bootstrap.sh`. Pinned `SETUP_REV` = `a2e5d01` (contains the step 2 merge, CI green); a manual build in the pod took 79 s. A failed `nix build` keeps the previous link instead of crash-looping T3.
+- Step 4 finding: T3 only offers providers enabled in `~/.t3/userdata/settings.json` (`providerInstances.opencode = {driver, enabled: true}`); a fresh PVC has none, so OpenCode was invisible until enabled in T3's settings. Login method IDs (not in the docs, read from opencode itself): `chatgpt-token-sharing`, `chatgpt-browser`, `chatgpt-headless`, `key`.
 - Not asked, recorded as assumptions (no effect on what gets built): opencode from npm pinned via Renovate; personal profile only; Mac permissions unchanged; darwin module refactored onto the shared core.
