@@ -21,10 +21,12 @@
 // token is in `haMcpHomeassistantToken`. Anyone who passes the Authentik
 // binding gets the full tool set of that user — automations, backups, restarts.
 //
-// ⚠️ Sessions do not refresh. ha-mcp requests only `openid`, and Authentik
-// issues refresh tokens only for `offline_access`, so an MCP client's session
-// lives exactly as long as the Authentik access token (`accessTokenValidity`
-// below) and then asks to reconnect. Revoking a user in Authentik does **not**
+// ⚠️ Sessions refresh only for clients that request `offline_access`. ha-mcp
+// itself requests only `openid` but passes on optional scopes a client asks
+// for, and Authentik issues refresh tokens only for `offline_access` (mapped
+// on the provider below). Every other client's session lives exactly as long
+// as the Authentik access token (`accessTokenValidity` below) and then asks
+// to reconnect. Revoking a user in Authentik does **not**
 // end a live session: tokens are verified locally against Authentik's JWKS,
 // not introspected. Shortening the validity is the only lever on both.
 //
@@ -45,7 +47,9 @@ import {
 import {
   defaultAuthorizationFlow,
   defaultInvalidationFlow,
+  mappingId,
   oauth2ScopeMappings,
+  scopeMapping,
   signingKey,
 } from "../auth/authentik-config";
 import { adminsGroup } from "../auth/authentik-directory";
@@ -94,7 +98,12 @@ const haMcpOauth2Provider = new authentik.ProviderOauth2(
     grantTypes: ["authorization_code", "refresh_token"],
     authorizationFlow: defaultAuthorizationFlow.id,
     invalidationFlow: defaultInvalidationFlow.id,
-    propertyMappings: oauth2ScopeMappings,
+    // offline_access lets clients that ask for it (OpenCode, via its
+    // `oauth.scope`) get a refresh token — see the header comment.
+    propertyMappings: [
+      ...oauth2ScopeMappings,
+      mappingId(scopeMapping.offlineAccess),
+    ],
     // ⚠️ Required, not cosmetic: without a signing key Authentik signs access
     // tokens HS256 with the client secret, and ha-mcp verifies them against
     // the JWKS from the discovery document — which would then be empty.

@@ -50,10 +50,11 @@ export const scopeMapping = {
   email: "goauthentik.io/providers/oauth2/scope-email",
   profile: "goauthentik.io/providers/oauth2/scope-profile",
   entitlements: "goauthentik.io/providers/oauth2/scope-entitlements",
+  offlineAccess: "goauthentik.io/providers/oauth2/scope-offline_access",
   proxy: "goauthentik.io/providers/proxy/scope-proxy",
 };
 
-const mappingId = (managed: string) =>
+export const mappingId = (managed: string) =>
   authentik.getPropertyMappingProviderScopeOutput({ managed }).id;
 
 export const oauth2ScopeMappings = [
