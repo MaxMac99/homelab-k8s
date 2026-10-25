@@ -85,6 +85,14 @@
       "automerge": true
     },
     {
+      "description": "setup-repo pin for the T3 Code pod's opencode config: own PR, automerged, nightly only. Renovate sees every commit on setup main, not just opencode changes, and each bump restarts the pod (killing running agent turns), so at most once a night.",
+      "matchDatasources": ["git-refs"],
+      "matchDepNames": ["MaxMac99/setup"],
+      "groupName": "setup",
+      "schedule": ["before 6am"],
+      "automerge": true
+    },
+    {
       "description": "Immich server image and chart in their own PR so the notification names the app; automerged including majors.",
       "matchPackageNames": [
         "ghcr.io/immich-app/immich-server",
@@ -147,6 +155,18 @@
       ],
       "depNameTemplate": "@opencode/cli",
       "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Match the pinned setup-repo commit (apps/t3code.ts); bootstrap.sh builds the opencode config and Meridian from it on pod start",
+      "managerFilePatterns": ["/\\.ts$/"],
+      "matchStrings": [
+        "SETUP_REV\\s*=\\s*[\"'](?<currentDigest>[0-9a-f]{40})[\"']"
+      ],
+      "depNameTemplate": "MaxMac99/setup",
+      "packageNameTemplate": "https://github.com/MaxMac99/setup",
+      "currentValueTemplate": "main",
+      "datasourceTemplate": "git-refs"
     },
     {
       "customType": "regex",

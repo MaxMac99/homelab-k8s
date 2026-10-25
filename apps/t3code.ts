@@ -10,7 +10,16 @@
 // Repos/Worktrees) und /nix (Devshells der Projekte via direnv). Das Image
 // ist nur die Debian-Basis; `bootstrap.sh` installiert beim ersten Start
 // idempotent nach, was fehlt. Ein PVC-Verlust = neu einloggen (T3 Connect,
-// claude, codex, gh), Threads weg — Homelab-Skala, bewusst akzeptiert.
+// claude, codex, opencode, gh), Threads weg — Homelab-Skala, bewusst
+// akzeptiert.
+//
+// opencode läuft mit derselben Config wie auf dem Mac: `bootstrap.sh` baut
+// sie aus dem setup-Repo (`SETUP_REV`, modules/apps/opencode/core.nix) und
+// verlinkt sie nach ~/.config/opencode. Claude kommt über Meridian im
+// Sidecar (dein Max-Login aus `claude auth login`), Codex über opencodes
+// eigenen ChatGPT-Login. Updates laufen ohne Handgriff: Renovate hebt
+// `OPENCODE_VERSION` sofort und `SETUP_REV` nachts, mergt automatisch,
+// deploy.yml macht `pulumi up`, der Pod startet neu.
 //
 // Erreichbarkeit:
 //   - **T3 Connect** (primär): ausgehender Cloudflare-Tunnel, funktioniert
@@ -35,6 +44,7 @@
 //     t3 connect publish    # Push + Live Activities, sonst kommt nichts an
 //     claude auth login
 //     codex login --device-auth
+//     opencode auth login openai --method chatgpt-headless
 //     gh auth login && gh auth setup-git
 //     git config --global user.name/user.email …
 // Ein laufender Tunnel (`t3 connect status`) braucht keinen Neustart.
