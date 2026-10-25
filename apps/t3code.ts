@@ -56,6 +56,11 @@ const t3Port = 3773;
 // Schedule), und `bootstrap.sh` gleicht beim Start per `t3 update` an.
 const T3_VERSION = "0.1.2";
 
+// OpenCode 2 kommt als npm `@opencode/cli` (`opencode-ai` ist noch 1.x).
+// Gepinnt statt T3s Provider-Update, damit Pod und Config (setup-Repo)
+// zusammenpassen; `bootstrap.sh` gleicht beim Start an. Renovate-Spur wie T3.
+const OPENCODE_VERSION = "2.1.4";
+
 // devcontainers/base bringt den Nutzer `vscode` (uid 1000) mit
 // passwortlosem sudo, git, curl und xz mit — alles, was die Installer
 // brauchen. HOME liegt auf dem PVC.
@@ -128,10 +133,12 @@ gh config set git_protocol https
 # Provider-CLIs nur beim ersten Mal; danach aktualisiert T3 sie selbst
 # (Settings → Providers → Update now).
 command -v claude >/dev/null || curl -fsSL https://claude.ai/install.sh | bash
-if ! command -v codex >/dev/null; then
-  npm config set prefix ${home}/.npm-global
-  npm install -g @openai/codex
-fi
+npm config set prefix ${home}/.npm-global
+command -v codex >/dev/null || npm install -g @openai/codex
+
+# opencode dagegen bei jedem Start auf den Pin, auch abwärts.
+[ "$(opencode --version 2>/dev/null)" = "opencode v$OPENCODE_VERSION" ] ||
+  npm install -g "@opencode/cli@$OPENCODE_VERSION"
 
 if ! command -v t3 >/dev/null; then
   curl -fsSL https://t3.codes/install.sh | T3CODE_VERSION="$T3_VERSION" sh
@@ -191,6 +198,7 @@ export const t3Deployment = new k8s.apps.v1.Deployment(
                 { name: "T3CODE_HOST", value: "0.0.0.0" },
                 { name: "T3CODE_PORT", value: String(t3Port) },
                 { name: "T3_VERSION", value: T3_VERSION },
+                { name: "OPENCODE_VERSION", value: OPENCODE_VERSION },
               ],
               volumeMounts: [
                 { name: "home", mountPath: home },
