@@ -74,11 +74,12 @@ exists as a Darwin-bound home-manager module.
 
 Steps 1–2 are in the `setup` repo, 3–6 in this repo.
 
-- [ ] **1. Extract a portable opencode core in `setup`**
+- [x] **1. Extract a portable opencode core in `setup`**
   - Goal: `modules/apps/opencode/core.nix` is a plain function
-    (`{ pkgs, meridian, profile }` → `{ settings, tui, tree }`) holding
-    settings, skills, commands, agents, AGENTS.md and tui; `default.nix`
-    keeps only brew, wrapper, sops, launchd and consumes the core.
+    (`{ lib, pkgs, inputs }` → `{ meridian, profiles, settings, commands,
+    agents, skills, context, tui }`) holding everything portable;
+    `default.nix` keeps only brew, wrapper, sops, launchd and consumes the
+    core. The file tree itself is assembled in step 2.
   - Files: `setup/modules/apps/opencode/{core.nix,default.nix}`.
   - Done when: `darwin-rebuild build` for `Maxs-MacBook-Pro` succeeds and
     `diff -r` of the old and new `home-files/.config/opencode` (and the two
@@ -138,4 +139,5 @@ Steps 1–2 are in the `setup` repo, 3–6 in this repo.
 - Q: How do updates arrive? → A: Automatically, via Renovate in homelab-k8s and on `setup` changes, deployed without manual steps.
 - Q: May every `setup` commit restart the pod? → A: No — nightly Renovate lane (`before 6am`) for the `setup` pin (B).
 - Q: Which provider for opencode in the pod? → A: Meridian and Codex (ChatGPT subscription login).
+- Step 1 (setup branch `opencode-core`): core interface takes `{ lib, pkgs, inputs }` and returns the parts, not a `profile`-specific tree — both profiles and the Meridian runtime (`host`, `port`, `pluginManifest`) are needed by the pod too. Verified stronger than planned: `system.build.toplevel.drvPath` of both darwin hosts unchanged (`2bxj6q0i…`, `mi21xy9k…`), so the whole system, not only `~/.config/opencode`, is identical.
 - Not asked, recorded as assumptions (no effect on what gets built): opencode from npm pinned via Renovate; personal profile only; Mac permissions unchanged; darwin module refactored onto the shared core.
