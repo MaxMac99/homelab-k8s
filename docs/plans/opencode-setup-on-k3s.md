@@ -89,7 +89,7 @@ Steps 1–2 are in the `setup` repo, 3–6 in this repo.
   - Done when: `darwin-rebuild build` for `Maxs-MacBook-Pro` succeeds and
     `diff -r` of the old and new `home-files/.config/opencode` (and the two
     `opencode-{work,personal}.json`) is empty.
-- [ ] **2. Expose `opencode-config` and `meridian` as Linux packages in `setup`**
+- [x] **2. Expose `opencode-config` and `meridian` as Linux packages in `setup`**
   - Goal: `packages.x86_64-linux.opencode-config` (`linkFarm`: `opencode.json`,
     `tui.json`, `AGENTS.md`, `agents/`, `commands/`, `skills/` incl. personal
     profile and i-have-adhd) and `packages.x86_64-linux.meridian` exist, and
@@ -98,9 +98,8 @@ Steps 1–2 are in the `setup` repo, 3–6 in this repo.
   - Done when: the `setup` CI run on the PR builds both packages green, and
     `jq .provider.anthropic.options.baseURL result/opencode.json` prints
     `http://127.0.0.1:3456/v1`.
-  - Pending: push `setup` branch `opencode-core` and open the PR; its
-    `check.yml` job "Build opencode packages for the T3 Code pod" must be
-    green. Locally verified: darwin drvPaths unchanged, `nix flake check`
+  - Verified: merged to `setup/main` as `7ed0d37`; CI run 40221700802,
+    step "Build opencode packages for the T3 Code pod", green. Locally: darwin drvPaths unchanged, `nix flake check`
     green, and the same tree built for aarch64-darwin matches the Mac's live
     `~/.config/opencode` (opencode.json = live ⊕ personal profile, tui.json,
     AGENTS.md, agents, commands, skills all identical).
