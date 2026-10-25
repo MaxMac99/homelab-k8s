@@ -133,6 +133,15 @@ unchanged` (t3code-bootstrap ConfigMap replace, t3code Deployment:
     points into `/nix/store`, and an opencode thread in T3 on the pod lists `/plan` and
     the `interview` skill. **You**: `opencode auth login` → OpenAI → Sign in
     with ChatGPT, then a Codex model answers.
+  - Verified on the cluster: merged as `5e1ca62`, Pulumi Deploy run
+    40231473719 green; all six entries linked, `opencode.json` resolves to
+    `/nix/store/9lx2…-opencode.json`, `opencode` resolves to the wrapper,
+    no bootstrap warning. `opencode api get /api/command` lists all 7 global
+    commands plus `epic`/`refine`; `/api/skill` lists all 12 global skills,
+    `i-have-adhd` and the 4 personal ones.
+  - Pending (**you**): in the pod `opencode auth login` → OpenAI → Sign in
+    with ChatGPT; then an opencode thread in T3 on the pod shows `/plan` and
+    a Codex model answers.
 - [ ] **5. Run Meridian as a sidecar**
   - Goal: a `meridian` container in the t3code pod (same image, `$HOME` PVC,
     `/nix` PVC) runs the `setup` meridian package for `SETUP_REV` — a
