@@ -148,6 +148,10 @@ unchanged` (t3code-bootstrap ConfigMap replace, t3code Deployment:
     `/nix` PVC) runs the `setup` meridian package for `SETUP_REV` — a
     wrapper that already sets `MERIDIAN_HOST/PORT/PLUGIN_CONFIG` — and
     listens on `127.0.0.1:3456`; it waits until bootstrap has built it.
+    Before `exec t3 serve`, `bootstrap.sh` also adds
+    `providerInstances.opencode = {driver: "opencode", enabled: true}` to
+    `~/.t3/userdata/settings.json` via `jq`, only if missing (T3 is not
+    running yet, so nothing overwrites it).
   - Files: `apps/t3code.ts`.
   - Done when: `kubectl -n t3code exec deploy/t3code -c t3code -- curl -sf
 127.0.0.1:3456/health` succeeds, and an opencode thread on an
@@ -177,4 +181,5 @@ unchanged` (t3code-bootstrap ConfigMap replace, t3code Deployment:
 - Step 3: npm `opencode-ai` is still opencode 1 (`latest` 1.19.4); opencode 2 ships as `@opencode/cli` (opencode.ai/v2/docs, install section), currently 2.1.4 = the Mac's brew version. Decision 6 now means that package. It joins the `t3code` Renovate group (one fast-lane PR with `t3`).
 - Step 4: correction — `ANTHROPIC_API_KEY=x` on the container would also hit the `claude` CLI in the pod and replace the Max login with the dummy key (the Mac scopes it to its wrapper for the same reason). The env therefore lives in a `~/.local/bin/opencode` wrapper written by `bootstrap.sh`. Pinned `SETUP_REV` = `a2e5d01` (contains the step 2 merge, CI green); a manual build in the pod took 79 s. A failed `nix build` keeps the previous link instead of crash-looping T3.
 - Step 4 finding: T3 only offers providers enabled in `~/.t3/userdata/settings.json` (`providerInstances.opencode = {driver, enabled: true}`); a fresh PVC has none, so OpenCode was invisible until enabled in T3's settings. Login method IDs (not in the docs, read from opencode itself): `chatgpt-token-sharing`, `chatgpt-browser`, `chatgpt-headless`, `key`.
+- Q: Should bootstrap enable the OpenCode provider in T3 if missing? → A: Yes, in step 5 (the pod restarts there anyway).
 - Not asked, recorded as assumptions (no effect on what gets built): opencode from npm pinned via Renovate; personal profile only; Mac permissions unchanged; darwin module refactored onto the shared core.
