@@ -150,7 +150,7 @@ const mealsDeployment = new k8s.apps.v1.Deployment(
             {
               name: "meals",
               // Renovate-format one-liner; releases publish per-version tags.
-              image: "ghcr.io/marco308/meals:1.9.0",
+              image: "ghcr.io/marco308/meals:1.9.1",
               ports: [
                 {
                   containerPort: 8000,
