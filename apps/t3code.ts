@@ -174,6 +174,13 @@ for entry in ${home}/.local/state/opencode-config/*; do
   ln -sfn "$entry" "$target"
 done
 
+# Meridian (Claude Max für opencode) läuft im Sidecar; der wartet auf diesen
+# Marker, damit er nach einem Rev-Bump nicht den alten Build startet.
+nix build "github:MaxMac99/setup/$SETUP_REV#meridian" \\
+  --out-link ${home}/.local/state/meridian ||
+  echo "bootstrap: meridian für $SETUP_REV nicht gebaut, behalte den letzten Stand" >&2
+echo "$SETUP_REV" > ${home}/.local/state/meridian.rev
+
 if ! command -v t3 >/dev/null; then
   curl -fsSL https://t3.codes/install.sh | T3CODE_VERSION="$T3_VERSION" sh
 elif [ "$(t3 --version)" != "t3 v$T3_VERSION" ]; then
@@ -183,6 +190,17 @@ fi
 
 # Rootfs ist flüchtig: Chromium-Libs und Fonts bei jedem Start.
 sudo env "PATH=$PATH" t3 browser setup
+
+# T3 bietet nur eingeschaltete Provider an; ein frisches PVC kennt opencode
+# nicht. Nur ergänzen, nie überschreiben — T3 läuft hier noch nicht.
+settings=${home}/.t3/userdata/settings.json
+mkdir -p "$(dirname "$settings")"
+[ -f "$settings" ] || echo '{}' > "$settings"
+if ! jq -e '.providerInstances.opencode' "$settings" >/dev/null; then
+  jq '.providerInstances.opencode = {driver: "opencode", enabled: true}' \\
+    "$settings" > "$settings.tmp"
+  mv "$settings.tmp" "$settings"
+fi
 
 exec t3 serve
 `;
@@ -257,6 +275,71 @@ export const t3Deployment = new k8s.apps.v1.Deployment(
               resources: {
                 requests: { cpu: "1000m", memory: "4Gi" },
                 limits: { cpu: "8000m", memory: "10Gi" },
+              },
+            },
+            {
+              // Meridian: Claude Max als Anthropic-API für opencode, auf
+              // 127.0.0.1:3456 im Pod (wie launchd auf dem Mac). Eigener
+              // Container, damit ein Absturz nur ihn neu startet, nicht T3.
+              // Build und claude-Login teilt er sich über die PVCs mit t3code.
+              name: "meridian",
+              image: "mcr.microsoft.com/devcontainers/base:2.2.3-trixie",
+              command: ["/bin/bash", "-c"],
+              args: [
+                `set -euo pipefail
+# Ohne gültige machine-id hat Meridian keine Boot-Identität und jeder
+# Session-Request endet mit 500; das Image bringt keine mit.
+[ -s /etc/machine-id ] ||
+  sudo sh -c 'tr -d - < /proc/sys/kernel/random/uuid > /etc/machine-id'
+until [ "$(cat ${home}/.local/state/meridian.rev 2>/dev/null)" = "$SETUP_REV" ]; do
+  sleep 5
+done
+exec ${home}/.local/state/meridian/bin/meridian`,
+              ],
+              securityContext: { runAsUser: 1000, runAsGroup: 1000 },
+              env: [
+                { name: "HOME", value: home },
+                { name: "USER", value: user },
+                { name: "SETUP_REV", value: SETUP_REV },
+                {
+                  name: "PATH",
+                  value: `${home}/.local/bin:${home}/.nix-profile/bin:/usr/local/bin:/usr/bin:/bin`,
+                },
+                {
+                  name: "MERIDIAN_CLAUDE_PATH",
+                  value: `${home}/.local/bin/claude`,
+                },
+                {
+                  // Macht die Identität eindeutig (sonst nur aus der
+                  // zufälligen machine-id und dem PID-Namespace).
+                  name: "MERIDIAN_HOST_ID",
+                  valueFrom: { fieldRef: { fieldPath: "metadata.uid" } },
+                },
+              ],
+              volumeMounts: [
+                { name: "home", mountPath: home },
+                { name: "nix", mountPath: "/nix" },
+              ],
+              // Lauscht nur auf 127.0.0.1, also exec statt httpGet. /livez
+              // statt /health: /health prüft den Login und würde bei
+              // abgelaufenem Login in eine Restart-Schleife führen.
+              startupProbe: {
+                exec: {
+                  command: ["curl", "-sf", "http://127.0.0.1:3456/livez"],
+                },
+                periodSeconds: 10,
+                failureThreshold: 90,
+              },
+              livenessProbe: {
+                exec: {
+                  command: ["curl", "-sf", "http://127.0.0.1:3456/livez"],
+                },
+                periodSeconds: 30,
+                failureThreshold: 5,
+              },
+              resources: {
+                requests: { cpu: "50m", memory: "256Mi" },
+                limits: { cpu: "2000m", memory: "3Gi" },
               },
             },
           ],
