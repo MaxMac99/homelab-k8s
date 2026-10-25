@@ -103,7 +103,7 @@ agents, skills, context, tui }`) holding everything portable;
     green, and the same tree built for aarch64-darwin matches the Mac's live
     `~/.config/opencode` (opencode.json = live ⊕ personal profile, tui.json,
     AGENTS.md, agents, commands, skills all identical).
-- [ ] **3. Install pinned opencode in the t3code pod**
+- [x] **3. Install pinned opencode in the t3code pod**
   - Goal: `bootstrap.sh` installs `OPENCODE_VERSION` from npm and re-pins it
     on every start; Renovate tracks it on the t3code fast lane.
   - Files: `apps/t3code.ts`, `renovate.json`.
@@ -115,10 +115,9 @@ agents, skills, context, tui }`) holding everything portable;
 unchanged` (t3code-bootstrap ConfigMap replace, t3code Deployment:
     bootstrap hash, `OPENCODE_VERSION` env, ConfigMap name); both version
     regexes match exactly once; renovate-config-validator and prettier green.
-  - Pending: merge branch `opencode-t3code` to `main` (deploy.yml runs
-    `pulumi up`), then
-    `kubectl -n t3code exec deploy/t3code -- bash -lc 'opencode --version'`
-    must print `opencode v2.1.4`.
+  - Verified on the cluster: merged as `582fd0a`, Pulumi Deploy run
+    40229567623 green, pod rolled; `opencode --version` in the pod prints
+    `opencode v2.1.4` from `/home/vscode/.npm-global/bin/opencode`.
 - [ ] **4. Link the pinned `setup` config into the pod**
   - Goal: `SETUP_REV` (40-char sha) in `apps/t3code.ts`; `bootstrap.sh`
     runs `nix build github:MaxMac99/setup/$SETUP_REV#opencode-config
