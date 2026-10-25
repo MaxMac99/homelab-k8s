@@ -98,6 +98,12 @@ Steps 1–2 are in the `setup` repo, 3–6 in this repo.
   - Done when: the `setup` CI run on the PR builds both packages green, and
     `jq .provider.anthropic.options.baseURL result/opencode.json` prints
     `http://127.0.0.1:3456/v1`.
+  - Pending: push `setup` branch `opencode-core` and open the PR; its
+    `check.yml` job "Build opencode packages for the T3 Code pod" must be
+    green. Locally verified: darwin drvPaths unchanged, `nix flake check`
+    green, and the same tree built for aarch64-darwin matches the Mac's live
+    `~/.config/opencode` (opencode.json = live ⊕ personal profile, tui.json,
+    AGENTS.md, agents, commands, skills all identical).
 - [ ] **3. Install pinned opencode in the t3code pod**
   - Goal: `bootstrap.sh` installs `OPENCODE_VERSION` from npm and re-pins it
     on every start; Renovate tracks it on the t3code fast lane.
@@ -109,18 +115,22 @@ Steps 1–2 are in the `setup` repo, 3–6 in this repo.
 - [ ] **4. Link the pinned `setup` config into the pod**
   - Goal: `SETUP_REV` (40-char sha) in `apps/t3code.ts`; `bootstrap.sh`
     runs `nix build github:MaxMac99/setup/$SETUP_REV#opencode-config
-    --out-link ~/.local/state/opencode-config` and `ln -sfn`s it to
-    `~/.config/opencode` (moving a pre-existing real directory aside once).
+    --out-link ~/.local/state/opencode-config` and `ln -sfn`s **each
+    top-level entry** (`opencode.json`, `tui.json`, `AGENTS.md`, `agents`,
+    `commands`, `skills`) into a real, writable `~/.config/opencode` —
+    opencode writes `service.json`, `package.json` and `node_modules` there.
+    Also sets `ANTHROPIC_API_KEY=x` and `OPENCODE_DISABLE_LSP_DOWNLOAD=1` on
+    the t3code container (the Mac wrapper's env).
   - Files: `apps/t3code.ts`.
-  - Done when: after deploy, `readlink ~/.config/opencode` points into
-    `/nix/store`, and an opencode thread in T3 on the pod lists `/plan` and
+  - Done when: after deploy, `readlink ~/.config/opencode/opencode.json`
+    points into `/nix/store`, and an opencode thread in T3 on the pod lists `/plan` and
     the `interview` skill. **You**: `opencode auth login` → OpenAI → Sign in
     with ChatGPT, then a Codex model answers.
 - [ ] **5. Run Meridian as a sidecar**
   - Goal: a `meridian` container in the t3code pod (same image, `$HOME` PVC,
-    `/nix` PVC) runs the `setup` meridian package for `SETUP_REV` and
-    listens on `127.0.0.1:3456`; it waits until bootstrap has built the
-    binary.
+    `/nix` PVC) runs the `setup` meridian package for `SETUP_REV` — a
+    wrapper that already sets `MERIDIAN_HOST/PORT/PLUGIN_CONFIG` — and
+    listens on `127.0.0.1:3456`; it waits until bootstrap has built it.
   - Files: `apps/t3code.ts`.
   - Done when: `kubectl -n t3code exec deploy/t3code -c t3code -- curl -sf
     127.0.0.1:3456/health` succeeds, and an opencode thread on an
@@ -146,4 +156,5 @@ Steps 1–2 are in the `setup` repo, 3–6 in this repo.
 - Q: Which provider for opencode in the pod? → A: Meridian and Codex (ChatGPT subscription login).
 - Step 1 (setup branch `opencode-core`): core interface takes `{ lib, pkgs, inputs }` and returns the parts, not a `profile`-specific tree — both profiles and the Meridian runtime (`host`, `port`, `pluginManifest`) are needed by the pod too. Verified stronger than planned: `system.build.toplevel.drvPath` of both darwin hosts unchanged (`2bxj6q0i…`, `mi21xy9k…`), so the whole system, not only `~/.config/opencode`, is identical.
 - Q: Why are the Claude models listed by hand in `core.nix`? → A: The list only zeroes the displayed cost, availability is unaffected; no global cost switch or model wildcard in the v2 config docs. Keep the list for now, follow-up spike for a cost-zeroing plugin (out of scope).
+- Step 2 (setup `c95ab68`): the personal profile is merged into the tree's `opencode.json` instead of riding in `OPENCODE_CONFIG`, so the pod needs no profile env. `packages.meridian` is a wrapper with Meridian's env baked in (step 5 just runs it). Correction to step 4: the Mac's `~/.config/opencode` is a real directory with per-entry symlinks and runtime files written by opencode, so the pod links entries one by one instead of symlinking the directory; step 4 also takes over the Mac wrapper's env (`ANTHROPIC_API_KEY=x`, `OPENCODE_DISABLE_LSP_DOWNLOAD=1`).
 - Not asked, recorded as assumptions (no effect on what gets built): opencode from npm pinned via Renovate; personal profile only; Mac permissions unchanged; darwin module refactored onto the shared core.
