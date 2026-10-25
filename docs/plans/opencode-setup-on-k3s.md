@@ -165,6 +165,12 @@ unchanged` (t3code-bootstrap ConfigMap replace, t3code Deployment:
   - Done when: `bunx --package renovate renovate-config-validator` passes,
     and after merge the Renovate dependency dashboard lists
     `MaxMac99/setup`; the first nightly bump PR automerges and the pod rolls.
+  - Verified locally: renovate-config-validator passes, the `SETUP_REV`
+    regex matches exactly the pinned sha, prettier green, `pulumi preview`
+    `440 unchanged` (comments and Renovate only, no pod restart).
+  - Pending: after merge, the Renovate dependency dashboard issue lists
+    `MaxMac99/setup` (git-refs); the first `setup` bump PR is created before
+    6am, automerges, and Pulumi Deploy rolls the t3code pod.
 
 ## Clarifications
 
