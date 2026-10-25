@@ -77,9 +77,9 @@
       "automerge": true
     },
     {
-      "description": "T3 Code server: same fast lane as meals, including majors. The desktop/mobile apps auto-update and refuse a server that falls behind, so every hour of lag is an hour without access.",
+      "description": "T3 Code server and the opencode CLI it drives: same fast lane as meals, including majors. The desktop/mobile apps auto-update and refuse a server that falls behind, so every hour of lag is an hour without access.",
       "matchDatasources": ["npm"],
-      "matchPackageNames": ["t3"],
+      "matchPackageNames": ["t3", "@opencode/cli"],
       "groupName": "t3code",
       "schedule": [],
       "automerge": true
@@ -136,6 +136,16 @@
       "managerFilePatterns": ["/\\.ts$/"],
       "matchStrings": ["T3_VERSION\\s*=\\s*[\"'](?<currentValue>[^\"']+)[\"']"],
       "depNameTemplate": "t3",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Match the pinned opencode CLI version (apps/t3code.ts); bootstrap.sh installs @opencode/cli at it on pod start",
+      "managerFilePatterns": ["/\\.ts$/"],
+      "matchStrings": [
+        "OPENCODE_VERSION\\s*=\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "depNameTemplate": "@opencode/cli",
       "datasourceTemplate": "npm"
     },
     {
