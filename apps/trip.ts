@@ -30,6 +30,7 @@
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
+import { ghcrPullSecret } from "../infrastructure/ghcr";
 import { traefikNamespace } from "../infrastructure/traefik";
 import {
   publicIngressClass,
@@ -48,11 +49,6 @@ import { userMax, userMichael } from "../auth/authentik-directory";
 
 const config = new pulumi.Config();
 
-// Classic PAT with `read:packages`. Packages pushed from a private repo are
-// private, and the cluster has no identity a private package would trust.
-// Set with: pulumi config set --secret tripRegistryPullToken <token>
-const registryPullToken = config.requireSecret("tripRegistryPullToken");
-
 // CARTO basemap key. Vite bakes it into the JS at build time, so the image is
 // built with the placeholder `__CARTO_API_KEY__` and the container entrypoint
 // rewrites the bundle at start with this value. If the Secret is ever empty
@@ -69,30 +65,12 @@ const namespace = new k8s.core.v1.Namespace("trip", {
   },
 });
 
-// Pull secret for the private GHCR package. `auth` is base64("user:token")
-// — the form kubelet actually reads.
-const registryPullSecret = new k8s.core.v1.Secret("trip-registry-pull", {
-  metadata: {
-    name: "trip-registry-pull",
-    namespace: namespace.metadata.name,
-  },
-  type: "kubernetes.io/dockerconfigjson",
-  stringData: {
-    ".dockerconfigjson": registryPullToken.apply((token) =>
-      Buffer.from(
-        JSON.stringify({
-          auths: {
-            "ghcr.io": {
-              username: "MaxMac99",
-              password: token,
-              auth: Buffer.from(`MaxMac99:${token}`).toString("base64"),
-            },
-          },
-        }),
-      ).toString("utf8"),
-    ),
-  },
-});
+// Pull secret for the private GHCR package (PAT shared with meals, see
+// infrastructure/ghcr.ts).
+const registryPullSecret = ghcrPullSecret(
+  "trip-registry-pull",
+  namespace.metadata.name,
+);
 
 // Runtime config for the SPA entrypoint. See the header comment: baked
 // placeholder in the image, real value substituted at container start.

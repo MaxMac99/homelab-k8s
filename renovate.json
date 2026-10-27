@@ -63,8 +63,8 @@
       ]
     },
     {
-      "description": "Own app meals: checked on every run instead of only on the scheduled run, automerged, so a freshly pushed build from the meals repo reaches the cluster in minutes-to-hours. Includes majors on purpose — reverting an own-app bump is trivial.",
-      "matchPackageNames": ["ghcr.io/marco308/meals"],
+      "description": "Own app meals (private fork MaxMac99/meals, :main pinned by digest): checked on every run instead of only on the scheduled run, automerged including digest bumps, so a push to the fork's main reaches the cluster in minutes-to-hours. Reverting an own-app bump is trivial. Needs the ghcr.io host rule in the Mend portal (apps/meals.ts setup step 0).",
+      "matchPackageNames": ["ghcr.io/maxmac99/meals"],
       "groupName": "meals",
       "schedule": [],
       "automerge": true
@@ -116,7 +116,7 @@
     {
       "description": "Notify on every update of these apps via a reviewer ping. assignAutomerge keeps the ping even when the PR automerges.",
       "matchPackageNames": [
-        "ghcr.io/marco308/meals",
+        "ghcr.io/maxmac99/meals",
         "ghcr.io/immich-app/immich-server",
         "ghcr.io/immich-app/immich-charts/immich",
         "ghcr.io/paperless-ngx/paperless-ngx",
@@ -167,6 +167,17 @@
       "packageNameTemplate": "https://github.com/MaxMac99/setup",
       "currentValueTemplate": "main",
       "datasourceTemplate": "git-refs"
+    },
+    {
+      "customType": "regex",
+      "description": "Match the digest pin of the meals fork's :main image (apps/meals.ts); kept out of the image line so the generic image regex does not read main@sha256 as a version",
+      "managerFilePatterns": ["/\\.ts$/"],
+      "matchStrings": [
+        "MEALS_DIGEST\\s*=\\s*[\"'](?<currentDigest>sha256:[0-9a-f]{64})[\"']"
+      ],
+      "depNameTemplate": "ghcr.io/maxmac99/meals",
+      "currentValueTemplate": "main",
+      "datasourceTemplate": "docker"
     },
     {
       "customType": "regex",
