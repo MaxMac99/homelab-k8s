@@ -1,4 +1,6 @@
-// Meals — "Yet Another Meal Planner" (github.com/marco308/meals).
+// Meals — "Yet Another Meal Planner", run from the private fork
+// github.com/MaxMac99/meals (a copy of github.com/marco308/meals, not a GitHub
+// fork: own changes on `main`, upstream merged in by a daily sync PR).
 //
 // A meal options planner: a recipe library with URL ingest, pools of meal
 // options instead of a fixed Mon–Sun grid, and an aisle-sorted shopping list
@@ -7,9 +9,22 @@
 // is meant to be driven by an external assistant; the household uses a ChatGPT
 // Custom GPT against /openapi.json with a personal API token.
 //
-// Single container (`ghcr.io/marco308/meals`): API, web client, skill and MCP
+// Single container (`ghcr.io/maxmac99/meals`): API, web client, skill and MCP
 // endpoint are all served by the one image on port 8000. Pointed at Postgres
 // via DATABASE_URL, it is **stateless** — no volume, no SQLite under /data.
+//
+// Image: every push to the fork's `main` builds `:main` and `:sha-<short>`
+// (main-image.yml, linux/amd64 only). The Deployment pins `:main` by digest
+// (`MEALS_DIGEST`), so each rollout is a visible, revertable commit; Renovate
+// bumps the digest through its own custom manager. ⚠️ The package is
+// **private**: the pod needs the GHCR pull secret (infrastructure/ghcr.ts),
+// and Renovate needs a ghcr.io host rule in the Mend portal — without it the
+// lookup fails with `no-result` and the digest never moves.
+//
+// ⚠️ Switching from upstream 1.11.0 to fork `main` migrates the schema
+// **forward** on boot (Alembic, incl. `users.oidc_subject`). There is no way
+// back to the upstream image without a manual downgrade — check the `meals`
+// database backup (databases/backup.ts) before the first rollout.
 //
 // ⚠️ The auth split is load-bearing, and it is not the trip.ts pattern:
 //
@@ -44,6 +59,7 @@ import * as k8s from "@pulumi/kubernetes";
 import * as authentik from "@pulumi/authentik";
 import * as pulumi from "@pulumi/pulumi";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
+import { ghcrPullSecret } from "../infrastructure/ghcr";
 import {
   ARCH_LABEL,
   brinkSite,
@@ -63,11 +79,22 @@ import {
   postgresqlNamespace,
 } from "../databases/postgresql";
 
+// Digest of ghcr.io/maxmac99/meals:main, bumped by Renovate's MEALS_DIGEST
+// manager. Kept out of the `image:` line on purpose: the generic image regex
+// would read `main@sha256:…` as the version.
+const MEALS_DIGEST =
+  "sha256:a64a3860c692e8141ea0f1fdaf0e37ab14dd54f50ee425275b31e9758c2055b7";
+
 const namespace = new k8s.core.v1.Namespace("meals", {
   metadata: {
     name: "meals",
   },
 });
+
+const registryPullSecret = ghcrPullSecret(
+  "meals-registry-pull",
+  namespace.metadata.name,
+);
 
 // The database lives on the shared Brink cluster — a declarative Database CR,
 // same shape as homeassistant's (apps/homeassistant.ts). CNPG creates the
@@ -146,11 +173,16 @@ const mealsDeployment = new k8s.apps.v1.Deployment(
             [ARCH_LABEL]: "amd64",
             ...brinkSite,
           },
+          imagePullSecrets: [
+            {
+              name: registryPullSecret.metadata.name,
+            },
+          ],
           containers: [
             {
               name: "meals",
-              // Renovate-format one-liner; releases publish per-version tags.
-              image: "ghcr.io/marco308/meals:1.11.0",
+              // Digest-pinned `:main` of the fork, see MEALS_DIGEST.
+              image: `ghcr.io/maxmac99/meals:main@${MEALS_DIGEST}`,
               ports: [
                 {
                   containerPort: 8000,
@@ -220,7 +252,15 @@ const mealsDeployment = new k8s.apps.v1.Deployment(
       },
     },
   },
-  { dependsOn: [namespace, mealsDatabase, mealsDbSecret, mealsConfig] },
+  {
+    dependsOn: [
+      namespace,
+      mealsDatabase,
+      mealsDbSecret,
+      mealsConfig,
+      registryPullSecret,
+    ],
+  },
 );
 
 const mealsService = new k8s.core.v1.Service("meals-service", {
@@ -606,6 +646,21 @@ export {
 };
 
 // Setup:
+//
+// 0. Image (fork repo MaxMac99/meals): a push to `main` runs main-image.yml
+//    and pushes ghcr.io/maxmac99/meals:main (private — verify once on
+//    github.com/users/MaxMac99/packages). Set MEALS_DIGEST above to its
+//    digest; from then on Renovate bumps it. Pull credentials:
+//    - Cluster: the shared `tripRegistryPullToken` (infrastructure/ghcr.ts),
+//      nothing new to set.
+//    - Renovate: developer.mend.io → MaxMac99/homelab-k8s (or the org) →
+//      Settings → Credentials → Add host rule: host `ghcr.io`, username
+//      `MaxMac99`, password = the same classic PAT (read:packages). This
+//      also fixes the `no-result` lookups for vacation-plan-view and
+//      foreman-server on the Dependency Dashboard.
+//    ⚠️ Before the first rollout from upstream to the fork, check the meals
+//    DB backup — the fork's migrations (users.oidc_subject …) run forward
+//    and the upstream image cannot run against the result.
 //
 // 1. Deploy: pulumi up (via PR → merge → CI). The schema migrates itself on
 //    boot; wait for the pod to be Ready.
