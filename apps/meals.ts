@@ -39,6 +39,13 @@
 //     deployment (bcrypt + opaque tokens, rate-limited auth endpoints, and
 //     auth is mandatory everywhere except /healthz).
 //
+//   - **Inside the app, "Sign in with Authentik"** (the fork's OIDC, web and
+//     iPhone) replaces typing the Meals password: a second Authentik
+//     application, "Meals Login", with a public OAuth2 provider. It still
+//     ends in the app's own session token, so the split above is unchanged.
+//     The first sign-in links the existing account by email address, so the
+//     Meals account must use the same address as the Authentik user.
+//
 //   So the internal edge carries three Ingresses — `/` (API + root landing),
 //   `/app` (forward auth), `/outpost.goauthentik.io` (the forward-auth
 //   callback, routed without it, same bypass as trip.ts) — and the public edge
@@ -69,7 +76,9 @@ import { authentikOutpostService } from "../auth/authentik-outpost";
 import {
   defaultAuthorizationFlow,
   defaultInvalidationFlow,
+  oauth2ScopeMappings,
   proxyScopeMappings,
+  signingKey,
 } from "../auth/authentik-config";
 import { forwardAuthOutpostRecord } from "../auth/authentik-forward-auth";
 import {
@@ -83,7 +92,14 @@ import {
 // manager. Kept out of the `image:` line on purpose: the generic image regex
 // would read `main@sha256:…` as the version.
 const MEALS_DIGEST =
-  "sha256:a64a3860c692e8141ea0f1fdaf0e37ab14dd54f50ee425275b31e9758c2055b7";
+  "sha256:b90ae678dbeca4596f2c9556c111a6c533b496a9d9dbbe3c75c254361e749a2a";
+
+// "Sign in with Authentik" (the app's own OIDC, not the forward auth on /app):
+// the OAuth2 provider in the Authentik section below and the Deployment's
+// OIDC_* env read the same two values. A public client's id is no secret.
+const mealsHost = "meals.mvissing.de";
+const oidcClientId = "meals";
+const oidcSlug = "meals-login";
 
 const namespace = new k8s.core.v1.Namespace("meals", {
   metadata: {
@@ -212,6 +228,25 @@ const mealsDeployment = new k8s.apps.v1.Deployment(
                   name: "REGISTRATION_ENABLED",
                   value: "false",
                 },
+                {
+                  // The public URL, as every other app here dials Authentik;
+                  // the token's `iss` must match it exactly.
+                  name: "OIDC_ISSUER",
+                  value: `https://auth.mvissing.de/application/o/${oidcSlug}/`,
+                },
+                {
+                  name: "OIDC_CLIENT_ID",
+                  value: oidcClientId,
+                },
+                {
+                  // Authentik sends email_verified=false by default; every
+                  // address in it is typed in by hand (auth/authentik-
+                  // directory.ts), so linking the existing account by its
+                  // address is safe. With registration closed, an address
+                  // that matches no account gets a 403, not a new household.
+                  name: "OIDC_TRUST_EMAIL",
+                  value: "true",
+                },
               ],
               livenessProbe: {
                 httpGet: {
@@ -306,8 +341,6 @@ const outpostAliasService = new k8s.core.v1.Service("meals-outpost-alias", {
     ],
   },
 });
-
-const mealsHost = "meals.mvissing.de";
 
 // Three rule sets, shared between the two edges so they cannot drift:
 //
@@ -628,6 +661,58 @@ const mealsUsersGroup = new authentik.Group("meals-users-group", {
 
 new authentik.PolicyBinding("meals-group-binding", {
   target: mealsApplication.uuid,
+  group: mealsUsersGroup.id,
+  order: 0,
+});
+
+// "Sign in with Authentik" inside the app — a second application, because
+// one Authentik application has one provider and "Meals" above is the
+// forward-auth proxy. Both the web client and the iPhone app use it as a
+// **public** client (PKCE, no secret): the web client through the server's
+// /auth/oidc/authorize + /auth/oidc/code, the app directly.
+const mealsOidcProvider = new authentik.ProviderOauth2("meals-oidc-provider", {
+  name: "Meals Login",
+  clientId: oidcClientId,
+  clientType: "public",
+  // ⚠️ Must be set explicitly — an API-created provider gets an empty list
+  // and rejects every login (apps/ha-mcp.ts).
+  grantTypes: ["authorization_code"],
+  authorizationFlow: defaultAuthorizationFlow.id,
+  invalidationFlow: defaultInvalidationFlow.id,
+  propertyMappings: oauth2ScopeMappings,
+  // ⚠️ Required: without it the ID token is HS256, which meals refuses.
+  signingKey,
+  // ⚠️ Snake_case map keys — see apps/immich.ts.
+  allowedRedirectUris: [
+    {
+      // The web client returns to /app/ itself.
+      matching_mode: "strict",
+      url: `https://${mealsHost}/app/`,
+      redirect_uri_type: "authorization",
+    },
+    {
+      // The iPhone app's callback (OIDCSignIn.swift in the fork).
+      matching_mode: "strict",
+      url: "com.marcuslab.meals:/oidc/callback",
+      redirect_uri_type: "authorization",
+    },
+  ],
+});
+
+const mealsOidcApplication = new authentik.Application(
+  "meals-oidc-application",
+  {
+    name: "Meals Login",
+    slug: oidcSlug,
+    protocolProvider: mealsOidcProvider.providerOauth2Id.apply(Number),
+    // Hidden from the library: the "Meals" tile above is the one to click.
+    metaLaunchUrl: "blank://blank",
+  },
+);
+
+// Same gate as the web client: meals-users only.
+new authentik.PolicyBinding("meals-oidc-group-binding", {
+  target: mealsOidcApplication.uuid,
   group: mealsUsersGroup.id,
   order: 0,
 });
