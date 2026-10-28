@@ -3,7 +3,7 @@
 // Two clusters, and they are not interchangeable:
 //   - `postgres`        — brink-server, PG 18.4. authentik, homeassistant, meals.
 //   - `postgres-winkel` — maxdata, PG 18.4 + VectorChord. grafana, paperless,
-//                         immich.
+//                         immich, photonic.
 //
 // Both run the same major *and minor* version deliberately: one upgrade
 // cadence, and `pg_dump` output restores in either direction.
@@ -212,6 +212,29 @@ const immichPasswordSecret = new k8s.core.v1.Secret(
     stringData: {
       username: "immich",
       password: immichPassword.result,
+    },
+  },
+);
+
+// Generate password for photonic user
+const photonicPassword = new random.RandomPassword("photonic-db-password", {
+  length: 32,
+  special: false,
+});
+
+// Create secret with password for photonic user
+// This will be used by CNPG declarative role management (postgres-winkel)
+const photonicPasswordSecret = new k8s.core.v1.Secret(
+  "postgres-photonic-password",
+  {
+    metadata: {
+      name: "postgres-photonic",
+      namespace: namespace.metadata.name,
+    },
+    type: "kubernetes.io/basic-auth",
+    stringData: {
+      username: "photonic",
+      password: photonicPassword.result,
     },
   },
 );
@@ -688,6 +711,14 @@ const postgresWinkelCluster = new k8s.apiextensions.CustomResource(
               name: immichPasswordSecret.metadata.name,
             },
           },
+          {
+            name: "photonic",
+            ensure: "present",
+            login: true,
+            passwordSecret: {
+              name: photonicPasswordSecret.metadata.name,
+            },
+          },
         ],
       },
 
@@ -845,6 +876,7 @@ export const homeassistantDbPassword = homeassistantPassword.result;
 export const immichDbPassword = immichPassword.result;
 export const mealsDbPassword = mealsPassword.result;
 export const foremanDbPassword = foremanPassword.result;
+export const photonicDbPassword = photonicPassword.result;
 
 export { immichDatabase };
 
