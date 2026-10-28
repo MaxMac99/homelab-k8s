@@ -36,3 +36,4 @@ export * from "./foreman";
 export * from "./attic";
 export * from "./ha-mcp";
 export * from "./t3code";
+export * from "./photonic";
