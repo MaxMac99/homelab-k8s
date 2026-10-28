@@ -74,7 +74,7 @@ const OPENCODE_VERSION = "2.2.0";
 // Commit des setup-Repos, aus dem `bootstrap.sh` die opencode-Config
 // (Skills, Commands, Agents, AGENTS.md, Permissions) baut — dieselbe wie auf
 // dem Mac (modules/apps/opencode/core.nix). Renovate hebt ihn nachts.
-const SETUP_REV = "90499128f26f4d7ceb0be4a1f8f15671a8b252aa";
+const SETUP_REV = "e932b8a65b1d4be94c7dfa63ac61d23e178c9683";
 
 // devcontainers/base bringt den Nutzer `vscode` (uid 1000) mit
 // passwortlosem sudo, git, curl und xz mit — alles, was die Installer
