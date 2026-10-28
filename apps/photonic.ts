@@ -58,7 +58,7 @@ import {
 // PHOTONIC_DIGEST manager. Kept out of the `image:` line on purpose: the
 // generic image regex would read `main@sha256:…` as the version.
 const PHOTONIC_DIGEST =
-  "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+  "sha256:372099ac4a5613d18be0f8b5d095f17f0b840503795191fd086d9fab33f86cbc";
 
 const photonicHost = "photonic.mvissing.de";
 const oidcClientId = "photonic";
