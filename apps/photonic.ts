@@ -22,14 +22,19 @@
 // check, each commented where it is set: `subMode`, the scope mappings and
 // `signingKey`.
 //
-// Placement: **Winkel (maxdata)**, next to the NFS export that holds the
-// photos and next to `postgres-winkel` with its database — NFS is reachable
-// cross-site only at WAN latency (CLAUDE.md). amd64 only.
+// Placement: **pinned to maxdata**, next to the NFS export that holds the
+// photos, next to `postgres-winkel` with its database (NFS is reachable
+// cross-site only at WAN latency, CLAUDE.md), and on the node that owns the
+// local-path cache volume.
 //
-// ⚠️ One volume, mounted once at /data, for originals, cache *and* temp. The
-// server moves uploads from temp into place with rename(2), which fails with
-// EXDEV across mount points — two subPath mounts of the same export count as
-// two. Do not split these into separate volumeMounts.
+// Storage is split by tier, the way the server's config already splits it:
+//   - /storage — originals, NFS on `tank` (spinning, snapshotted). The data
+//     that matters.
+//   - /cache   — thumbnails (`store`) and in-flight uploads (`tmp`),
+//     local-path on maxdata, i.e. `/fast/k8s/local-path` on the NVMe pool.
+//     Rebuildable, and the hot path for every library scroll and upload.
+// Two mounts are safe: uploads reach permanent storage by copy, not rename(2)
+// (move_to_permanent_storage.rs), so there is no EXDEV across them.
 
 import * as k8s from "@pulumi/kubernetes";
 import * as authentik from "@pulumi/authentik";
@@ -38,7 +43,8 @@ import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import { ghcrPullSecret } from "../infrastructure/ghcr";
 import {
   ARCH_LABEL,
-  winkelSite,
+  MAXDATA,
+  onNode,
   publicIngressClass,
 } from "../infrastructure/sites";
 import {
@@ -147,6 +153,19 @@ const dataPVC = new k8s.core.v1.PersistentVolumeClaim("photonic-data-pvc", {
   },
 });
 
+// Thumbnails and upload temp on maxdata's NVMe pool (`fast`), via local-path
+// (`/fast/k8s/local-path`, infrastructure/local-path.ts). Rebuildable from the
+// originals, so node-local is fine — the pod is pinned to maxdata anyway.
+// Size is advisory: local-path does not enforce it.
+const cachePVC = new k8s.core.v1.PersistentVolumeClaim("photonic-cache-pvc", {
+  metadata: { name: "photonic-cache", namespace: namespace.metadata.name },
+  spec: {
+    accessModes: ["ReadWriteOnce"],
+    storageClassName: "local-path",
+    resources: { requests: { storage: "50Gi" } },
+  },
+});
+
 const photonicDeployment = new k8s.apps.v1.Deployment(
   "photonic",
   {
@@ -178,7 +197,9 @@ const photonicDeployment = new k8s.apps.v1.Deployment(
         spec: {
           nodeSelector: {
             [ARCH_LABEL]: "amd64",
-            ...winkelSite,
+            // A node, not the site: the local-path cache volume binds to
+            // whichever node first schedules it, permanently.
+            ...onNode(MAXDATA),
           },
           imagePullSecrets: [
             {
@@ -207,10 +228,10 @@ const photonicDeployment = new k8s.apps.v1.Deployment(
                     },
                   },
                 },
-                // All three under the one /data mount — see the header.
-                { name: "STORAGE_BASE_DIRECTORY", value: "/data/storage" },
-                { name: "STORAGE_CACHE_DIRECTORY", value: "/data/cache/store" },
-                { name: "STORAGE_TEMP_DIRECTORY", value: "/data/cache/tmp" },
+                // Originals on NFS, cache and temp on NVMe — see the header.
+                { name: "STORAGE_BASE_DIRECTORY", value: "/storage" },
+                { name: "STORAGE_CACHE_DIRECTORY", value: "/cache/store" },
+                { name: "STORAGE_TEMP_DIRECTORY", value: "/cache/tmp" },
                 // OIDC: all four or none (the server refuses a partial set).
                 // The client fetches the authorize/token URLs from
                 // GET /api/v1/system, so they must be reachable from the
@@ -233,7 +254,11 @@ const photonicDeployment = new k8s.apps.v1.Deployment(
               volumeMounts: [
                 {
                   name: "data",
-                  mountPath: "/data",
+                  mountPath: "/storage",
+                },
+                {
+                  name: "cache",
+                  mountPath: "/cache",
                 },
               ],
               livenessProbe: {
@@ -277,6 +302,12 @@ const photonicDeployment = new k8s.apps.v1.Deployment(
                 claimName: dataPVC.metadata.name,
               },
             },
+            {
+              name: "cache",
+              persistentVolumeClaim: {
+                claimName: cachePVC.metadata.name,
+              },
+            },
           ],
         },
       },
@@ -289,6 +320,7 @@ const photonicDeployment = new k8s.apps.v1.Deployment(
       photonicConfig,
       registryPullSecret,
       dataPVC,
+      cachePVC,
     ],
   },
 );
