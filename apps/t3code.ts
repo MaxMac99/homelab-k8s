@@ -184,6 +184,27 @@ for entry in ${home}/.local/state/opencode-config/*; do
   ln -sfn "$entry" "$target"
 done
 
+# Dieselben Skills, Subagents und AGENTS.md für Claude Code, damit T3s
+# claude-Provider sie direkt nutzt. Einzeln verlinken: ~/.claude/skills hält
+# auch die von claude.ai synchronisierten Skills. Aus setup entfernte Einträge
+# hinterlassen tote Links, die räumt das find weg.
+nix build "github:MaxMac99/setup/$SETUP_REV#claude-config" \\
+  --out-link ${home}/.local/state/claude-config ||
+  echo "bootstrap: claude-config für $SETUP_REV nicht gebaut, behalte den letzten Stand" >&2
+mkdir -p ${home}/.claude/skills ${home}/.claude/agents
+for entry in ${home}/.local/state/claude-config/CLAUDE.md \\
+  ${home}/.local/state/claude-config/skills/* \\
+  ${home}/.local/state/claude-config/agents/*; do
+  [ -e "$entry" ] || continue
+  target=${home}/.claude/\${entry#${home}/.local/state/claude-config/}
+  if [ -e "$target" ] && [ ! -L "$target" ]; then
+    mv "$target" "$target.pre-setup"
+  fi
+  ln -sfn "$entry" "$target"
+done
+find ${home}/.claude/skills ${home}/.claude/agents -maxdepth 1 -xtype l \\
+  -lname '${home}/.local/state/claude-config/*' -delete
+
 # Meridian (Claude Max für opencode) läuft im Sidecar; der wartet auf diesen
 # Marker, damit er nach einem Rev-Bump nicht den alten Build startet.
 nix build "github:MaxMac99/setup/$SETUP_REV#meridian" \\
