@@ -221,7 +221,7 @@ const haMcpDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "ha-mcp",
-              image: "ghcr.io/homeassistant-ai/ha-mcp:8.7.0",
+              image: "ghcr.io/homeassistant-ai/ha-mcp:9.0.0",
               command: ["ha-mcp-oidc"],
               ports: [
                 {
