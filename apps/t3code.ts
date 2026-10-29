@@ -271,7 +271,7 @@ export const t3Deployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "t3code",
-              image: "mcr.microsoft.com/devcontainers/base:2.2.3-trixie",
+              image: "mcr.microsoft.com/devcontainers/base:2.2.5-trixie",
               command: ["/bin/bash", "/bootstrap/bootstrap.sh"],
               ports: [{ containerPort: t3Port, name: "http" }],
               securityContext: { runAsUser: 1000, runAsGroup: 1000 },
@@ -314,7 +314,7 @@ export const t3Deployment = new k8s.apps.v1.Deployment(
               // Container, damit ein Absturz nur ihn neu startet, nicht T3.
               // Build und claude-Login teilt er sich über die PVCs mit t3code.
               name: "meridian",
-              image: "mcr.microsoft.com/devcontainers/base:2.2.3-trixie",
+              image: "mcr.microsoft.com/devcontainers/base:2.2.5-trixie",
               command: ["/bin/bash", "-c"],
               args: [
                 `set -euo pipefail
