@@ -12,6 +12,15 @@
   "prConcurrentLimit": 5,
   "labels": ["dependencies"],
   "platformAutomerge": true,
+  "hostRules": [
+    {
+      "description": "Read MaxMac99's private GHCR packages (meals, photonic, trip, foreman-server). A host rule set only in the Mend portal never reached the repo config (hostRules: [] in the job log), so Mend's own ghcr.io token was used and got 401. The secret tripRegistryPullToken lives in the Mend portal (homelab-k8s → Credentials → Secrets) and holds the same classic PAT (read:packages) as the Pulumi config key of that name.",
+      "matchHost": "ghcr.io",
+      "hostType": "docker",
+      "username": "MaxMac99",
+      "password": "{{ secrets.tripRegistryPullToken }}"
+    }
+  ],
   "packageRules": [
     {
       "description": "typescript must stay below v7: TypeScript 7 ships no compiler JS API, so typescript-eslint 8.x hard-fails on it (TS >= 7.1 support tracked in typescript-eslint#10940). The runtime is bun and unaffected; only lint and the editor care. tsconfig.json also needs moduleResolution/module rework before TS7.",
@@ -63,14 +72,14 @@
       ]
     },
     {
-      "description": "Own app meals (private fork MaxMac99/meals, :main pinned by digest): checked on every run instead of only on the scheduled run, automerged including digest bumps, so a push to the fork's main reaches the cluster in minutes-to-hours. Reverting an own-app bump is trivial. Needs the ghcr.io host rule in the Mend portal (apps/meals.ts setup step 0).",
+      "description": "Own app meals (private fork MaxMac99/meals, :main pinned by digest): checked on every run instead of only on the scheduled run, automerged including digest bumps, so a push to the fork's main reaches the cluster in minutes-to-hours. Reverting an own-app bump is trivial. Needs the ghcr.io host rule above.",
       "matchPackageNames": ["ghcr.io/maxmac99/meals"],
       "groupName": "meals",
       "schedule": [],
       "automerge": true
     },
     {
-      "description": "Own app photonic (private, :main pinned by digest, the test deployment of photonic's main): same fast lane as meals, so a server push to photonic's main reaches the cluster in minutes-to-hours. Uses the same ghcr.io host rule in the Mend portal.",
+      "description": "Own app photonic (private, :main pinned by digest, the test deployment of photonic's main): same fast lane as meals, so a server push to photonic's main reaches the cluster in minutes-to-hours. Uses the same ghcr.io host rule.",
       "matchPackageNames": ["ghcr.io/maxmac99/photonic"],
       "groupName": "photonic",
       "schedule": [],
