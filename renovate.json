@@ -70,6 +70,13 @@
       "automerge": true
     },
     {
+      "description": "Own app photonic (private, :main pinned by digest, the test deployment of photonic's main): same fast lane as meals, so a server push to photonic's main reaches the cluster in minutes-to-hours. Uses the same ghcr.io host rule in the Mend portal.",
+      "matchPackageNames": ["ghcr.io/maxmac99/photonic"],
+      "groupName": "photonic",
+      "schedule": [],
+      "automerge": true
+    },
+    {
       "description": "Own app trip: same fast lane as meals.",
       "matchPackageNames": ["ghcr.io/maxmac99/vacation-plan-view"],
       "groupName": "trip",
@@ -176,6 +183,17 @@
         "MEALS_DIGEST\\s*=\\s*[\"'](?<currentDigest>sha256:[0-9a-f]{64})[\"']"
       ],
       "depNameTemplate": "ghcr.io/maxmac99/meals",
+      "currentValueTemplate": "main",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Match the digest pin of photonic's :main image (apps/photonic.ts); same reasoning as MEALS_DIGEST",
+      "managerFilePatterns": ["/\\.ts$/"],
+      "matchStrings": [
+        "PHOTONIC_DIGEST\\s*=\\s*[\"'](?<currentDigest>sha256:[0-9a-f]{64})[\"']"
+      ],
+      "depNameTemplate": "ghcr.io/maxmac99/photonic",
       "currentValueTemplate": "main",
       "datasourceTemplate": "docker"
     },

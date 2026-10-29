@@ -103,6 +103,7 @@ const backupTargets = [
   { db: "grafana", host: postgresWinkelHost, secret: "postgres-grafana" },
   { db: "paperless", host: postgresWinkelHost, secret: "postgres-paperless" },
   { db: "immich", host: postgresWinkelHost, secret: "postgres-immich" },
+  { db: "photonic", host: postgresWinkelHost, secret: "postgres-photonic" },
 ];
 
 // Static NFS bind for the dump target.
