@@ -738,11 +738,12 @@ export {
 //    digest; from then on Renovate bumps it. Pull credentials:
 //    - Cluster: the shared `tripRegistryPullToken` (infrastructure/ghcr.ts),
 //      nothing new to set.
-//    - Renovate: developer.mend.io → MaxMac99/homelab-k8s (or the org) →
-//      Settings → Credentials → Add host rule: host `ghcr.io`, username
-//      `MaxMac99`, password = the same classic PAT (read:packages). This
-//      also fixes the `no-result` lookups for vacation-plan-view and
-//      foreman-server on the Dependency Dashboard.
+//    - Renovate: the `hostRules` entry in renovate.json, which reads the
+//      Mend secret `tripRegistryPullToken` (developer.mend.io →
+//      MaxMac99/homelab-k8s → Credentials → Secrets, the same classic PAT
+//      with read:packages). A host rule set only in the portal never reached
+//      the repo config. This also covers vacation-plan-view and
+//      foreman-server.
 //    ⚠️ Before the first rollout from upstream to the fork, check the meals
 //    DB backup — the fork's migrations (users.oidc_subject …) run forward
 //    and the upstream image cannot run against the result.
