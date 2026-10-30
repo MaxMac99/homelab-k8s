@@ -693,7 +693,7 @@ const mealsOidcProvider = new authentik.ProviderOauth2("meals-oidc-provider", {
     {
       // The iPhone app's callback (OIDCSignIn.swift in the fork).
       matching_mode: "strict",
-      url: "com.marcuslab.meals:/oidc/callback",
+      url: "de.mvissing.meals:/oidc/callback",
       redirect_uri_type: "authorization",
     },
   ],
