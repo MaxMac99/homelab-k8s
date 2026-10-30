@@ -246,6 +246,12 @@ const GATEWAY_ROUTING = JSON.stringify({
   budget: {},
 });
 
+// ⏸ Vorübergehend aus (2026-10-30, der Init-Container `playbooks` hing im
+// Crashloop). 0 Replicas statt das Modul zu entfernen, damit Namespace,
+// Secrets und Ingress stehen bleiben (attic im selben Namespace läuft
+// weiter). Zum Wiedereinschalten auf `true` setzen.
+const FOREMAN_ENABLED = false;
+
 export const foremanControlDeployment = new k8s.apps.v1.Deployment(
   "foreman-control",
   {
@@ -256,7 +262,7 @@ export const foremanControlDeployment = new k8s.apps.v1.Deployment(
     spec: {
       // State Machine + Outbox: genau eine Instanz (D-005); Migrationen
       // laufen beim Start (production_state -> run_migrations).
-      replicas: 1,
+      replicas: FOREMAN_ENABLED ? 1 : 0,
       strategy: { type: "Recreate" },
       selector: { matchLabels: { app: "foreman-control" } },
       template: {
