@@ -196,6 +196,9 @@ const mealsRunnerScaleSet = new k8s.helm.v3.Release(
               name: "runner",
               image: "ghcr.io/actions/actions-runner:latest",
               command: ["/home/runner/run.sh"],
+              // GitHub-hosted runners set USER=runner; the actions-runner
+              // image does not, and photonic's devshell runs `createdb $USER`.
+              env: [{ name: "USER", value: "runner" }],
             },
           ],
         },
@@ -229,6 +232,9 @@ const photonicRunnerScaleSet = new k8s.helm.v3.Release(
               name: "runner",
               image: "ghcr.io/actions/actions-runner:latest",
               command: ["/home/runner/run.sh"],
+              // GitHub-hosted runners set USER=runner; the actions-runner
+              // image does not, and photonic's devshell runs `createdb $USER`.
+              env: [{ name: "USER", value: "runner" }],
             },
           ],
         },
