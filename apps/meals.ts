@@ -76,8 +76,10 @@ import { authentikOutpostService } from "../auth/authentik-outpost";
 import {
   defaultAuthorizationFlow,
   defaultInvalidationFlow,
+  mappingId,
   oauth2ScopeMappings,
   proxyScopeMappings,
+  scopeMapping,
   signingKey,
 } from "../auth/authentik-config";
 import { forwardAuthOutpostRecord } from "../auth/authentik-forward-auth";
@@ -675,11 +677,19 @@ const mealsOidcProvider = new authentik.ProviderOauth2("meals-oidc-provider", {
   clientId: oidcClientId,
   clientType: "public",
   // ⚠️ Must be set explicitly — an API-created provider gets an empty list
-  // and rejects every login (apps/ha-mcp.ts).
-  grantTypes: ["authorization_code"],
+  // and rejects every login (apps/ha-mcp.ts). `refresh_token` keeps both
+  // clients signed in past the access token's lifetime.
+  grantTypes: ["authorization_code", "refresh_token"],
   authorizationFlow: defaultAuthorizationFlow.id,
   invalidationFlow: defaultInvalidationFlow.id,
-  propertyMappings: oauth2ScopeMappings,
+  // ⚠️ offline_access is what makes Authentik issue a refresh token at all.
+  // Without it Authentik drops the scope the clients ask for ("requested
+  // scopes not configured, setting to overlap"), and the app signs out each
+  // time the access token runs out.
+  propertyMappings: [
+    ...oauth2ScopeMappings,
+    mappingId(scopeMapping.offlineAccess),
+  ],
   // ⚠️ Required: without it the ID token is HS256, which meals refuses.
   signingKey,
   // ⚠️ Snake_case map keys — see apps/immich.ts.
