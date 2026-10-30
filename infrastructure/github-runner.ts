@@ -150,10 +150,101 @@ const foremanRunnerScaleSet = new k8s.helm.v3.Release(
   { dependsOn: [arcController, arcRunnerSA, arcRunnerClusterRoleBinding] },
 );
 
+// ServiceAccount ohne RBAC für App-Repos (2026-10-30): meals und photonic
+// brauchen keinen Cluster-Zugriff — cluster-admin bleibt homelab-k8s
+// vorbehalten, das `pulumi up` fährt. Kein Token im Pod gemountet.
+const arcRunnerUnprivilegedSA = new k8s.core.v1.ServiceAccount(
+  "arc-runner-unprivileged",
+  {
+    metadata: {
+      name: "arc-runner-unprivileged",
+      namespace: arcRunnersNamespace.metadata.name,
+    },
+    automountServiceAccountToken: false,
+  },
+);
+
+// meals- und photonic-Runner-Sets (2026-10-30): je ein Scale-Set pro Repo,
+// weil ein User-Account keine Org-Ebene hat. Beide Repos sind privat, daher
+// keine Fork-PRs. Der homelab-k8s-PAT ist ein classic PAT mit repo-Scope und
+// deckt beide Repos ab — kein eigenes Secret. Nur die Linux-Jobs laufen hier;
+// die iOS-Jobs laufen auf dem MacBook (nix-darwin, setup-Repo).
+// meals braucht dind: main-image/release bauen mit docker buildx. photonic
+// baut sein Image mit `nix build` und pusht per skopeo — kein Daemon nötig.
+const mealsRunnerScaleSet = new k8s.helm.v3.Release(
+  "meals-runner-set",
+  {
+    chart:
+      "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
+    version: "0.15.1",
+    namespace: arcRunnersNamespace.metadata.name,
+    values: {
+      githubConfigUrl: "https://github.com/MaxMac99/meals",
+      githubConfigSecret: githubPatSecret.metadata.name,
+      minRunners: 0,
+      maxRunners: 3,
+      runnerScaleSetName: "meals-runner",
+      containerMode: { type: "dind" },
+      template: {
+        spec: {
+          serviceAccountName: "arc-runner-unprivileged",
+          nodeSelector: {
+            "kubernetes.io/arch": "amd64",
+          },
+          containers: [
+            {
+              name: "runner",
+              image: "ghcr.io/actions/actions-runner:latest",
+              command: ["/home/runner/run.sh"],
+            },
+          ],
+        },
+      },
+    },
+  },
+  { dependsOn: [arcController, arcRunnerUnprivilegedSA] },
+);
+
+const photonicRunnerScaleSet = new k8s.helm.v3.Release(
+  "photonic-runner-set",
+  {
+    chart:
+      "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
+    version: "0.15.1",
+    namespace: arcRunnersNamespace.metadata.name,
+    values: {
+      githubConfigUrl: "https://github.com/MaxMac99/photonic",
+      githubConfigSecret: githubPatSecret.metadata.name,
+      minRunners: 0,
+      maxRunners: 3,
+      runnerScaleSetName: "photonic-runner",
+      template: {
+        spec: {
+          serviceAccountName: "arc-runner-unprivileged",
+          nodeSelector: {
+            "kubernetes.io/arch": "amd64",
+          },
+          containers: [
+            {
+              name: "runner",
+              image: "ghcr.io/actions/actions-runner:latest",
+              command: ["/home/runner/run.sh"],
+            },
+          ],
+        },
+      },
+    },
+  },
+  { dependsOn: [arcController, arcRunnerUnprivilegedSA] },
+);
+
 export {
   arcController,
   arcRunnerScaleSet,
   foremanRunnerScaleSet,
+  mealsRunnerScaleSet,
+  photonicRunnerScaleSet,
+  arcRunnerUnprivilegedSA,
   arcRunnerSA,
   arcRunnerClusterRoleBinding,
 };
