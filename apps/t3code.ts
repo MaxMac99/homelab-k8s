@@ -31,8 +31,11 @@
 //     nicht liefern kann. Auth macht T3 selbst (Pairing-Token = Passwort).
 //     Bewusst NICHT auf traefik-public.
 //
-// Isolation: kein ServiceAccount-Token, kein Host-Zugriff. Ein Agent mit
-// Vollzugriff kann den Pod beschädigen, nicht den Cluster. sudo im
+// Isolation: ServiceAccount nur mit der ClusterRole `view` (lesen ohne
+// Secrets, für Logs und Fehlersuche), kein Host-Zugriff. Ein Agent mit
+// Vollzugriff kann den Pod beschädigen und den Cluster lesen, nicht ändern.
+// `view` zeigt ConfigMaps und Klartext-env in Pod-Specs: Geheimes gehört in
+// Secrets. sudo im
 // Container bleibt (apt für Chromium-Libs bei jedem Start).
 //
 // Placement: maxdata (NVMe unter /fast), weg von brink-server, das als
@@ -86,6 +89,29 @@ export const t3Namespace = new k8s.core.v1.Namespace("t3code", {
   metadata: { name: "t3code" },
 });
 
+// Nur-Lese-Zugang für Agenten (Logs, Pods, Events in allen Namespaces) über
+// die eingebaute ClusterRole `view`: keine Secrets, kein Schreiben, kein exec.
+// Der Token rotiert, Kubernetes mountet ihn; `kubectl` findet ihn von selbst.
+const t3ServiceAccount = new k8s.core.v1.ServiceAccount("t3code", {
+  metadata: { name: "t3code", namespace: t3Namespace.metadata.name },
+});
+
+new k8s.rbac.v1.ClusterRoleBinding("t3code-view", {
+  metadata: { name: "t3code-view" },
+  roleRef: {
+    apiGroup: "rbac.authorization.k8s.io",
+    kind: "ClusterRole",
+    name: "view",
+  },
+  subjects: [
+    {
+      kind: "ServiceAccount",
+      name: t3ServiceAccount.metadata.name,
+      namespace: t3Namespace.metadata.name,
+    },
+  ],
+});
+
 // Repos, Worktrees und Rust-target-Verzeichnisse mehrerer Projekte.
 export const t3HomePVC = new k8s.core.v1.PersistentVolumeClaim("t3code-home", {
   metadata: { name: "t3code-home", namespace: t3Namespace.metadata.name },
@@ -124,7 +150,7 @@ if [ ! -e ${home}/.nix-profile ]; then
 fi
 . ${home}/.nix-profile/etc/profile.d/nix.sh
 
-for entry in node:nodejs_24 gh:gh direnv:direnv rg:ripgrep jq:jq; do
+for entry in node:nodejs_24 gh:gh direnv:direnv rg:ripgrep jq:jq kubectl:kubectl; do
   command -v "\${entry%%:*}" >/dev/null || nix profile install "nixpkgs#\${entry#*:}"
 done
 [ -e ${home}/.nix-profile/share/nix-direnv ] || nix profile install nixpkgs#nix-direnv
@@ -263,7 +289,8 @@ export const t3Deployment = new k8s.apps.v1.Deployment(
           },
         },
         spec: {
-          automountServiceAccountToken: false,
+          serviceAccountName: t3ServiceAccount.metadata.name,
+          automountServiceAccountToken: true,
           nodeSelector: {
             [ARCH_LABEL]: "amd64",
             ...onNode(MAXDATA),
