@@ -94,7 +94,7 @@ import {
 // manager. Kept out of the `image:` line on purpose: the generic image regex
 // would read `main@sha256:…` as the version.
 const MEALS_DIGEST =
-  "sha256:970f1d5a921025e348b00714a3ac91beb64f9af04e09df351f74fffca7b79911";
+  "sha256:c1cfbbfbf8ccef54fd2981eef4d3ca623715ebe7a3cebce1f434356f367721eb";
 
 // "Sign in with Authentik" (the app's own OIDC, not the forward auth on /app):
 // the OAuth2 provider in the Authentik section below and the Deployment's
