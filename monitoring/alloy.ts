@@ -229,7 +229,7 @@ loki.write "default" {
 
 const alloy = new k8s.helm.v3.Chart("alloy", {
   chart: "alloy",
-  version: "1.14.4",
+  version: "1.15.0",
   namespace: namespaceName,
   fetchOpts: {
     repo: "https://grafana.github.io/helm-charts",
