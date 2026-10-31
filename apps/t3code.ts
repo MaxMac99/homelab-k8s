@@ -72,7 +72,7 @@ const T3_VERSION = "0.1.5";
 // OpenCode 2 kommt als npm `@opencode/cli` (`opencode-ai` ist noch 1.x).
 // Gepinnt statt T3s Provider-Update, damit Pod und Config (setup-Repo)
 // zusammenpassen; `bootstrap.sh` gleicht beim Start an. Renovate-Spur wie T3.
-const OPENCODE_VERSION = "2.2.4";
+const OPENCODE_VERSION = "2.2.5";
 
 // Commit des setup-Repos, aus dem `bootstrap.sh` die opencode-Config
 // (Skills, Commands, Agents, AGENTS.md, Permissions) baut — dieselbe wie auf
