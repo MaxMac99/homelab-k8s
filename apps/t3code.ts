@@ -67,7 +67,7 @@ const t3Port = 3773;
 // `exec t3 serve` gestarteter Server bekommt nur einen Copy-Befehl. Deshalb
 // pinnt Renovate die Version (npm `t3`, eigene Automerge-Spur ohne
 // Schedule), und `bootstrap.sh` gleicht beim Start per `t3 update` an.
-const T3_VERSION = "0.1.5";
+const T3_VERSION = "0.1.6";
 
 // OpenCode 2 kommt als npm `@opencode/cli` (`opencode-ai` ist noch 1.x).
 // Gepinnt statt T3s Provider-Update, damit Pod und Config (setup-Repo)
