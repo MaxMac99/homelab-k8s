@@ -86,6 +86,13 @@
       "automerge": true
     },
     {
+      "description": "The meals agent sidecar (ghcr.io/maxmac99/meals-agent, :main pinned by digest in MEALS_AGENT_DIGEST): same fast lane as meals, its own group so the PR names it. The fork's agent-image.yml usually writes the digest first; Renovate is the fallback. Until the image exists (the pin is 64 zeros) its lookup returns no-result, which is expected.",
+      "matchPackageNames": ["ghcr.io/maxmac99/meals-agent"],
+      "groupName": "meals-agent",
+      "schedule": [],
+      "automerge": true
+    },
+    {
       "description": "Own app trip: same fast lane as meals.",
       "matchPackageNames": ["ghcr.io/maxmac99/vacation-plan-view"],
       "groupName": "trip",
@@ -133,6 +140,7 @@
       "description": "Notify on every update of these apps via a reviewer ping. assignAutomerge keeps the ping even when the PR automerges.",
       "matchPackageNames": [
         "ghcr.io/maxmac99/meals",
+        "ghcr.io/maxmac99/meals-agent",
         "ghcr.io/immich-app/immich-server",
         "ghcr.io/immich-app/immich-charts/immich",
         "ghcr.io/paperless-ngx/paperless-ngx",
@@ -192,6 +200,17 @@
         "MEALS_DIGEST\\s*=\\s*[\"'](?<currentDigest>sha256:[0-9a-f]{64})[\"']"
       ],
       "depNameTemplate": "ghcr.io/maxmac99/meals",
+      "currentValueTemplate": "main",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Match the digest pin of the meals agent sidecar's :main image (apps/meals.ts); same reasoning as MEALS_DIGEST. The pin is 64 zeros until the image exists, and the first real digest switches the sidecar on",
+      "managerFilePatterns": ["/\\.ts$/"],
+      "matchStrings": [
+        "MEALS_AGENT_DIGEST\\s*=\\s*[\"'](?<currentDigest>sha256:[0-9a-f]{64})[\"']"
+      ],
+      "depNameTemplate": "ghcr.io/maxmac99/meals-agent",
       "currentValueTemplate": "main",
       "datasourceTemplate": "docker"
     },
