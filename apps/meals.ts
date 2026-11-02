@@ -104,7 +104,7 @@ import {
 // manager. Kept out of the `image:` line on purpose: the generic image regex
 // would read `main@sha256:…` as the version.
 const MEALS_DIGEST =
-  "sha256:3c6345a25a9ff9e9a4a0d32da8e7ff2e2ca9113db2b9bfe601bf0fb702b2bf28";
+  "sha256:0a092ebef1dc869b5d3710564d987ce514bb2c00c9d1cc5eb16023f4c3d46353";
 
 // Digest of ghcr.io/maxmac99/meals-agent:main, the chat's agent sidecar.
 // Written by the fork's agent-image.yml rollout job (a sed over exactly this
