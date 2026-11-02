@@ -61,6 +61,14 @@
 // holds its database (databases/postgresql.ts) — one site, no HA wanted, and
 // the DB never takes a cross-site hop. amd64 only: winkel-pi is the estate's
 // only arm64 node.
+//
+// The in-app chat (web and iPhone) is answered by the **agent sidecar**
+// (`ghcr.io/maxmac99/meals-agent`, the fork's Dockerfile.agent; OPERATIONS.md
+// "Agent sidecar"): the unmodified `claude` CLI on the household's Claude
+// subscription, with Meals' own MCP endpoint as its only tools. The server
+// still never calls a model; it hands each chat turn to the sidecar over the
+// cluster network. The sidecar has no Ingress — only the meals pod reaches it.
+// It exists only once `MEALS_AGENT_DIGEST` names a real image (see there).
 
 import * as k8s from "@pulumi/kubernetes";
 import * as authentik from "@pulumi/authentik";
@@ -69,7 +77,9 @@ import { activeClusterIssuer } from "../infrastructure/cert-manager";
 import { ghcrPullSecret } from "../infrastructure/ghcr";
 import {
   ARCH_LABEL,
+  BRINK_SERVER,
   brinkSite,
+  onNode,
   publicIngressClass,
 } from "../infrastructure/sites";
 import { authentikOutpostService } from "../auth/authentik-outpost";
@@ -96,12 +106,40 @@ import {
 const MEALS_DIGEST =
   "sha256:557855391659f04133efc51825fc2fd66e49f09221dcbe29ba72711b3b0d450a";
 
+// Digest of ghcr.io/maxmac99/meals-agent:main, the chat's agent sidecar.
+// Written by the fork's agent-image.yml rollout job (a sed over exactly this
+// `const MEALS_AGENT_DIGEST =` … `;` block, the same as main-image.yml does for
+// MEALS_DIGEST — keep the two-line shape) and by Renovate's
+// MEALS_AGENT_DIGEST manager.
+//
+// ⚠️ The zeros are a placeholder, not a digest: no image exists until the
+// meals PR #42 (the sidecar) is merged and agent-image.yml has run once. Its
+// rollout replaces them with the real digest, and that commit is what turns
+// the chat on — while the placeholder stands, `agentEnabled` is false and this
+// file creates none of the agent's resources and sets no AGENT_* env, so it can
+// be merged and deployed before the image exists.
+const MEALS_AGENT_DIGEST =
+  "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+const agentEnabled = !/^sha256:0{64}$/.test(MEALS_AGENT_DIGEST);
+
+const config = new pulumi.Config();
+
 // "Sign in with Authentik" (the app's own OIDC, not the forward auth on /app):
 // the OAuth2 provider in the Authentik section below and the Deployment's
 // OIDC_* env read the same two values. A public client's id is no secret.
 const mealsHost = "meals.mvissing.de";
 const oidcClientId = "meals";
 const oidcSlug = "meals-login";
+// The public URL, as every other app here dials Authentik; a token's `iss`
+// must match it exactly. The server and the agent sidecar both read it — the
+// sidecar finds the token endpoint through its discovery document.
+const oidcIssuer = `https://auth.mvissing.de/application/o/${oidcSlug}/`;
+
+// The agent sidecar's names. Fixed strings rather than resource outputs,
+// because the meals Deployment names the sidecar's Service before it exists
+// in this file.
+const agentName = "meals-agent";
+const agentPort = 8100;
 
 const namespace = new k8s.core.v1.Namespace("meals", {
   metadata: {
@@ -161,6 +199,126 @@ const mealsConfig = new k8s.core.v1.Secret("meals-config", {
     DATABASE_URL: pulumi.interpolate`postgresql+asyncpg://meals:${mealsDbPassword}@${postgresqlHost}:5432/meals`,
   },
 });
+
+// The gate of both Authentik applications in the Authentik section below:
+// only members of meals-users may open the web client or sign in.
+// ⚠️ The group starts empty — after the first deploy, add yourself in
+// Directory → Groups → meals-users, or /app answers 403 even after a
+// successful login. The API/MCP paths stay outside Authentik entirely (see
+// the header comment). Declared up here, not beside its policy bindings,
+// because the agent's service account below is a member.
+//
+// ⚠️ Membership of people stays a UI action (no `users` here); the agent's
+// account joins from its own side (`groups` on the User). Setting `users` on
+// this group later would make Pulumi own the whole list and drop everyone
+// added by hand.
+const mealsUsersGroup = new authentik.Group("meals-users-group", {
+  name: "meals-users",
+});
+
+// ---------------------------------------------------------------------------
+// The agent sidecar's identity — only while MEALS_AGENT_DIGEST is real.
+//
+// The sidecar signs in to /mcp by itself with the OAuth2 `client_credentials`
+// grant, so a chat turn never rides on a person's token: it acts as its own
+// Meals account. It asks the **same** provider the people use ("Meals Login",
+// below), so its token carries the issuer OIDC_ISSUER names and the audience
+// OIDC_CLIENT_ID names, and the server needs no OIDC_AUDIENCES entry.
+//
+// Authentik's form of that grant: client_id is the provider's, client_secret
+// is base64("<username>:<app password>"), which Authentik reads as a service
+// account and one of its app-password tokens (docs.goauthentik.io, "Client
+// credentials"). So no confidential provider and no second client id.
+function mealsAgentIdentity() {
+  // ⚠️ The email is not decoration: the first request with this account's
+  // token creates its Meals account, and a Meals account needs an address.
+  // It must be unique among Meals accounts; nothing is ever sent to it.
+  const user = new authentik.User("meals-agent-user", {
+    username: agentName,
+    name: "Meals Agent",
+    email: "meals-agent@mvissing.de",
+    type: "service_account",
+    // The client_credentials grant checks the application's policy bindings
+    // against this user — outside meals-users Authentik refuses the token.
+    groups: [mealsUsersGroup.id],
+  });
+
+  // The app password the client secret is made of. Non-expiring: an expired
+  // one would stop the chat silently in a year, with nothing here to renew
+  // it. `retrieveKey` puts the key into state (a secret output) — that is the
+  // point, it is never typed anywhere.
+  const token = new authentik.Token("meals-agent-token", {
+    identifier: "meals-agent-client-credentials",
+    description: "Meals agent sidecar: client_credentials for /mcp",
+    user: user.id.apply(Number),
+    intent: "app_password",
+    expiring: false,
+    retrieveKey: true,
+  });
+
+  const clientSecret = pulumi
+    .secret(pulumi.interpolate`${user.username}:${token.key}`)
+    .apply((pair) => Buffer.from(pair).toString("base64"));
+
+  // Both of the agent's secrets in one object. The meals server reads only
+  // AGENT_CLAUDE_TOKEN (it hands the subscription token to the sidecar with
+  // each turn); the sidecar reads only AGENT_OIDC_CLIENT_SECRET.
+  const secret = new k8s.core.v1.Secret(
+    "meals-agent-secret",
+    {
+      metadata: {
+        name: agentName,
+        namespace: namespace.metadata.name,
+      },
+      type: "Opaque",
+      stringData: {
+        // `claude setup-token`'s output, valid for a year — renew it before
+        // it runs out (pulumi config set --secret mealsAgentClaudeToken).
+        AGENT_CLAUDE_TOKEN: config.requireSecret("mealsAgentClaudeToken"),
+        AGENT_OIDC_CLIENT_SECRET: clientSecret,
+      },
+    },
+    { dependsOn: [namespace] },
+  );
+
+  return { user, token, secret };
+}
+
+const agentIdentity = agentEnabled ? mealsAgentIdentity() : undefined;
+
+// The meals server's half of the chat: where the sidecar is, who may chat and
+// the subscription token. Empty while the agent is off — without AGENT_URL
+// the server tells the clients the chat is off and its endpoints answer 404.
+const agentServerEnv = agentIdentity
+  ? [
+      {
+        name: "AGENT_URL",
+        value: pulumi.interpolate`http://${agentName}.${namespace.metadata.name}.svc.cluster.local:${agentPort}`,
+      },
+      {
+        // Who may chat: the provider subjects (`sub`), comma-separated. One
+        // subscription backs every turn, so keep it to the household.
+        //
+        // ⚠️ No way to read a subject from the app (GET /auth/me does not
+        // show it). After the person has signed in once, read it from the
+        // database: `select subject, email from users;` in the `meals`
+        // database (kubectl exec into the postgres primary, psql -d meals),
+        // then `pulumi config set mealsAgentSubjects '<sub>,<sub>'`. Empty
+        // means nobody sees the chat.
+        name: "AGENT_SUBJECTS",
+        value: config.get("mealsAgentSubjects") ?? "",
+      },
+      {
+        name: "AGENT_CLAUDE_TOKEN",
+        valueFrom: {
+          secretKeyRef: {
+            name: agentIdentity.secret.metadata.name,
+            key: "AGENT_CLAUDE_TOKEN",
+          },
+        },
+      },
+    ]
+  : [];
 
 const mealsDeployment = new k8s.apps.v1.Deployment(
   "meals",
@@ -231,10 +389,9 @@ const mealsDeployment = new k8s.apps.v1.Deployment(
                   value: "false",
                 },
                 {
-                  // The public URL, as every other app here dials Authentik;
-                  // the token's `iss` must match it exactly.
+                  // See oidcIssuer.
                   name: "OIDC_ISSUER",
-                  value: `https://auth.mvissing.de/application/o/${oidcSlug}/`,
+                  value: oidcIssuer,
                 },
                 {
                   name: "OIDC_CLIENT_ID",
@@ -249,6 +406,7 @@ const mealsDeployment = new k8s.apps.v1.Deployment(
                   name: "OIDC_TRUST_EMAIL",
                   value: "true",
                 },
+                ...agentServerEnv,
               ],
               livenessProbe: {
                 httpGet: {
@@ -296,6 +454,7 @@ const mealsDeployment = new k8s.apps.v1.Deployment(
       mealsDbSecret,
       mealsConfig,
       registryPullSecret,
+      ...(agentIdentity ? [agentIdentity.secret] : []),
     ],
   },
 );
@@ -320,6 +479,244 @@ const mealsService = new k8s.core.v1.Service("meals-service", {
     ],
   },
 });
+
+// ---------------------------------------------------------------------------
+// The agent sidecar's workload — only while MEALS_AGENT_DIGEST is real.
+function mealsAgentWorkload(identity: NonNullable<typeof agentIdentity>) {
+  // The agent's transcripts (CLAUDE_CONFIG_DIR) and each turn's working
+  // directory live here, so a chat resumes where it stopped after a restart
+  // or a new image. Small: transcripts are text, and photos are never stored.
+  //
+  // ⚠️ local-path is node-local, so the pod below is pinned to the **node**
+  // (brink-server), not just the site: the first binding decides for good
+  // where this volume lives. Losing it only loses chat continuity — the
+  // chats themselves are in the meals database.
+  const pvc = new k8s.core.v1.PersistentVolumeClaim(
+    "meals-agent-data",
+    {
+      metadata: {
+        name: "meals-agent-data",
+        namespace: namespace.metadata.name,
+      },
+      spec: {
+        accessModes: ["ReadWriteOnce"],
+        storageClassName: "local-path",
+        resources: {
+          requests: {
+            storage: "2Gi",
+          },
+        },
+      },
+    },
+    { dependsOn: [namespace] },
+  );
+
+  const deployment = new k8s.apps.v1.Deployment(
+    agentName,
+    {
+      metadata: {
+        name: agentName,
+        namespace: namespace.metadata.name,
+        labels: {
+          app: agentName,
+        },
+      },
+      spec: {
+        // The server runs one turn at a time anyway, and the RWO volume
+        // cannot be shared: Recreate, never two pods on the transcripts.
+        replicas: 1,
+        strategy: {
+          type: "Recreate",
+        },
+        selector: {
+          matchLabels: {
+            app: agentName,
+          },
+        },
+        template: {
+          metadata: {
+            labels: {
+              app: agentName,
+            },
+          },
+          spec: {
+            nodeSelector: {
+              [ARCH_LABEL]: "amd64",
+              ...onNode(BRINK_SERVER),
+            },
+            imagePullSecrets: [
+              {
+                name: registryPullSecret.metadata.name,
+              },
+            ],
+            // Dockerfile.agent runs as uid/gid 1000 (`agent`).
+            //
+            // ⚠️ fsGroup does nothing on local-path — its volumes are
+            // hostPath, which the kubelet never chowns (apps/t3code.ts hits
+            // the same). The volume is writable anyway because the
+            // provisioner creates every directory `mkdir -m 0777`
+            // (infrastructure/local-path.ts); the sidecar and `claude`
+            // create their subdirectories themselves. fsGroup stays for the
+            // day this moves to a storage class that honours it.
+            securityContext: {
+              runAsUser: 1000,
+              runAsGroup: 1000,
+              runAsNonRoot: true,
+              fsGroup: 1000,
+            },
+            volumes: [
+              {
+                name: "data",
+                persistentVolumeClaim: {
+                  claimName: pvc.metadata.name,
+                },
+              },
+            ],
+            containers: [
+              {
+                name: agentName,
+                // Digest-pinned `:main` of the fork, see MEALS_AGENT_DIGEST.
+                image: `ghcr.io/maxmac99/meals-agent:main@${MEALS_AGENT_DIGEST}`,
+                ports: [
+                  {
+                    containerPort: agentPort,
+                    name: "http",
+                    protocol: "TCP",
+                  },
+                ],
+                env: [
+                  {
+                    // The meals Service, in-cluster: the sidecar reads the
+                    // skill from <MEALS_URL>/skill and the agent's tools
+                    // from <MEALS_URL>/mcp. It sends no Origin header, so
+                    // the MCP endpoint's browser-origin check lets it in.
+                    name: "MEALS_URL",
+                    value: pulumi.interpolate`http://${mealsService.metadata.name}.${namespace.metadata.name}.svc.cluster.local`,
+                  },
+                  {
+                    // The same issuer the server checks tokens against.
+                    // ⚠️ It is the public name, so the token request leaves
+                    // the pod through the site's ingress VIP, exactly like
+                    // the meals server's own JWKS fetch already does.
+                    name: "OIDC_ISSUER",
+                    value: oidcIssuer,
+                  },
+                  {
+                    name: "AGENT_OIDC_CLIENT_ID",
+                    value: oidcClientId,
+                  },
+                  {
+                    name: "AGENT_OIDC_CLIENT_SECRET",
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: identity.secret.metadata.name,
+                        key: "AGENT_OIDC_CLIENT_SECRET",
+                      },
+                    },
+                  },
+                  {
+                    // `email` is what the server needs to make the agent's
+                    // Meals account; `openid profile` as the people get.
+                    name: "AGENT_OIDC_SCOPE",
+                    value: "openid email profile",
+                  },
+                  {
+                    name: "LOG_LEVEL",
+                    value: "info",
+                  },
+                ],
+                volumeMounts: [
+                  {
+                    // The image's VOLUME; its AGENT_WORK_DIR (…/work) and
+                    // CLAUDE_CONFIG_DIR (…/claude) both point inside it.
+                    name: "data",
+                    mountPath: "/var/lib/meals-agent",
+                  },
+                ],
+                livenessProbe: {
+                  httpGet: {
+                    // Answers 200 without touching the server or the model.
+                    path: "/healthz",
+                    port: agentPort,
+                  },
+                  initialDelaySeconds: 10,
+                  periodSeconds: 30,
+                  timeoutSeconds: 5,
+                  failureThreshold: 5,
+                },
+                readinessProbe: {
+                  httpGet: {
+                    path: "/healthz",
+                    port: agentPort,
+                  },
+                  initialDelaySeconds: 3,
+                  periodSeconds: 10,
+                  timeoutSeconds: 3,
+                  failureThreshold: 6,
+                },
+                // `claude` is a Node-sized process per turn; one turn at a
+                // time across the server, so 1Gi is the ceiling of one.
+                resources: {
+                  requests: {
+                    cpu: "100m",
+                    memory: "512Mi",
+                  },
+                  limits: {
+                    cpu: "1",
+                    memory: "1Gi",
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+    {
+      dependsOn: [namespace, pvc, identity.secret, registryPullSecret],
+    },
+  );
+
+  // ClusterIP only, no Ingress on either edge: the meals pod is the sidecar's
+  // one caller (AGENT_URL).
+  //
+  // ⚠️ POST /turns has no auth of its own — the caller brings the Claude
+  // token, and the sidecar adds its own Meals sign-in. So any pod in the
+  // cluster that holds *some* Claude token could drive Meals' MCP as the
+  // agent's account. Accepted like every other ClusterIP here (the estate
+  // has no NetworkPolicies); a policy admitting only `app=meals` is the fix
+  // if that ever matters.
+  const service = new k8s.core.v1.Service(
+    "meals-agent-service",
+    {
+      metadata: {
+        name: agentName,
+        namespace: namespace.metadata.name,
+      },
+      spec: {
+        type: "ClusterIP",
+        selector: {
+          app: agentName,
+        },
+        ports: [
+          {
+            port: agentPort,
+            targetPort: agentPort,
+            name: "http",
+            protocol: "TCP",
+          },
+        ],
+      },
+    },
+    { dependsOn: [namespace] },
+  );
+
+  return { pvc, deployment, service };
+}
+
+const agentWorkload = agentIdentity
+  ? mealsAgentWorkload(agentIdentity)
+  : undefined;
 
 // ExternalName alias for the outpost, so the callback-path Ingresses below can
 // reach it from this namespace — a standard Ingress backend only resolves
@@ -356,6 +753,18 @@ const outpostAliasService = new k8s.core.v1.Service("meals-outpost-alias", {
 //             Set-Cookie/redirect response and the login loops forever
 //             (trip.ts). Traefik's rule-length priority makes the longer
 //             prefixes win over `/`.
+//
+// The chat (`/chats/…`, and its event stream `/chats/*/events/stream`, SSE)
+// falls under `/`: no forward auth, the app's own bearer auth — iOS reads the
+// stream too, and it cannot follow the outpost's redirect. Checked for the
+// stream, nothing needed changing: neither edge has a buffering (or
+// compress) middleware, on these Ingresses or on the entrypoints
+// (infrastructure/traefik.ts, traefik-public.ts), and Traefik's proxy flushes
+// a `text/event-stream` response as it is written. No writeTimeout is set,
+// so Traefik v3's default of none applies and a long stream is not cut;
+// `readTimeout` covers reading the request, which a GET has finished at once.
+// ⚠️ Adding a Buffering or Compress middleware to `/` would turn the chat's
+// events into bursts (OPERATIONS.md "Agent sidecar", step 5).
 const mealsRootRules = [
   {
     host: mealsHost,
@@ -652,15 +1061,9 @@ new authentik.OutpostProviderAttachment("meals-outpost-attachment", {
   protocolProvider: mealsProxyProvider.providerProxyId.apply(Number),
 });
 
-// Step 4(d)'s gate: only members of meals-users may open the web client.
-// ⚠️ The group starts empty — after the first deploy, add yourself in
-// Directory → Groups → meals-users, or /app answers 403 even after a
-// successful login. The API/MCP paths stay outside Authentik entirely (see
-// the header comment).
-const mealsUsersGroup = new authentik.Group("meals-users-group", {
-  name: "meals-users",
-});
-
+// Step 4(d)'s gate: only members of meals-users may open the web client
+// (mealsUsersGroup, declared above the meals Deployment because the agent's
+// service account joins it).
 new authentik.PolicyBinding("meals-group-binding", {
   target: mealsApplication.uuid,
   group: mealsUsersGroup.id,
@@ -679,7 +1082,23 @@ const mealsOidcProvider = new authentik.ProviderOauth2("meals-oidc-provider", {
   // ⚠️ Must be set explicitly — an API-created provider gets an empty list
   // and rejects every login (apps/ha-mcp.ts). `refresh_token` keeps both
   // clients signed in past the access token's lifetime.
-  grantTypes: ["authorization_code", "refresh_token"],
+  //
+  // `client_credentials` only with the agent sidecar: it is how the sidecar
+  // signs in to /mcp as its service account (mealsAgentIdentity).
+  // ⚠️ Authentik's docs do not say whether a **public** provider accepts this
+  // grant. Verify after the first deploy with the agent on (OPERATIONS.md
+  // "Agent sidecar", step 2.5): `curl -s -d grant_type=client_credentials
+  // -d client_id=meals -d client_secret=<AGENT_OIDC_CLIENT_SECRET from the
+  // meals-agent Secret> -d 'scope=openid email profile'
+  // https://auth.mvissing.de/application/o/token/` must return a token whose
+  // `iss` is oidcIssuer, `aud` is `meals` and which has an `email`. If it is
+  // refused, the sidecar needs a confidential provider of its own with the
+  // same signing key, and its client id in the server's OIDC_AUDIENCES.
+  grantTypes: [
+    "authorization_code",
+    "refresh_token",
+    ...(agentEnabled ? ["client_credentials"] : []),
+  ],
   authorizationFlow: defaultAuthorizationFlow.id,
   invalidationFlow: defaultInvalidationFlow.id,
   // ⚠️ offline_access is what makes Authentik issue a refresh token at all.
@@ -739,6 +1158,10 @@ export {
   mealsPublicOutpostIngress,
   outpostAliasService as mealsOutpostAliasService,
 };
+
+// `undefined` while MEALS_AGENT_DIGEST is the placeholder.
+export const mealsAgentDeployment = agentWorkload?.deployment;
+export const mealsAgentService = agentWorkload?.service;
 
 // Setup:
 //
@@ -805,6 +1228,22 @@ export {
 //    - curl https://meals.mvissing.de/ → JSON landing (the API's own gate)
 //    - iOS login works; shopping list loads offline in airplane mode
 //    - kubectl get pods -n meals → 1/1 Ready on brink-server
+//
+// 9. The chat (agent sidecar; OPERATIONS.md "Agent sidecar"):
+//    a. Merge order: the meals PR #42 first; its agent-image.yml run builds
+//       ghcr.io/maxmac99/meals-agent and commits the digest into
+//       MEALS_AGENT_DIGEST here, which switches everything below on. This
+//       file can merge before that — with the placeholder nothing happens.
+//    b. The subscription token is stack config already
+//       (`mealsAgentClaudeToken`, from `claude setup-token`, valid one year).
+//    c. After the deploy, verify the client_credentials grant (the curl at
+//       mealsOidcProvider's grantTypes). The service account `meals-agent`,
+//       its app password and its meals-users membership are code.
+//    d. Who may chat: read the subjects (`select subject, email from users;`
+//       in the meals database), then
+//       `pulumi config set mealsAgentSubjects '<sub>,<sub>'` and deploy.
+//    e. Verify: kubectl get pods -n meals → meals-agent 1/1 Ready;
+//       the chat button shows in the web client and answers.
 //
 // Deliberately unset:
 //   - SMTP — password reset returns a 503 and the app hides the option via
