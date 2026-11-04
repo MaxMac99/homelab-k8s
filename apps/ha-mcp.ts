@@ -95,13 +95,7 @@ const haMcpOauth2Provider = new authentik.ProviderOauth2(
     // *empty* list — unlike the UI, which pre-selects them — and Authentik then
     // rejects every login with "invalid_request: The request is otherwise
     // malformed" (logged as "Invalid grant_type for provider").
-    //
-    // `client_credentials` is for the Meals agent sidecar (apps/meals.ts),
-    // which explores Home Assistant here when it maps an appliance and has
-    // no browser to log in with. Authentik checks that grant against the
-    // application's policy bindings too, so it opens nothing to anyone the
-    // bindings below do not already let in.
-    grantTypes: ["authorization_code", "refresh_token", "client_credentials"],
+    grantTypes: ["authorization_code", "refresh_token"],
     authorizationFlow: defaultAuthorizationFlow.id,
     invalidationFlow: defaultInvalidationFlow.id,
     // offline_access lets clients that ask for it (OpenCode, via its
@@ -278,6 +272,10 @@ const haMcpDeployment = new k8s.apps.v1.Deployment(
                     "https://chatgpt.com/aip/*/oauth/callback",
                     "http://localhost/callback",
                     "http://127.0.0.1/callback",
+                    // Meals connects itself once from its Settings and keeps
+                    // the session (apps/meals.ts, HA_MCP_URL): its sign-in
+                    // comes back to the server, never to a loopback client.
+                    "https://meals.mvissing.de/home/connection/callback",
                   ].join(","),
                 },
                 {
@@ -453,16 +451,12 @@ const haMcpPublicIngress = new k8s.networking.v1.Ingress(
   },
 );
 
-// What the Meals agent sidecar signs in with: this provider's client id and
-// the application's issuer (apps/meals.ts binds its service account here).
-const haMcpOidcClientId = oauthClientId.result;
-const haMcpOidcIssuer = pulumi.interpolate`https://auth.mvissing.de/application/o/${haMcpApplication.slug}/`;
+// The MCP endpoint as remote clients reach it, which Meals connects to.
+const haMcpUrl = `${haMcpBaseUrl}/mcp`;
 
 export {
   namespace as haMcpNamespace,
-  haMcpApplication,
-  haMcpOidcClientId,
-  haMcpOidcIssuer,
+  haMcpUrl,
   haMcpDeployment,
   haMcpService,
   haMcpIngress,
