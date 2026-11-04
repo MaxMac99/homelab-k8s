@@ -1276,7 +1276,7 @@ export const mealsAgentService = agentWorkload?.service;
 // 10. Home Assistant (the fork's docs/plans/home-assistant.md; OPERATIONS.md
 //     "Home Assistant"), through ha-mcp only — nothing to do in Home
 //     Assistant itself:
-//     a. Merge order: the meals PR #52 first. Until its images run here
+//     a. Merge order: the meals PR #53 first. Until its images run here
 //        HA_MCP_URL is read by nobody, so this file can merge before.
 //     b. Deploy (ha-mcp then allows Meals' callback,
 //        https://meals.mvissing.de/home/connection/callback). Then in Meals:
