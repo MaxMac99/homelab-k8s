@@ -158,15 +158,20 @@ const scratchVolume = (name: string, dir: string) => {
       },
     },
   });
-  return new k8s.core.v1.PersistentVolumeClaim(name, {
-    metadata: { name, namespace: t3Namespace.metadata.name },
-    spec: {
-      accessModes: ["ReadWriteOnce"],
-      storageClassName: scratchClass,
-      volumeName: pv.metadata.name,
-      resources: { requests: { storage: "100Gi" } },
+  return new k8s.core.v1.PersistentVolumeClaim(
+    name,
+    {
+      metadata: { name, namespace: t3Namespace.metadata.name },
+      spec: {
+        accessModes: ["ReadWriteOnce"],
+        storageClassName: scratchClass,
+        volumeName: pv.metadata.name,
+        resources: { requests: { storage: "100Gi" } },
+      },
     },
-  });
+    // Fester Name: Ersetzen (spec ist unveränderlich) muss erst löschen.
+    { deleteBeforeReplace: true },
+  );
 };
 
 // Repos, Worktrees und Rust-target-Verzeichnisse mehrerer Projekte.
