@@ -99,6 +99,7 @@ import {
   postgresqlHost,
   postgresqlNamespace,
 } from "../databases/postgresql";
+import { haMcpUrl } from "./ha-mcp";
 
 // Digest of ghcr.io/maxmac99/meals:main, bumped by Renovate's MEALS_DIGEST
 // manager. Kept out of the `image:` line on purpose: the generic image regex
@@ -320,6 +321,32 @@ const agentServerEnv = agentIdentity
     ]
   : [];
 
+// ---------------------------------------------------------------------------
+// Home Assistant (the fork's docs/plans/home-assistant.md, decision 10;
+// OPERATIONS.md "Home Assistant"): Meals reaches Home Assistant only through
+// ha-mcp (apps/ha-mcp.ts), never its REST or WebSocket API, and needs
+// nothing in Home Assistant itself. A cook step's action ("preheat the oven")
+// calls ha-mcp's ha_call_service, a waited signal ("core at 54 °C") is read
+// with ha_get_state while a run waits, and each agent turn gets ha-mcp from
+// the server to explore Home Assistant when it maps an appliance.
+//
+// ha-mcp admits only tokens it issued after a browser sign-in, so Meals is
+// its OAuth client: someone connects it once in Meals' Settings (setup step
+// 10), and the server keeps and refreshes that session in its database. The
+// public URL, because the sign-in runs in the browser and Meals reads the
+// OAuth endpoints from this server's metadata.
+//
+// ⚠️ ha-mcp acts as the Home Assistant **administrator** whose token it
+// holds (haMcpHomeassistantToken), so Meals and its agent can switch
+// anything there. The agent is told to use those tools only to explore; a
+// step's action runs through Meals, during an open cooking run.
+const homeAssistantServerEnv = [
+  {
+    name: "HA_MCP_URL",
+    value: haMcpUrl,
+  },
+];
+
 const mealsDeployment = new k8s.apps.v1.Deployment(
   "meals",
   {
@@ -407,6 +434,7 @@ const mealsDeployment = new k8s.apps.v1.Deployment(
                   value: "true",
                 },
                 ...agentServerEnv,
+                ...homeAssistantServerEnv,
               ],
               livenessProbe: {
                 httpGet: {
@@ -1244,6 +1272,27 @@ export const mealsAgentService = agentWorkload?.service;
 //       `pulumi config set mealsAgentSubjects '<sub>,<sub>'` and deploy.
 //    e. Verify: kubectl get pods -n meals → meals-agent 1/1 Ready;
 //       the chat button shows in the web client and answers.
+//
+// 10. Home Assistant (the fork's docs/plans/home-assistant.md; OPERATIONS.md
+//     "Home Assistant"), through ha-mcp only — nothing to do in Home
+//     Assistant itself:
+//     a. Merge order: the meals PR #53 first. Until its images run here
+//        HA_MCP_URL is read by nobody, so this file can merge before.
+//     b. Deploy (ha-mcp then allows Meals' callback,
+//        https://meals.mvissing.de/home/connection/callback). Then in Meals:
+//        Settings → Home Assistant → "Connect Home Assistant", sign in at
+//        Authentik as an admin (ha-mcp's binding), and the browser comes
+//        back to Settings saying it is connected.
+//     c. Verify:
+//        - curl -s https://meals.mvissing.de/client-config | jq .home_assistant
+//          → true
+//        - kubectl logs -n meals deploy/meals | grep home\. → home.connected,
+//          no home.states_unread.
+//        - In the app: an appliance's chat → "Map in Home Assistant"; a
+//          recipe adapted; a cooking run's "preheat" reaches the oven.
+//        If Settings says "failed" with home-connect-refused, ha-mcp did not
+//        take the callback: check OIDC_ALLOWED_CLIENT_REDIRECT_URIS in
+//        apps/ha-mcp.ts against the address in the failure.
 //
 // Deliberately unset:
 //   - SMTP — password reset returns a 503 and the app hides the option via

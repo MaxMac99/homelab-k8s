@@ -272,6 +272,10 @@ const haMcpDeployment = new k8s.apps.v1.Deployment(
                     "https://chatgpt.com/aip/*/oauth/callback",
                     "http://localhost/callback",
                     "http://127.0.0.1/callback",
+                    // Meals connects itself once from its Settings and keeps
+                    // the session (apps/meals.ts, HA_MCP_URL): its sign-in
+                    // comes back to the server, never to a loopback client.
+                    "https://meals.mvissing.de/home/connection/callback",
                   ].join(","),
                 },
                 {
@@ -447,8 +451,12 @@ const haMcpPublicIngress = new k8s.networking.v1.Ingress(
   },
 );
 
+// The MCP endpoint as remote clients reach it, which Meals connects to.
+const haMcpUrl = `${haMcpBaseUrl}/mcp`;
+
 export {
   namespace as haMcpNamespace,
+  haMcpUrl,
   haMcpDeployment,
   haMcpService,
   haMcpIngress,
