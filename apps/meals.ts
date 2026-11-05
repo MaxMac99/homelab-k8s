@@ -105,7 +105,7 @@ import { haMcpUrl } from "./ha-mcp";
 // manager. Kept out of the `image:` line on purpose: the generic image regex
 // would read `main@sha256:…` as the version.
 const MEALS_DIGEST =
-  "sha256:bac44ac1dfd63481c9bc374d9b695d31def4fbb626267e43ee3645538cff2d7c";
+  "sha256:9662f08fe6c965b04a262ec2d405b02307363c673aef4d073c49fc1ef12da9e4";
 
 // Digest of ghcr.io/maxmac99/meals-agent:main, the chat's agent sidecar.
 // Written by the fork's agent-image.yml rollout job (a sed over exactly this
