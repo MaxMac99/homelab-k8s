@@ -56,7 +56,12 @@
 import { createHash } from "node:crypto";
 import * as k8s from "@pulumi/kubernetes";
 import { activeClusterIssuer } from "../infrastructure/cert-manager";
-import { ARCH_LABEL, onNode, MAXDATA } from "../infrastructure/sites";
+import {
+  ARCH_LABEL,
+  HOSTNAME_LABEL,
+  onNode,
+  MAXDATA,
+} from "../infrastructure/sites";
 
 const t3Host = "t3.mvissing.de";
 const t3Port = 3773;
@@ -112,25 +117,63 @@ new k8s.rbac.v1.ClusterRoleBinding("t3code-view", {
   ],
 });
 
+// $HOME und /nix liegen auf maxdatas `fast/scratch`, nicht auf local-path
+// (`fast/k8s`). ⚠️ Der Grund ist Platz, nicht Ordnung: `fast/k8s` hat
+// Sanoid-Snapshots (48 stündlich, 30 täglich, 6 monatlich), und jeder davon
+// friert den gerade aktuellen Stand der Rust-`target`-Verzeichnisse aller
+// Worktrees ein. Gelöschte Build-Artefakte blieben so bis zu sechs Monate
+// belegt; am 2026-11-05 hielten die Snapshots 663 G und `fast` stand bei
+// 81 %. `fast/scratch` steht in keiner Sanoid-Config und wird auch nicht
+// nach `tank` repliziert — passend zur Entscheidung oben, dass ein Verlust
+// dieser PVCs nur ein erneutes Einloggen kostet.
+//
+// Statisch gebunden wie die NFS-Volumes (databases/backup.ts):
+// `storageClassName` ist nur Schlüssel zwischen PV und PVC, kein
+// Provisioner. `hostPath.type: Directory` statt `DirectoryOrCreate`, damit
+// ein nicht eingehängtes Dataset den Pod scheitern lässt, statt still auf
+// `fast/root` zu schreiben. Angelegt per `zfs create -o
+// mountpoint=/fast/scratch fast/scratch` plus `mkdir` der beiden
+// Verzeichnisse (D13: Daten-Datasets stehen in keiner NixOS-Config).
+const scratchClass = "t3code-scratch";
+
+const scratchVolume = (name: string, dir: string) => {
+  const pv = new k8s.core.v1.PersistentVolume(`${name}-pv`, {
+    metadata: { name },
+    spec: {
+      capacity: { storage: "100Gi" },
+      accessModes: ["ReadWriteOnce"],
+      persistentVolumeReclaimPolicy: "Retain",
+      storageClassName: scratchClass,
+      hostPath: { path: `/fast/scratch/t3code/${dir}`, type: "Directory" },
+      nodeAffinity: {
+        required: {
+          nodeSelectorTerms: [
+            {
+              matchExpressions: [
+                { key: HOSTNAME_LABEL, operator: "In", values: [MAXDATA] },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  });
+  return new k8s.core.v1.PersistentVolumeClaim(name, {
+    metadata: { name, namespace: t3Namespace.metadata.name },
+    spec: {
+      accessModes: ["ReadWriteOnce"],
+      storageClassName: scratchClass,
+      volumeName: pv.metadata.name,
+      resources: { requests: { storage: "100Gi" } },
+    },
+  });
+};
+
 // Repos, Worktrees und Rust-target-Verzeichnisse mehrerer Projekte.
-export const t3HomePVC = new k8s.core.v1.PersistentVolumeClaim("t3code-home", {
-  metadata: { name: "t3code-home", namespace: t3Namespace.metadata.name },
-  spec: {
-    accessModes: ["ReadWriteOnce"],
-    storageClassName: "local-path",
-    resources: { requests: { storage: "100Gi" } },
-  },
-});
+export const t3HomePVC = scratchVolume("t3code-home", "home");
 
 // Nix-Store für die Devshells; ohne PVC lädt jeder Restart alles neu.
-export const t3NixPVC = new k8s.core.v1.PersistentVolumeClaim("t3code-nix", {
-  metadata: { name: "t3code-nix", namespace: t3Namespace.metadata.name },
-  spec: {
-    accessModes: ["ReadWriteOnce"],
-    storageClassName: "local-path",
-    resources: { requests: { storage: "100Gi" } },
-  },
-});
+export const t3NixPVC = scratchVolume("t3code-nix", "nix");
 
 // Idempotent: jeder Schritt prüft, ob er schon erledigt ist. Der erste
 // Start dauert mehrere Minuten (Nix + Installer), spätere nur den
