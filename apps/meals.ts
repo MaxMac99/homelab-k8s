@@ -815,6 +815,19 @@ const mealsRootRules = [
   },
 ];
 
+// `/app` exactly and everything under `/app/`, never a bare `/app` prefix:
+// Traefik turns pathType Prefix into a string `PathPrefix`, so `/app` would
+// also catch the API's `/appliances` and send iOS to the Authentik login
+// (an HTML 200 the app cannot read).
+const mealsAppBackend = {
+  service: {
+    name: mealsService.metadata.name,
+    port: {
+      number: 80,
+    },
+  },
+};
+
 const mealsAppRules = [
   {
     host: mealsHost,
@@ -822,15 +835,13 @@ const mealsAppRules = [
       paths: [
         {
           path: "/app",
+          pathType: "Exact" as const,
+          backend: mealsAppBackend,
+        },
+        {
+          path: "/app/",
           pathType: "Prefix" as const,
-          backend: {
-            service: {
-              name: mealsService.metadata.name,
-              port: {
-                number: 80,
-              },
-            },
-          },
+          backend: mealsAppBackend,
         },
       ],
     },
