@@ -120,7 +120,7 @@ const MEALS_DIGEST =
 // file creates none of the agent's resources and sets no AGENT_* env, so it can
 // be merged and deployed before the image exists.
 const MEALS_AGENT_DIGEST =
-  "sha256:f8dda311560217c9fcf564f4a1d506a5c3a2dbc8b19630ffe680d30e66c95dd8";
+  "sha256:776ea112a03ae31d9fd2573e9a6646cc31cb83c883b76dcc80405106834888dd";
 const agentEnabled = !/^sha256:0{64}$/.test(MEALS_AGENT_DIGEST);
 
 const config = new pulumi.Config();
