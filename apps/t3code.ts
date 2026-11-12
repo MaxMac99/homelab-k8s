@@ -31,12 +31,12 @@
 //     nicht liefern kann. Auth macht T3 selbst (Pairing-Token = Passwort).
 //     Bewusst NICHT auf traefik-public.
 //
-// Isolation: ServiceAccount nur mit der ClusterRole `view` (lesen ohne
-// Secrets, für Logs und Fehlersuche), kein Host-Zugriff. Ein Agent mit
-// Vollzugriff kann den Pod beschädigen und den Cluster lesen, nicht ändern.
-// `view` zeigt ConfigMaps und Klartext-env in Pod-Specs: Geheimes gehört in
-// Secrets. sudo im
-// Container bleibt (apt für Chromium-Libs bei jedem Start).
+// Isolation: ServiceAccount nur mit der ClusterRole `t3code-read` (den ganzen
+// Cluster lesen außer Secrets, für Logs und Fehlersuche), kein Host-Zugriff.
+// Ein Agent mit Vollzugriff kann den Pod beschädigen und den Cluster lesen,
+// nicht ändern. Die Rolle zeigt ConfigMaps und Klartext-env in Pod-Specs:
+// Geheimes gehört in Secrets. sudo im Container bleibt (apt für
+// Chromium-Libs bei jedem Start).
 //
 // Placement: maxdata (NVMe unter /fast), weg von brink-server, das als
 // einziger Dauerläufer der Wohnung DNS, Subnet-Router und etcd trägt.
@@ -94,19 +94,94 @@ export const t3Namespace = new k8s.core.v1.Namespace("t3code", {
   metadata: { name: "t3code" },
 });
 
-// Nur-Lese-Zugang für Agenten (Logs, Pods, Events in allen Namespaces) über
-// die eingebaute ClusterRole `view`: keine Secrets, kein Schreiben, kein exec.
-// Der Token rotiert, Kubernetes mountet ihn; `kubectl` findet ihn von selbst.
+// Nur-Lese-Zugang für Agenten auf den ganzen Cluster — außer Secrets. Der
+// Token rotiert, Kubernetes mountet ihn; `kubectl` findet ihn von selbst.
 const t3ServiceAccount = new k8s.core.v1.ServiceAccount("t3code", {
   metadata: { name: "t3code", namespace: t3Namespace.metadata.name },
 });
 
-new k8s.rbac.v1.ClusterRoleBinding("t3code-view", {
-  metadata: { name: "t3code-view" },
+// Eigene Rolle statt `view`: `view` lässt cluster-weite Objekte (Nodes, PVs,
+// StorageClasses, CRDs, RBAC, Webhooks) und nicht aggregierte CRDs (CNPG,
+// MetalLB, Traefik, cert-manager) aus.
+//
+// ⚠️ RBAC kennt kein „alles außer“. Secrets liegen nur in der Core-Gruppe,
+// deshalb zählt die Core-Regel ihre Ressourcen einzeln auf (ohne `secrets`
+// und ohne `nodes/proxy`, das ist exec über das Kubelet), und alle anderen
+// Gruppen stehen namentlich in der zweiten Regel. `apiGroups: ["*"]` würde
+// die Core-Gruppe und damit Secrets einschließen. **Eine neue API-Gruppe
+// (neuer Operator/CRD) ist erst lesbar, wenn sie hier steht** — Liste aus
+// `kubectl api-versions | cut -d/ -f1 | sort -u`, Stand 2026-11-12.
+const t3ReadRole = new k8s.rbac.v1.ClusterRole("t3code-read", {
+  metadata: { name: "t3code-read" },
+  rules: [
+    {
+      apiGroups: [""],
+      resources: [
+        "componentstatuses",
+        "configmaps",
+        "endpoints",
+        "events",
+        "limitranges",
+        "namespaces",
+        "nodes",
+        "persistentvolumeclaims",
+        "persistentvolumes",
+        "pods",
+        "pods/log",
+        "podtemplates",
+        "replicationcontrollers",
+        "resourcequotas",
+        "serviceaccounts",
+        "services",
+      ],
+      verbs: ["get", "list", "watch"],
+    },
+    {
+      apiGroups: [
+        "acme.cert-manager.io",
+        "actions.github.com",
+        "admissionregistration.k8s.io",
+        "apiextensions.k8s.io",
+        "apiregistration.k8s.io",
+        "apps",
+        "autoscaling",
+        "batch",
+        "cert-manager.io",
+        "certificates.k8s.io",
+        "coordination.k8s.io",
+        "discovery.k8s.io",
+        "events.k8s.io",
+        "flowcontrol.apiserver.k8s.io",
+        "helm.cattle.io",
+        "hub.traefik.io",
+        "k3s.cattle.io",
+        "metallb.io",
+        "metrics.k8s.io",
+        "monitoring.grafana.com",
+        "networking.k8s.io",
+        "node.k8s.io",
+        "policy",
+        "postgresql.cnpg.io",
+        "rbac.authorization.k8s.io",
+        "resource.k8s.io",
+        "scheduling.k8s.io",
+        "storage.k8s.io",
+        "traefik.io",
+      ],
+      resources: ["*"],
+      verbs: ["get", "list", "watch"],
+    },
+    // /metrics, /version, /healthz, /openapi am API-Server.
+    { nonResourceURLs: ["*"], verbs: ["get"] },
+  ],
+});
+
+new k8s.rbac.v1.ClusterRoleBinding("t3code-read", {
+  metadata: { name: "t3code-read" },
   roleRef: {
     apiGroup: "rbac.authorization.k8s.io",
     kind: "ClusterRole",
-    name: "view",
+    name: t3ReadRole.metadata.name,
   },
   subjects: [
     {
