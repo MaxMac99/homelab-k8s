@@ -99,7 +99,7 @@ const musicassistantDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "musicassistant",
-              image: "ghcr.io/music-assistant/server:2.10.9",
+              image: "ghcr.io/music-assistant/server:2.10.11",
               ports: [
                 {
                   // Web UI and API. Informational under hostNetwork, but kept
