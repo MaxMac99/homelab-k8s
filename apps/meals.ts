@@ -1111,9 +1111,10 @@ new authentik.PolicyBinding("meals-group-binding", {
 
 // "Sign in with Authentik" inside the app — a second application, because
 // one Authentik application has one provider and "Meals" above is the
-// forward-auth proxy. Both the web client and the iPhone app use it as a
-// **public** client (PKCE, no secret): the web client through the server's
-// /auth/oidc/authorize + /auth/oidc/code, the app directly.
+// forward-auth proxy. The web client, the iPhone app and Claude Code (as an
+// MCP client of /mcp) use it as a **public** client (PKCE, no secret): the
+// web client through the server's /auth/oidc/authorize + /auth/oidc/code,
+// the other two directly.
 const mealsOidcProvider = new authentik.ProviderOauth2("meals-oidc-provider", {
   name: "Meals Login",
   clientId: oidcClientId,
@@ -1162,6 +1163,16 @@ const mealsOidcProvider = new authentik.ProviderOauth2("meals-oidc-provider", {
       // The iPhone app's callback (OIDCSignIn.swift in the fork).
       matching_mode: "strict",
       url: "de.mvissing.meals:/oidc/callback",
+      redirect_uri_type: "authorization",
+    },
+    {
+      // Claude Code's OAuth callback for the /mcp server. Authentik has no
+      // dynamic client registration, so Claude Code signs in as this client
+      // (`"oauth": { "clientId": "meals", "callbackPort": 33418 }` in its MCP
+      // config) on this one fixed loopback port. A different port fails at
+      // the provider with "redirect URI mismatch".
+      matching_mode: "strict",
+      url: "http://localhost:33418/callback",
       redirect_uri_type: "authorization",
     },
   ],
