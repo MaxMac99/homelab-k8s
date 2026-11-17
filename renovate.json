@@ -29,6 +29,12 @@
       "enabled": false
     },
     {
+      "description": "gotenberg must stay below v9: Gotenberg 9 removed the pdfa form field and the /forms/pdfengines/* routes (incl. merge), which Paperless uses through gotenberg-client 1.x for Office conversion and mail import. Unpin once a Paperless release ships a gotenberg-client with Gotenberg 9 support; a weekly T3 scheduled task checks for that.",
+      "matchPackageNames": ["gotenberg/gotenberg"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "All minor and patch updates share one automerged PR; majors stay separate via the rule below.",
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "non-major updates",
