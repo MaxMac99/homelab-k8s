@@ -287,7 +287,21 @@ const homeassistantDeployment = new k8s.apps.v1.Deployment(
 );
 
 // Matter Server Deployment
-// Provides Matter protocol support for Home Assistant
+// Provides Matter protocol support for Home Assistant.
+//
+// This is the matter.js server (matter-js/matterjs-server), the drop-in
+// successor of python-matter-server: same WebSocket API on :5580, same
+// `--storage-path`. It migrates the Python data files (`chip.json` and
+// `<long-number>.json`) once, on its first start against them. The resource
+// names deliberately stay `matter-server` so the PVC — and with it the fabric —
+// carries over and Home Assistant's integration URL does not change.
+//
+// ⚠️ Never run both servers on the same data: they would act as the same
+// controller on the same fabric. `Recreate` is what guarantees that here.
+//
+// ⚠️ The matter.js image runs unprivileged as UID 1000, while the Python one
+// ran as root, so every existing file in /data is root-owned. local-path is a
+// hostPath, so `fsGroup` does not apply — the init container chowns instead.
 const matterServerDeployment = new k8s.apps.v1.Deployment(
   "matter-server",
   {
@@ -321,11 +335,37 @@ const matterServerDeployment = new k8s.apps.v1.Deployment(
           // Same node as Home Assistant: Thread/Matter commissioning has to
           // happen on the segment the devices are on.
           nodeSelector: onNode(BRINK_SERVER),
+          initContainers: [
+            {
+              name: "chown-data",
+              image: "docker.io/library/alpine:3.24",
+              command: ["chown", "-R", "1000:1000", "/data"],
+              securityContext: { runAsUser: 0, runAsGroup: 0 },
+              volumeMounts: [
+                {
+                  name: "data",
+                  mountPath: "/data",
+                },
+              ],
+            },
+          ],
           containers: [
             {
               name: "matter-server",
-              image: "ghcr.io/matter-js/python-matter-server:8.1.2",
-              args: ["--storage-path", "/data", "--log-level", "info"],
+              image: "ghcr.io/matter-js/matterjs-server:1.6.0",
+              securityContext: { runAsUser: 1000, runAsGroup: 1000 },
+              // `--primary-interface eno1`: with hostNetwork the pod sees the
+              // overlay, flannel and every veth too. matter.js recommends
+              // pinning on multi-interface hosts; eno1 is the Brink LAN
+              // (`lanInterface` in setup's hosts/nixos/brink-server).
+              args: [
+                "--storage-path",
+                "/data",
+                "--log-level",
+                "info",
+                "--primary-interface",
+                "eno1",
+              ],
               ports: [
                 {
                   containerPort: 5580,
@@ -670,18 +710,19 @@ export {
 //
 // Architecture:
 // - Home Assistant: Official container image
-// - Matter Server: Python Matter Server for Matter protocol support
+// - Matter Server: matter.js server (matterjs-server) for Matter protocol support
 // - PostgreSQL: Shared database cluster (CloudNativePG)
-// - Storage: NFS on tank pool for configuration (10Gi) and Matter data (1Gi)
+// - Storage: local-path on brink-server for configuration (10Gi) and Matter data (1Gi)
 // - Ingress: Traefik with Let's Encrypt TLS
 // - Authentication: OAuth2/OIDC via Authentik (using custom component)
 // - Monitoring: Prometheus metrics at /api/prometheus
 //
 // Storage:
-// - Config: /tank/k8s/nfs/homeassistant (NFS, 10Gi)
-// - Matter Server: /tank/k8s/nfs/matter-server (NFS, 1Gi)
+// - Config: PVC homeassistant-config (local-path, brink-server, 10Gi)
+// - Matter Server: PVC matter-server-data (local-path, brink-server, 1Gi)
 // - Database: PostgreSQL cluster in database namespace
-// - Backup: ZFS snapshots via sanoid/syncoid
+// - Backup: sanoid snapshots of brink-server's `main/k8s`, pulled to maxdata
+//   by syncoid (setup repo: hosts/nixos/brink-server/backup.nix)
 //
 // Important Notes:
 // - Home Assistant MUST run as single replica (no multi-instance support)
@@ -695,9 +736,8 @@ export {
 // - See plan documentation for USB device passthrough options
 //
 // Matter Server Setup:
-// 1. Create Matter Server data directory on NFS server:
-//    sudo mkdir -p /tank/k8s/nfs/matter-server
-//    sudo chown -R 1000:1000 /tank/k8s/nfs/matter-server
+// 1. Storage is provisioned by local-path; ownership is fixed by the
+//    `chown-data` init container — nothing to prepare by hand.
 //
 // 2. Deploy Matter Server: pulumi up
 //
@@ -716,5 +756,6 @@ export {
 // Notes:
 // - Matter Server uses hostNetwork for mDNS/Thread discovery
 // - WebSocket API on port 5580 for Home Assistant communication
-// - Data stored on NFS at /tank/k8s/nfs/matter-server
+// - Data stored on the matter-server-data PVC (local-path on brink-server)
+// - Dashboard: the server also serves a web UI on :5580 (not exposed)
 // - Matter devices remain commissioned even if HA restarts
