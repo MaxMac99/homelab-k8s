@@ -119,7 +119,7 @@ const mosquittoDeployment = new k8s.apps.v1.Deployment(
           initContainers: [
             {
               name: "init-passwd",
-              image: "eclipse-mosquitto:2.0.22",
+              image: "eclipse-mosquitto:2.0.23",
               securityContext: { runAsUser: 1883, runAsGroup: 1883 },
               command: [
                 "sh",
@@ -152,7 +152,7 @@ const mosquittoDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "mosquitto",
-              image: "eclipse-mosquitto:2.0.22",
+              image: "eclipse-mosquitto:2.0.23",
               ports: [
                 {
                   containerPort: 1883,
