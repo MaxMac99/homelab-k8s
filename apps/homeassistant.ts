@@ -352,7 +352,7 @@ const matterServerDeployment = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "matter-server",
-              image: "ghcr.io/matter-js/matterjs-server:1.6.0",
+              image: "ghcr.io/matter-js/matterjs-server:1.6.1",
               securityContext: { runAsUser: 1000, runAsGroup: 1000 },
               // `--primary-interface eno1`: with hostNetwork the pod sees the
               // overlay, flannel and every veth too. matter.js recommends
