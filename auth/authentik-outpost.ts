@@ -84,7 +84,7 @@ const authentikOutpost = new k8s.apps.v1.Deployment(
           containers: [
             {
               name: "authentik-proxy",
-              image: "ghcr.io/goauthentik/proxy:2026.8.6",
+              image: "ghcr.io/goauthentik/proxy:2026.8.7",
               env: [
                 {
                   name: "AUTHENTIK_HOST",
